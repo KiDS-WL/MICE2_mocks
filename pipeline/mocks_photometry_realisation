@@ -7,7 +7,8 @@ from hashlib import md5
 import numpy as np
 from astropy import units
 from astropy.table import Column, Table
-from data_table import load_table
+
+from table_tools import load_table
 
 
 if __name__ == "__main__":
@@ -34,8 +35,7 @@ if __name__ == "__main__":
     params_group = parser.add_argument_group('parameters')
     params_group.add_argument(
         '--filters', nargs='*', required=True,
-        help='list of table column names (use colX, with X in 1,2,...,N, if '
-             'no table header exist) providing model magnitudes')
+        help='list of table column names providing model magnitudes')
     params_group.add_argument(
         '--limits', nargs='*', type=float, required=True,
         help='magnitude limits for each entry in --filters')
@@ -65,14 +65,16 @@ if __name__ == "__main__":
     # check if all argument lengths match
     filters = args.filters
     if len(args.limits) != len(filters):
-        sys.exit("ERROR: input --limits do not match --filters")
+        sys.exit("ERROR: number of input --limits do not match --filters")
     if args.sn_factors is None:
         sn_factors = [None] * len(filters)
     else:
         sn_factors = args.sn_factors
         if len(sn_factors) != len(filters):
-            sys.exit("ERROR: input --sn-factors do not match --filters")
+            sys.exit(
+                "ERROR: number of input --sn-factors do not match --filters")
 
+    # load the data table and check that all required columsn exist
     columns = [f for f in filters]
     if args.sn_factors is not None:
         columns.extend(sn_factors)
@@ -87,11 +89,12 @@ if __name__ == "__main__":
     # create noise realisations
     SN_limit = args.sn_limit
     SN_detect = args.sn_detect
-    non_detection_magnitude = 99.0
-    detect_sigma_to_mag = 2.5 * np.log10(args.significance)
+    non_detection_magnitude = 99.0  # inserted for non-detections
+    detect_sigma_to_mag = 2.5 * np.log10(args.significance)  # ZP conversion
+    # dictionaries that collect the magnitude realisations per filter
     mag_realisation_data = {}
     mag_realisation_error = {}
-    # reseed the random state
+    # reseed the random state -> reproducible results
     hasher = md5(bytes(args.seed, "utf-8"))
     hashval = bytes(hasher.hexdigest(), "utf-8")
     np.random.seed(np.frombuffer(hashval, dtype=np.uint32))
@@ -130,6 +133,8 @@ if __name__ == "__main__":
     # collect output data
     table = Table()
     for filt in filters:
+        # find the correct magnitude column suffix depending on whether
+        # magnification was applied or not
         if "_evo" in filt:
             key = filt.replace("_evo", "_obs")
             keyerr = filt.replace("_evo", "_obserr")
