@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+###############################################################################
+#                                                                             #
+#   Create a mock catalogue for DESy1 derived from the MICE2 galaxy mock      #
+#   catalogue with enabled magnification. The catalogue contains a DES like   #
+#   photometry, DES selection flags, lensift weights and BPZ photo-z.         #
+#                                                                             #
+###############################################################################
+
 DATADIR=${HOME}/DATA/MICE2_DES/DES_sigma_12
 mkdir -p ${DATADIR}
 

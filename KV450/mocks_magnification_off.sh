@@ -1,18 +1,30 @@
 #!/usr/bin/env bash
 
+###############################################################################
+#                                                                             #
+#   Create a mock catalogue for KV450 derived from the MICE2 galaxy mock      #
+#   catalogue. The catalogue contains a KiDS like photometry, lensfit         #
+#   weights and BPZ photo-z.                                                  #
+#                                                                             #
+#   This version of the catalogue has magnification disabled.                 #
+#                                                                             #
+###############################################################################
+
+# data paths
 DATADIR=${HOME}/DATA/MICE2_KV450/KV450_magnification_off
 mkdir -p ${DATADIR}
-
 MAPDIR=${HOME}/CC/STOMP_MAPS/MICE2_KV450
 mkdir -p ${MAPDIR}
 
+# static file names
 MOCKraw=${HOME}/DATA/MICE2_KV450/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL.fits
 MOCKmasked=${DATADIR}/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL_masked.fits
 MOCKoutfull=${DATADIR}/MICE2_all.fits
 MOCKout=${DATADIR}/MICE2_KV450.fits
-
+# KV450 data table for check plots
 dataKV450=${HOME}/DATA/KV450/KiDS_VIKING/KV450_north.cat
 
+# constant parameters
 RAname=ra_gal
 DECname=dec_gal
 PSFs="    1.0  0.9  0.7  0.8  1.0   1.0  0.9  1.0  0.9"
@@ -23,11 +35,15 @@ export BPZPATH=~/src/bpz-1.99.3
 
 echo "==> generate base masks for KV450 footprint"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
+# STOMP map that encompasses the data downloaded from COSMOHUB
 mocks_generate_footprint \
     -b  0.00 30.00 30.00 60.00 \
     --survey MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL \
     --footprint-file ${DATADIR}/footprint.txt -a \
     -o ${MAPDIR}/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL.map
+# STOMP map that masks the data to ~343 sqdeg (effective KV450 area).
+# Create a pointing list of 440 pointings (20x22) with ~0.7 sqdeg each (mean
+# pointing area in KV450 CC data).
 mocks_generate_footprint \
     -b  6.00 24.00 35.00 55.00 \
     --survey KV450 \
@@ -38,6 +54,7 @@ mocks_generate_footprint \
 echo ""
 
 echo "==> mask MICE2 to KV450 footprint"
+# apply the STOMP map to the MICE2 catalogue
 data_table_mask \
     -i ${MOCKraw} \
     -s ${MAPDIR}/MICE2_KV450_r16384.map \
@@ -46,9 +63,11 @@ data_table_mask \
 echo ""
 
 echo "==> apply evolution correction"
+# automatically applied to any existing MICE2 filter column
 mocks_MICE_mag_evolved \
     -i ${MOCKmasked} \
     -o ${DATADIR}/magnitudes_evolved.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -56,6 +75,11 @@ data_table_hstack \
 echo ""
 
 echo "==> compute point source S/N correction"
+# Compute the effective radius (that contains 50% of the luminosity), compute
+# the observational size using the PSFs, scale this with a factor of 2.5
+# (similar to what sextractor would do) to get a mock aperture. Finally
+# calculate a correction factor for the S/N based on the aperture area compared
+# to a point source (= PSF area).
 mocks_extended_object_sn \
     -i ${MOCKoutfull} \
     --bulge-ratio bulge_fraction --bulge-size bulge_length \
@@ -73,6 +97,7 @@ mocks_extended_object_sn \
         vhs_ks \
     --scale 2.5 --flux-frac 0.5 \
     -o ${DATADIR}/apertures.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -81,6 +106,9 @@ data_table_hstack \
 echo ""
 
 echo "==> generate photometry realisation"
+# Based on the KiDS limiting magnitudes, calcalute the mock galaxy S/N and
+# apply the aperture size S/N correction to obtain a KiDS-like magnitude
+# realisation.
 mocks_photometry_realisation \
     -i ${MOCKoutfull} \
     --filters \
@@ -106,6 +134,7 @@ mocks_photometry_realisation \
         sn_factor_vhs_h \
         sn_factor_vhs_ks \
     -o ${DATADIR}/magnitudes_observed.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -115,6 +144,9 @@ data_table_hstack \
 echo ""
 
 echo "==> assign galaxy weights"
+# Assign lensfit weights by matching mock galaxies in 9-band magnitude space to
+# their nearest neighbour KV450 galaxies using the super-user catalogues which
+# contain objects with recal_weight<=0.
 mocks_draw_property \
     -s ${MOCKoutfull} \
     --s-attr \
@@ -143,6 +175,7 @@ mocks_draw_property \
     --fallback 0.0 \
     -t ${HOME}/DATA/KV450/recal_weights.tree.pickle \
     -o ${DATADIR}/recal_weights.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -153,6 +186,8 @@ data_table_hstack \
 echo ""
 
 echo "==> compute photo-zs"
+# Run BPZ on the mock galaxy photometry using the KV450 setup (prior: NGVS,
+# templates: Capak CWWSB), the prior limited to 0.7 < z < 1.43.
 mocks_bpz_wrapper \
     -i ${MOCKoutfull} \
     --filters \
@@ -182,6 +217,7 @@ mocks_bpz_wrapper \
     --prior NGVS \
     --prior-filter sdss_i_obs \
     -o ${DATADIR}/photoz.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -193,6 +229,7 @@ data_table_hstack \
 echo ""
 
 echo "==> apply final KV450 selection"
+# select objects with recal_weight==0 and M_0<90
 data_table_filter \
     -i ${MOCKoutfull} \
     --rule recal_weight gg 0.0 \
@@ -201,6 +238,7 @@ data_table_filter \
 echo ""
 
 echo "==> reduce number of columns"
+# create copies of the output catalogues with a minimal subset of colums
 data_table_copy \
     -i ${MOCKoutfull} \
     -c unique_gal_id $RAname $DECname \
@@ -244,6 +282,10 @@ data_table_copy \
        vhs_ks_obs \
     -o ${MOCKout%.*}_CC.fits
 echo ""
+
+###############################################################################
+# create check plots
+###############################################################################
 
 echo "==> plot aperture statistics"
 plot_extended_object_sn \
