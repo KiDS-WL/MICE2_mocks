@@ -6,12 +6,29 @@ import sys
 import numpy as np
 from astropy import units
 from astropy.table import Column, Table
-from data_table import load_table
+
+from table_tools import load_table
 
 
 def magnification_correction(mag, kappa):
+    """
+    Magnification calculated from the convergence, following Fosalba+15 eq. 21.
+
+    Parameters
+    ----------
+    mag : array_like
+        (Evolution corrected) model magnitudes.
+    kappa : array_like
+        Convergence field at the galaxy positions.
+
+    Returns
+    -------
+    mag_magnified : array_like
+        Magnitudes corrected for magnification.
+    """
     d_mu = 2.0 * kappa
-    return mag - 2.5 * np.log10(1 + d_mu)
+    mag_magnified = mag - 2.5 * np.log10(1 + d_mu)
+    return mag_magnified
 
 
 if __name__ == "__main__":
@@ -37,8 +54,7 @@ if __name__ == "__main__":
     params_group = parser.add_argument_group('parameters')
     params_group.add_argument(
         '--filters', nargs='*', required=True,
-        help='list of table column names (use colX, with X in 1,2,...,N, if '
-             'no table header exist) providing model magnitudes')
+        help='list of table column names providing model magnitudes')
     params_group.add_argument(
         '--convergence', required=True,
         help='table column name of convergence')
@@ -50,10 +66,11 @@ if __name__ == "__main__":
     data = load_table(args.input, args.i_format, columns)
     print("use input filters: %s" % ", ".join(args.filters))
 
-    # collect output data
+    # create new table that only contains magnification corrected magnitudes
     table = Table()
     for filt in args.filters:
         table[filt + "_mag"] = Column(
+            # apply the magnification correction
             magnification_correction(data[filt], data[args.convergence]),
             unit=units.mag,
             description="magnitude magnified by gravitational lensing")
