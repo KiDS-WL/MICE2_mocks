@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+import argparse
+import multiprocessing
+import os
+import sys
+from multiprocessing import cpu_count
+from shutil import rmtree
+
+import numpy as np
+from astropy import units
+from astropy.table import Column, Table, vstack
+from data_table import load_table
+from scipy.integrate import cumtrapz
+
+
+def integrate_pdf(z, p, z_true):
+    P = cumtrapz(p, z, initial=0.0)
+    return np.interp(z_true, z, P / P[-1])
+
+
+def run_BPZ(arguments):
+    inputfile, probfile, logfile = arguments
+    outputfile = os.path.splitext(inputfile)[0] + ".bpz"
+    command = [
+        "python2.7", os.path.join(bpz_path, "bpz.py"), inputfile,
+        "-COLUMNS", column_file, "-OUTPUT", outputfile,
+        "-PRIOR", args.prior, "-SPECTRA", args.templates + ".list",
+        "-ZMIN", str(args.z_min), "-ZMAX", str(args.z_max),
+        "-INTERP", "10", "-NEW_AB", "no",
+        "-ODDS", "0.68", "-MIN_RMS", "0.0", "-INTERACTIVE", "no",
+        "-PROBS_LITE", "no" if probfile is None else probfile,
+        "-VERBOSE", "yes" if args.verbose else "no",
+        "-CHECK", "no"]
+    if logfile is not None:
+        command.extend([">", logfile,  "2>&1"])
+    os.system(" ".join(command))
+    return outputfile
+
+
+if __name__ == "__main__":
+
+    bpz_path = os.environ["BPZPATH"]
+    sed_path = os.path.join(bpz_path, "SED")
+    template_list = [
+        os.path.splitext(p)[0] for p in os.listdir(sed_path)
+        if p.endswith(".list")]
+    prior_list = [
+        os.path.splitext(p)[0].split("prior_")[1] for p in os.listdir(bpz_path)
+        if p.startswith("prior_") and p.endswith(".py")]
+
+    parser = argparse.ArgumentParser(
+        description='Wrapper for BPZ to automatically handle various input '
+                    'data formats using astropy.table.')
+
+    data_group = parser.add_argument_group('data')
+    data_group.add_argument(
+        '-i', '--input', required=True, help='file path of input data table')
+    data_group.add_argument(
+        '--i-format', default='fits',
+        help='astropy.table format specifier of the input table '
+             '(default: %(default)s)')
+    data_group.add_argument(
+        '-o', '--output', required=True, help='file path of output table')
+    data_group.add_argument(
+        '--o-format', default='fits',
+        help='astropy.table format specifier of the output table '
+             '(default: %(default)s)')
+
+    params_group = parser.add_argument_group('parameters')
+    params_group.add_argument(
+        '--filters', nargs='*', required=True,
+        help='list of table column names (use colX, with X in 1,2,...,N, if '
+             'no table header exist) defining the magnitude columns')
+    params_group.add_argument(
+        '--errors', nargs='*', required=True,
+        help='list of table column names (use colX, with X in 1,2,...,N, if '
+             'no table header exist) defining the magitude errors')
+    params_group.add_argument(
+        '--prior-filter', required=True,
+        help='table column name of magnitudes used as input for BPZ prior')
+    params_group.add_argument(
+        '--z-true',
+        help='table column name of true object redshift (optional, used for '
+             'photo-z test metric)')
+
+    bpz_group = parser.add_argument_group('BPZ')
+    bpz_group.add_argument(
+        '--templates', choices=template_list, default='CWSSB4.list',
+        help='template set list defined in the SED folder of BPZ '
+             '(default: %(default)s)')
+    bpz_group.add_argument(
+        '--prior', choices=prior_list, default='hdfn_gen',
+        help='prior function defined in the BPZ root-folder '
+             '(default: %(default)s)')
+    bpz_group.add_argument(
+        '--id',
+        help='table column name of a unique object identifier')
+    bpz_group.add_argument(
+        '--z-min', type=float, default=0.01,
+        help='minimum probed redshift (default: %(default)s)')
+    bpz_group.add_argument(
+        '--z-max', type=float, default=7.0,
+        help='maximum probed redshift (default: %(default)s)')
+    bpz_group.add_argument(
+        '--store-likelihoods', action='store_true',
+        help='store the full posteriors')
+    bpz_group.add_argument(
+        '--threads', type=int, default=cpu_count(),
+        help='number of threads to use (default: %(default)s, splits the '
+             'input data in chunks, spawns an according number of child '
+             'processes and concatenates the output)')
+    bpz_group.add_argument(
+        '-v', '--verbose', action='store_true',
+        help='show full output from BPZ')
+
+    args = parser.parse_args()
+
+    setattr(args, "threads", min(cpu_count(), max(0, args.threads)))
+
+    if len(args.filters) != len(args.errors):
+        sys.exit("ERROR: --filters and --errors do not match")
+
+    columns = [args.prior_filter]
+    columns.extend(args.filters)
+    columns.extend(args.errors)
+    if args.z_true is not None:
+        columns.append(args.z_true)
+    data = load_table(args.input, args.i_format, columns)
+
+    string = "build BPZ input catalogues"
+    if args.threads > 1:
+        string += " for parallel processing"
+    print(string)
+    # collect only the required data columns
+    temp_columns = [] if args.id is None else [args.id]
+    temp_columns.extend(args.filters)
+    temp_columns.extend(args.errors)
+    if args.prior_filter not in temp_columns:
+        temp_columns.append(args.prior_filter)
+    temp_table = data[temp_columns]
+
+    if args.z_true is not None:
+        z_true = data[args.z_true]
+    else:
+        z_true = None
+
+    # create a subdirectory to collect the log files of each thread
+    logdir = os.path.join(os.path.dirname(args.input), "BPZ_logs")
+    if os.path.exists(logdir):
+        rmtree(logdir)
+    os.mkdir(logdir)
+
+    # create a write a temporary table in ascii format
+    column_file = os.path.splitext(args.input)[0] + ".columns"
+    cat_files = []
+    prob_files = []
+    out_files = []
+    log_files = []
+    os.environ["NUMERIX"] = "numpy"
+    try:
+        # write the columns file
+        with open(column_file, "w") as f:
+            for i, (filt, err) in enumerate(zip(args.filters, args.errors)):
+                # register the filters
+                if filt.endswith("_mag"):
+                    filt_name = filt[:-4]
+                else:
+                    filt_name = filt
+                f.write(
+                    "%s %d,%d AB %.2f, %.2f\n" % (
+                        filt_name, temp_table.index_column(filt) + 1,
+                        temp_table.index_column(err) + 1, 0.01, 0.0))
+            # add the object index and prior columns
+            if args.id is not None:
+                f.write("ID %d\n" % (temp_table.index_column(args.id) + 1))
+            f.write(
+                "M_0 %d\n" % (temp_table.index_column(args.prior_filter) + 1))
+        # write a table-subset for each BPZ thread
+        row_count = len(temp_table) // args.threads + 1
+        for i in range(args.threads):
+            basename = os.path.splitext(args.input)[0] + ".%02d" % (i + 1)
+            cat_files.append(basename + ".ascii")
+            if args.store_likelihoods:
+                prob_files.append(basename + ".prob")
+            else:
+                prob_files.append(None)
+            log_files.append(
+                os.path.join(
+                    logdir,
+                    os.path.basename(
+                        os.path.splitext(
+                            args.output)[0]) + ".%02d.log" % (i + 1)))
+            idx_start = i * row_count
+            temp_table[idx_start:idx_start + row_count].write(
+                cat_files[-1], format="ascii.no_header", overwrite=True)
+        del(temp_table)
+        # run bpz
+        print(
+            "running BPZ" +
+            (" with %d threads" % args.threads if args.threads > 1 else ""))
+        if args.threads > 1:
+            print(
+                "redirecting concurrent output to: %s" %
+                log_files[0].replace(".01.", ".*."))
+            with multiprocessing.Pool(args.threads) as pool:
+                out_files = pool.map(
+                    run_BPZ, list(zip(cat_files, prob_files, log_files)))
+        else:
+            print("#" * 30)
+            out_files.append(run_BPZ([cat_files[0], prob_files[0], None]))
+            print("#" * 30)
+        # recombine and convert output tables
+        print(
+            "%s output data" % (
+                "concatenate" if args.threads > 1 else "convert"))
+        tables = []
+        for fpath in out_files:
+            tables.append(Table.read(fpath, format="ascii"))
+            try:
+                os.remove(fpath)
+            except Exception:
+                pass
+        table = vstack(tables)
+        # correct the repeated indices
+        if args.id is None:
+            table["ID"] = np.arange(1, len(table["ID"]) + 1, dtype=np.int64)
+        # recombine and convert output likelihoods
+        if args.store_likelihoods:
+            integrated = np.empty(len(table))
+            z = np.arange(args.z_min, args.z_max + 0.01, 0.01)
+            probfile = os.path.splitext(args.output)[0] + ".prob"
+            idx = 1
+            wrote_header = False
+            with open(probfile, "w") as f:
+                for fpath in prob_files:
+                    if fpath is None:
+                        continue
+                    with open(fpath) as infile:
+                        for i, line in enumerate(infile):
+                            if i == 0 and not wrote_header:
+                                f.write(line)
+                                wrote_header = True
+                            elif i > 0:
+                                # integrate up to true redshift
+                                if z_true is not None:
+                                    p = np.fromstring(line, sep=" ")[1:]
+                                    integrated[idx - 1] = integrate_pdf(
+                                        z, p, z_true[idx - 1])
+                                # correct the repeated indices
+                                if args.id is None and idx > 0:
+                                    splitted = line.split()
+                                    splitted[0] = str(idx)
+                                    line = " ".join(splitted) + "\n"
+                                f.write(line)
+                                idx += 1
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
+            table["Q_value"] = Column(
+                integrated, description="p(z) integrated up to true redshift")
+        # write final output table
+        print("write table to: %s" % args.output)
+        table.write(args.output, format=args.o_format, overwrite=True)
+    finally:
+        # tidy up and convert output tables
+        print("remove temporary data")
+        try:
+            os.remove(column_file)
+        except Exception:
+            pass
+        # remove remaining data products
+        for flist in [cat_files, prob_files, out_files]:
+            for fpath in flist:
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass

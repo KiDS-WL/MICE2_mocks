@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+
+import numpy as np
+from astropy import units
+from astropy.table import Column, Table
+from data_table import load_table
+
+
+def magnification_correction(mag, kappa):
+    d_mu = 2.0 * kappa
+    return mag - 2.5 * np.log10(1 + d_mu)
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(
+        description='Compute magnitudes corrected for gravitational lensing '
+                    'magnification in the limit of weak lensing.')
+
+    data_group = parser.add_argument_group('data')
+    data_group.add_argument(
+        '-i', '--input', required=True, help='file path of input data table')
+    data_group.add_argument(
+        '--i-format', default='fits',
+        help='astropy.table format specifier of the input table '
+             '(default: %(default)s)')
+    data_group.add_argument(
+        '-o', '--output', required=True, help='file path of output table')
+    data_group.add_argument(
+        '--o-format', default='fits',
+        help='astropy.table format specifier of the output table '
+             '(default: %(default)s)')
+
+    params_group = parser.add_argument_group('parameters')
+    params_group.add_argument(
+        '--filters', nargs='*', required=True,
+        help='list of table column names (use colX, with X in 1,2,...,N, if '
+             'no table header exist) providing model magnitudes')
+    params_group.add_argument(
+        '--convergence', required=True,
+        help='table column name of convergence')
+
+    args = parser.parse_args()
+
+    columns = [f for f in args.filters]
+    columns.append(args.convergence)
+    data = load_table(args.input, args.i_format, columns)
+    print("use input filters: %s" % ", ".join(args.filters))
+
+    # collect output data
+    table = Table()
+    for filt in args.filters:
+        table[filt + "_mag"] = Column(
+            magnification_correction(data[filt], data[args.convergence]),
+            unit=units.mag,
+            description="magnitude magnified by gravitational lensing")
+
+    # write to specified output path
+    print("write table to: %s" % args.output)
+    table.write(args.output, format=args.o_format, overwrite=True)

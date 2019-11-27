@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import pickle
+import sys
+from multiprocessing import cpu_count
+
+import numpy as np
+from astropy import units
+from astropy.table import Column, Table, hstack, vstack
+from data_table import load_table
+from scipy.spatial import cKDTree
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(
+        description='Draw and assign a property from real data to a simulated '
+                    'data catalogue based on certain data attribute.')
+
+    sim_group = parser.add_argument_group('simulation')
+    sim_group.add_argument(
+        '-s', '--simulated', required=True,
+        help='file path of the simulation table')
+    sim_group.add_argument(
+        '--s-format', default='fits',
+        help='astropy.table format specifier of the simulation table')
+    sim_group.add_argument(
+        '--s-attr', nargs='*', required=True,
+        help='list of column names of simulation attributes based on which '
+             'the property are asiggned or drawn')
+    sim_group.add_argument(
+        '--s-prop', nargs='*',
+        help='column name at which property will be stored in simulation '
+             'table (default: same as --dprop)')
+
+    data_group = parser.add_argument_group('data')
+    data_group.add_argument(
+        '-d', '--data', required=True,
+        help='file path of the data table')
+    data_group.add_argument(
+        '--d-format', default='fits',
+        help='astropy.table format specifier of the data table')
+    data_group.add_argument(
+        '--d-attr', nargs='*', required=True,
+        help='list of column names of data attributes based on which the '
+             'property is asiggned or drawn')
+    data_group.add_argument(
+        '--d-prop', nargs='*', required=True,
+        help='column name of property in data table')
+    data_group.add_argument(
+        '--d-sparse', type=int, default=1,
+        help='use only every --dsparse entries in input data table')
+
+    params_group = parser.add_argument_group('parameters')
+    params_group.add_argument(
+        '-t', '--tree', default="",
+        help='file path at which the generated search tree is stored or '
+             'loaded from an existing pickle file '
+             '(python%s.%s)' % (sys.version[0], sys.version[1]))
+    params_group.add_argument(
+        '--r-max', type=float,
+        help='maximum distance at which neighbours are considered a match, '
+             'this requires specifying --fallback')
+    params_group.add_argument(
+        '--fallback', nargs='*',
+        help='value to assign if no neighbour is found within --r-max, one '
+             'for each drawn property (bools can be represented by "True" or '
+             '"False")')
+    params_group.add_argument(
+        '-o', '--output', required=True, help='file path of output table')
+    params_group.add_argument(
+        '--o-format', default='fits',
+        help='astropy.table format specifier of the output table '
+             '(default: %(default)s)')
+    params_group.add_argument(
+        '--threads', type=int, default=cpu_count(),
+        help='number of threads to use for the nearest neighbour query')
+
+    args = parser.parse_args()
+
+    setattr(args, "threads", min(cpu_count(), max(0, args.threads)))
+
+    if args.s_prop is None:
+        setattr(args, "s_prop", args.d_prop)
+
+    if args.r_max is not None and args.fallback is None:
+        raise parser.error("--fallback is required with --r-max")
+
+    simul = load_table(args.simulated, args.s_format, args.s_attr)
+    data = load_table(
+        args.data, args.d_format,
+        [*args.d_attr, *args.d_prop])[::args.d_sparse]
+    # get the data columns to match simulation against data
+    simul_attr = np.transpose([simul[s] for s in args.s_attr])
+    data_attr = np.transpose([data[s] for s in args.d_attr])
+    data_props = data[tuple(args.d_prop)]  # this is an astropy table
+    n_props = len(data_props.columns)
+    n_data = len(data_props)
+
+    # get the property data type
+    if args.fallback is not None:
+        fallbacks = [f for f in args.fallback]
+        # convert the input fallback values to data of valid type
+        if len(fallbacks) != n_props:
+            raise ValueError(
+                "number of properties is %d, but number of fallbacks is %d" % (
+                    n_props, len(fallbacks)))
+        for i in range(n_props):
+            dtype = data_props.dtype[i]
+            colname = data_props.colnames[i]
+            try:
+                if dtype.kind == "b":  # conversion of booleans
+                    fallbacks[i] = Column(
+                        [args.fallback[i].upper() == "TRUE"],
+                        colname, dtype=dtype)
+                else:
+                    fallbacks[i] = Column(
+                        [args.fallback[i]], colname, dtype=dtype)
+            except ValueError:
+                raise ValueError(
+                    "failed to convert fallback '%s' to type '%s'" % (
+                        args.fallback[i], dtype.str))
+        # append the fallbacks into the property vectors, if neighbours are
+        # outside r_max, cKDTree.query will point to index len(property)
+        fallback_row = Table(fallbacks)
+        data_props = vstack([data_props, fallback_row])
+
+    # draw from data using t_nearest neighbours
+    if os.path.exists(args.tree):
+        print("load existing search tree from: %s" % args.tree)
+        with open(args.tree, "rb") as f:
+            tree = pickle.load(f)
+        # verify the tree structure
+        if not isinstance(tree, cKDTree):
+            sys.exit("ERROR: pickled object ist not a 'cKDTree' instance")
+        n, m, = data_attr.shape
+        if tree.m != m or tree.n != n:
+            message = "ERROR: data with dimensions (%d, %d) does not " % (n, m)
+            message += "match loaded tree with (%d, %d)" % (tree.n, tree.m)
+            sys.exit(message)
+        for i in range(m):
+            if not np.isclose(
+                    tree.data[:, i], data_attr[:, i], equal_nan=True).all():
+                message = "ERROR: data in dimension %d " % i
+                message += "of tree does not match data"
+                sys.exit(message)
+    else:
+        print("build search tree for '%s'" % ", ".join(args.d_attr))
+        tree = cKDTree(data_attr)
+        # write the tree if the path string is not empty
+        if args.tree != "":
+            print("write search tree to python pickle file")
+            if os.path.exists(os.path.dirname(args.tree)):
+                with open(args.tree, "wb") as f:
+                    pickle.dump(tree, f)
+            else:
+                sys.exit(
+                    "ERROR: folder does not exit: %s" %
+                    os.path.dirname(args.tree))
+
+    print("assign values from nearest neighbour")
+    dist, idx_nearest = tree.query(
+        simul_attr, k=1, distance_upper_bound=args.r_max, n_jobs=args.threads)
+
+    # create a new output table
+    table = Table()
+    for i, (s_prop, d_prop) in enumerate(zip(args.s_prop, args.d_prop)):
+        table[s_prop] = Column(
+            data_props[d_prop][idx_nearest], dtype=data_props.dtype[i],
+            description="drawn via %s from file: %s" % (
+                ", ".join(args.d_attr), args.data))
+
+    # write to specified output path
+    print("write table to: %s" % args.output)
+    table.write(args.output, format=args.o_format, overwrite=True)
