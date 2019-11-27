@@ -8,7 +8,29 @@ from scipy.interpolate import interp1d, interp2d
 from scipy.stats import gaussian_kde
 
 
+# folder containing data for the spec. success rate for the deep spec-z samples
+success_rate_dir = os.path.join(
+    os.path.dirname(__file__),  # location of this script
+    "success_rate_data")
+
+
 class MICE_data(object):
+    """
+    Base class providing easy access to magnitude columns of MICE2 data tables.
+    Filters can be accessed as class methods by there name, e.g.:
+
+    MICE_data.i(suffix) would return the internally defined i-band magnitude
+    with a given suffix (true: model magnitude, evo: evolution corrected model
+    magnitude, obs: survey photometry realisation). Detects automatically if
+    magnification is applied (additional suffix: mag).
+
+    Supports indexing like astropy.table.Table itself.
+
+    Parameters
+    ----------
+    micetable : astropy.table.Table
+        MICE2 data table.
+    """
 
     filter_keys = {}  # map band name to table keyword
     detection_band = None
@@ -21,11 +43,38 @@ class MICE_data(object):
         return len(self.data)
 
     def detect_mask(self):
-        detect_mag = self._get_filter_keyword(self.detection_band, "obs")
+        """
+        Returns a mask indicating if an object was observed in the detection
+        band of the survey.
+
+        Returns
+        -------
+        mask : boolean array_like
+            Indication whether dection was successful or not.
+        """
+        # non-detections are either mag==99 or mag==inf/nan
+        detect_mag = self._get_filter_data(self.detection_band, "obs")
         detect_mask = np.isfinite(detect_mag) & (detect_mag < 90.0)
         return detect_mask
 
-    def _get_filter_keyword(self, filter, suffix):
+    def _get_filter_data(self, filter, suffix):
+        """
+        Returns the data of the requested magnitude.
+
+        Parameters
+        ----------
+        filter : string
+            Filter name as defined in self.filter_keys.
+        suffix : string
+            Suffix to distinguish different magnitude types (true: model
+            magnitude, evo: evolution corrected model magnitude, obs: survey
+            photometry realisation).
+
+        Returns
+        -------
+        data : astropy.table.Table
+            Magnitude column data.
+        """
         full_key = "%s_%s_mag" % (self.filter_keys[filter], suffix)
         if full_key in self.data.colnames:
             print("selecting column '%s'" % full_key)
@@ -43,14 +92,24 @@ class MICE_data(object):
             raise AttributeError
         if attr not in self.filter_keys:
             raise KeyError("unknown filter '%s'" % attr)
-        else:
-            return lambda suffix: self._get_filter_keyword(attr, suffix)
+        else:  # call _get_filter_data with the right parameters
+            return lambda suffix: self._get_filter_data(attr, suffix)
 
     def __getitem__(self, item):
+        # interface for table indexing
         return self.data.__getitem__(item)
 
 
 class KV450_MICE_data(MICE_data):
+    """
+    Sub-class of MICE_data defining the KiDS-VIKING specific mock catalogue
+    magnitude columns and the detection band.
+
+    Parameters
+    ----------
+    micetable : astropy.table.Table
+        MICE2 data table.
+    """
 
     filter_keys = {
         "u": "sdss_u",
@@ -70,6 +129,15 @@ class KV450_MICE_data(MICE_data):
 
 
 class DES_MICE_data(MICE_data):
+    """
+    Sub-class of MICE_data defining the DES specific mock catalogue magnitude
+    columns and the detection band.
+
+    Parameters
+    ----------
+    micetable : astropy.table.Table
+        MICE2 data table.
+    """
 
     filter_keys = {
         "g": "des_asahi_full_g",
@@ -85,9 +153,22 @@ class DES_MICE_data(MICE_data):
 
 
 class make_specz(object):
+    """
+    Base class for spectroscopic selection function. The selection is split
+    into different steps (photometryCut, speczSuccess, surveyDetection,
+    downsampling, etc.) which can be called in the correct order using the
+    __call__() method, which also provides basic statistics about each
+    selection process.
 
-    needs_n_z = False
-    needs_n_tot = False
+    Parameters
+    ----------
+    micedata : MICE_data
+        MICE2 data table on which the selection function is applied.
+    """
+
+    # indicates the signature of __call__
+    needs_n_z = False  # whether the total number of objects is required
+    needs_n_tot = False  # whether the data n(z_spec) is required
 
     def __init__(self, micedata):
         assert(isinstance(micedata, MICE_data))
@@ -96,6 +177,16 @@ class make_specz(object):
         self.redshift = micedata["z_cgal_v"]
 
     def stats(self):
+        """
+        Provide basic statistics on the current state of the selection mask.
+
+        Returns
+        -------
+        stats : dict
+            Contains the classmethod name from which which this method was
+            called, the total number of remaining objects and their mean
+            redshift.
+        """
         stats = {
             "method": inspect.stack()[1][3],  # method name that called stats
             "N_tot": np.count_nonzero(self.mask),
@@ -103,26 +194,72 @@ class make_specz(object):
         return stats
 
     def input(self):
+        """
+        Returns self.stats() to record the input data.
+
+        Returns
+        -------
+        stats : dict
+            Statistics dictionaly returned by self.stats().
+        """
         return self.stats()
 
     def photometryCut(self):
+        """
+        Method that applies all magnitude or colour cuts to the input data.
+
+        Returns
+        -------
+        stats : dict
+            Statistics dictionaly returned by self.stats().
+        """
         raise NotImplementedError
 
     def speczSuccess(self):
+        """
+        Method that applies all magnitude or colour cuts to the input data.
+
+        Returns
+        -------
+        stats : dict
+            Statistics dictionaly returned by self.stats().
+        """
         raise NotImplementedError
 
     def surveyDetection(self):
+        """
+        Method that applies the survey detection cut.
+
+        Returns
+        -------
+        stats : dict
+            Statistics dictionaly returned by self.stats().
+        """
         # update the internal state
         self.mask &= self.data.detect_mask()
         return self.stats()
 
     def downsampling_N_tot(self, N_tot):
+        """
+        Method to randomly sample down the remaining MICE2 objects to a given
+        number of data objects.
+
+        Parameters
+        ----------
+        N_tot : int
+            Number of objects to sample down to.
+
+        Returns
+        -------
+        stats : dict
+            Statistics dictionaly returned by self.stats().
+        """
         idx_all = np.arange(len(self.data), dtype=np.int64)
         idx_preselect = idx_all[self.mask]
         # shuffle and select the first draw_n objects
         np.random.shuffle(idx_preselect)
         idx_keep = idx_preselect[:N_tot]
-        # create a new mask with entries enabled that have been selected
+        # create a mask with only those entries enabled that have been selected
         mask = np.zeros_like(self.mask)
         mask[idx_keep] = True
         # update the internal state
@@ -130,26 +267,59 @@ class make_specz(object):
         return self.stats()
 
     def downsampling_n_z(self, n_z):
+        """
+        Method to randomly sample down the remaining MICE2 objects to a given
+        data redshift distribution using Gaussian KDEs.
+
+        Parameters
+        ----------
+        n_z : array_like
+            Spectroscopic redshifts of data objects.
+
+        Returns
+        -------
+        stats : dict
+            Statistics dictionaly returned by self.stats().
+        """
         idx_all = np.arange(len(self.data), dtype=np.int64)
+        # only consider objects that are not already masked
         idx_preselect = idx_all[self.mask]
         z_preselect = self.redshift[self.mask]
-        # create Gaussian KDEs
+        # create Gaussian KDEs of the redshift distributions
         kde_spec = gaussian_kde(n_z, 0.05)
         kde_phot = gaussian_kde(z_preselect, 0.05)
-        # compute the rejection probability based on their ratios
+        # compute the rejection probability based on the data to mock redshift
+        # probabilty densities
         p_keep = (
             (kde_spec(z_preselect) * len(n_z)) /
             (kde_phot(z_preselect) * len(z_preselect)))
         # reject randomly galaxies
         rand = np.random.uniform(size=len(z_preselect))
         mask_keep = 1.0 - np.minimum(1.0, p_keep) < rand
+        # create a mask with only those entries enabled that have been selected
         mask = np.zeros_like(self.mask)
         mask[idx_preselect[mask_keep]] = True
         # update the internal state
         self.mask &= mask
         return self.stats()
 
-    def __call__(self):
+    def __call__(self, pass_survey_selection=False):
+        """
+        Apply the selection function step by step to the input mock catalogue.
+
+        Parameters
+        ----------
+        pass_survey_selection : bool
+            Whether the objects should be rejected which are not detected by
+            the imaging survey.
+
+        Returns
+        -------
+        data : astropy.table.Table
+            Input mock data table with selection function mask applied.
+        stats : list
+            List of statistics from each selection functin step.
+        """
         raise NotImplementedError
 
 
@@ -179,7 +349,7 @@ class make_2dFLenS(make_specz):
         c_p = 0.7 * (self.g-self.r) + 1.2 * (self.r-self.i - 0.18)
         c_r = (self.r-self.i) - (self.g-self.r) / 4.0 - 0.18
         d_r = (self.r-self.i) - (self.g-self.r) / 8.0
-        # photometric cuts
+        # defining the LOWZ sample
         low_z1 = (
             (self.r > 16.5) &
             (self.r < 19.2) &
@@ -196,12 +366,14 @@ class make_2dFLenS(make_specz):
             (self.r < (13.5 + c_p / 0.32)) &
             (np.abs(c_r) < 0.2))
         low_z = low_z1 | low_z2 | low_z3
+        # defining the MIDZ sample
         mid_z = (
             (self.i > 17.5) &
             (self.i < 19.9) &
             ((self.r-self.i) < 2.0) &
             (d_r > 0.55) &
             (self.i < 19.86 + 1.6 * (d_r - 0.9)))
+        # defining the HIGHZ sample
         high_z = (
             (self.z < 19.9) &
             (self.i > 19.9) &
@@ -281,18 +453,20 @@ class make_SDSS_BOSS(make_specz):
         c_p = 0.7 * (self.g-self.r) + 1.2 * (self.r-self.i - 0.18)
         c_r = (self.r-self.i) - (self.g-self.r) / 4.0 - 0.18
         d_r = (self.r-self.i) - (self.g-self.r) / 8.0
-        # photometric cuts
+        # defining the LOWZ sample
         low_z = (
             (self.r > 16.0) &
             (self.r < 20.0) &
             (np.abs(c_r) < 0.2) &
             (self.r < 13.35 + c_p / 0.3))
+        # defining the CMASS sample
         cmass = (
             (self.i > 17.5) &
             (self.i < 20.1) &
             (d_r > 0.55) &
             (self.i < 19.98 + 1.6 * (d_r - 0.7)) &
             ((self.r-self.i) < 2.0))
+        # CMASS sparse is ignored
         mask = low_z | cmass
         # update the internal state
         self.mask &= mask
@@ -306,16 +480,10 @@ class make_SDSS_BOSS(make_specz):
         return self.data.data[self.mask], stats
 
 
-class make_SDSS_BOSS_original(make_specz):
-
-    def __init__(self, micedata):
-        super().__init__(micedata)
-        # magnitudes
-        self.g = micedata.g("obs")
-        self.r = micedata.r("obs")
-        self.i = micedata.i("obs")
+class make_SDSS_BOSS_original(make_SDSS_BOSS):
 
     def photometryCut(self):
+        # THIS USES THE ORIGINAL CUTS USED ON THE BOSS DATA
         # colour masking
         mask = (np.abs(self.g) < 99.0) & (np.abs(self.r) < 99.0)
         mask &= (np.abs(self.r) < 99.0) & (np.abs(self.i) < 99.0)
@@ -323,29 +491,24 @@ class make_SDSS_BOSS_original(make_specz):
         c_p = 0.7 * (self.g-self.r) + 1.2 * (self.r-self.i - 0.18)
         c_r = (self.r-self.i) - (self.g-self.r) / 4.0 - 0.18
         d_r = (self.r-self.i) - (self.g-self.r) / 8.0
-        # photometric cuts
+        # defining the LOWZ sample
         low_z = (
             (self.r > 16.0) &
             (self.r < 19.5) &
             (np.abs(c_r) < 0.2) &
             (self.r < 13.5 + c_p / 0.3))
+        # defining the CMASS sample
         cmass = (
             (self.i > 17.5) &
             (self.i < 19.9) &
             (d_r > 0.55) &
             (self.i < 19.98 + 1.6 * (d_r - 0.8)) &
             ((self.r-self.i) < 2.0))
+        # CMASS sparse is ignored
         mask = low_z | cmass
         # update the internal state
         self.mask &= mask
         return self.stats()
-
-    def __call__(self, pass_survey_selection=False):
-        stats = [self.input()]
-        stats.append(self.photometryCut())
-        if pass_survey_selection:
-            stats.append(self.surveyDetection())
-        return self.data.data[self.mask], stats
 
 
 class make_SDSS_QSO(make_specz):
@@ -354,10 +517,20 @@ class make_SDSS_QSO(make_specz):
         super().__init__(micedata)
 
     def environmentCut(self):
+        """
+        Method create a fake MICE2 quasar sample. Quasars do not exists in
+        MICE2, therefore the assumption is made that quasars sit in the central
+        galaxies of the most massive halos.
+
+        Returns
+        -------
+        stats : dict
+            Statistics dictionaly returned by self.stats().
+        """
         is_central = self.data["flag_central"] == 1
         lm_halo = self.data["lmhalo"]
-        lm_stel = self.data["lmstellar"]
-        mask = is_central & (lm_stel > 11.2) & (lm_halo > 13.3)
+        lm_stellar = self.data["lmstellar"]
+        mask = is_central & (lm_stellar > 11.2) & (lm_halo > 13.3)
         # update the internal state
         self.mask &= mask
         return self.stats()
@@ -371,6 +544,15 @@ class make_SDSS_QSO(make_specz):
 
 
 class make_SDSS(make_specz):
+    """
+    The full SDSS selection is a combination of applying the SDSS main,
+    SDSS BOSS and SDSS QSO sample selections on an input MICE2 mock catalogue.
+
+    Parameters
+    ----------
+    micedata : MICE_data
+        MICE2 data table on which the selection function is applied.
+    """
 
     def __init__(self, micedata):
         super().__init__(micedata)
@@ -429,6 +611,8 @@ class make_WiggleZ(make_specz):
             (self.r-self.i < 0.4) &
             (self.g-self.r > 0.6) &
             (self.r-self.z < 0.7 * (self.g-self.r)))
+        # further selection done on NUV, FUV and IR observations cannot be
+        # be reproduced on the mocks
         mask = include & ~exclude
         # update the internal state
         self.mask &= mask
@@ -476,10 +660,9 @@ class make_DEEP2(make_specz):
         # with the first and last bin centered on 19 and 24.
         success_R_bins = np.arange(18.9, 24.1 + 0.01, 0.2)
         success_R_centers = (success_R_bins[1:] + success_R_bins[:-1]) / 2.0
-        success_R_rate = 1 - np.array([
-            0.069, 0.069, 0.082, 0.082, 0.069, 0.070, 0.044, 0.103, 0.093,
-            0.141, 0.093, 0.085, 0.108, 0.101, 0.110, 0.139, 0.161, 0.173,
-            0.184, 0.191, 0.261, 0.290, 0.337, 0.393, 0.433, 0.467])
+        # paper has given 1 - [sucess rate] in the histogram
+        success_R_rate = np.loadtxt(os.path.join(
+                success_rate_dir, "DEEP2_success.txt"))
         # interpolate the success rate as probability of being selected with
         # the probability at R > 24.1 being 0
         p_success_R = interp1d(
@@ -518,14 +701,13 @@ class make_VVDSf02(make_specz):
         return self.stats()
 
     def speczSuccess(self):
-        # Spec-z success rate as function of i_AB read of Figure 13 in
+        # Spec-z success rate as function of i_AB read of Figure 16 in
         # LeFevre+05 for the VVDS 2h field. Values are binned in steps of
         # 0.5 mag with the first starting at 17 and the last bin ending at 24.
         success_I_bins = np.arange(17.0, 24.0 + 0.01, 0.5)
         success_I_centers = (success_I_bins[1:] + success_I_bins[:-1]) / 2.0
-        success_I_rate = np.array([
-            0.993, 0.980, 0.980, 0.977, 0.950, 0.960, 0.960,
-            0.944, 0.934, 0.917, 0.891, 0.854, 0.785, 0.685])
+        success_I_rate = np.loadtxt(os.path.join(
+                success_rate_dir, "VVDSf02_I_success.txt"))
         # interpolate the success rate as probability of being selected with
         # the probability at I > 24 being 0
         p_success_I = interp1d(
@@ -535,24 +717,14 @@ class make_VVDSf02(make_specz):
         random_draw = np.random.rand(len(self.data))
         mask = random_draw < p_success_I(self.I)
         # Spec-z success rate as function of redshift read of Figure 13a/b in
-        # LeFevre+05 for VVDS deep sample. The listing is split by i_AB into
+        # LeFevre+13 for VVDS deep sample. The listing is split by i_AB into
         # ranges (17.5; 22.5] and (22.5; 24.0].
-        success_z_bright_centers, success_z_bright_rate = np.transpose([
-            [0.000, 0.996], [0.239, 0.958], [0.345, 0.979], [0.447, 0.975],
-            [0.539, 0.981], [0.640, 0.983], [0.741, 0.992], [0.843, 0.979],
-            [0.940, 0.985], [1.046, 0.983], [1.143, 0.945], [1.240, 0.861],
-            [1.346, 0.838], [1.444, 0.686], [1.541, 0.568], [1.647, 0.604],
-            [1.741, 1.000]])  # at z > 1.75 there are only lower limits
-        success_z_deep_centers, success_z_deep_rate = np.transpose([
-            [0.000, 0.888], [0.251, 0.897], [0.343, 0.920], [0.454, 0.945],
-            [0.550, 0.962], [0.647, 0.964], [0.749, 0.954], [0.850, 0.933],
-            [0.947, 0.912], [1.053, 0.901], [1.150, 0.872], [1.251, 0.869],
-            [1.353, 0.869], [1.445, 0.867], [1.546, 0.851], [1.652, 0.861],
-            [1.749, 0.836], [1.851, 0.722], [1.953, 0.678], [2.050, 0.691],
-            [2.151, 0.686], [2.248, 0.617], [2.354, 0.691], [2.450, 0.697],
-            [2.552, 0.657], [2.653, 0.678], [2.754, 0.764], [2.851, 0.802],
-            [2.952, 0.905], [3.049, 0.876], [3.150, 0.844], [3.252, 0.789],
-            [3.353, 0.787], [3.451, 0.640], [4.003, 0.752]])
+        # NOTE: at z > 1.75 there are only lower limits (due to a lack of
+        # spec-z?), thus the success rate is extrapolated as 1.0 at z > 1.75
+        success_z_bright_centers, success_z_bright_rate = np.loadtxt(
+            os.path.join(success_rate_dir, "VVDSf02_z_bright_success.txt")).T
+        success_z_deep_centers, success_z_deep_rate = np.loadtxt(
+            os.path.join(success_rate_dir, "VVDSf02_z_deep_success.txt")).T
         # interpolate the success rates as probability of being selected with
         # the probability in the bright bin at z > 1.75 being 1.0 and the deep
         # bin at z > 4.0 being 0.0
@@ -603,15 +775,14 @@ class make_zCOSMOS(make_specz):
         # Figure 3 in Lilly+09 for zCOSMOS bright sample. Do a spline
         # interpolation of the 2D data and save it as pickle on the disk for
         # faster reloads
-        wdir = os.path.dirname(__file__)
-        pickle_file = os.path.join(wdir, "zCOSMOS_successrate.cache")
+        pickle_file = os.path.join(success_rate_dir, "zCOSMOS.cache")
         if not os.path.exists(pickle_file):
             x = np.loadtxt(os.path.join(
-                wdir, "zCOSMOS_successrate_z_sampling.txt"))
+                success_rate_dir, "zCOSMOS_z_sampling.txt"))
             y = np.loadtxt(os.path.join(
-                wdir, "zCOSMOS_successrate_I_sampling.txt"))
+                success_rate_dir, "zCOSMOS_I_sampling.txt"))
             rates = np.loadtxt(os.path.join(
-                wdir, "zCOSMOS_successrate_sample_values.txt"))
+                success_rate_dir, "zCOSMOS_success.txt"))
             p_success_zI = interp2d(x, y, rates, copy=True, kind="linear")
             with open(pickle_file, "wb") as f:
                 pickle.dump(p_success_zI, f)
@@ -647,6 +818,15 @@ class make_zCOSMOS(make_specz):
 
 
 class make_idealized(make_specz):
+    """
+    Idealized spectroscopic mock sample used for cross-correlaton redshift
+    tests.
+
+    Parameters
+    ----------
+    micedata : MICE_data
+        MICE2 data table on which the selection function is applied.
+    """
 
     def __init__(self, micedata):
         assert(isinstance(micedata, MICE_data))

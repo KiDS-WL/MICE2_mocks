@@ -1,3 +1,4 @@
+# redshift sampling of the success rate from Lilly+09 fig. 3
 0.000000000000000000e+00
 5.870020964360586277e-03
 1.174004192872117255e-02
