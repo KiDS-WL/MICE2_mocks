@@ -8,44 +8,120 @@ from multiprocessing import cpu_count
 import numpy as np
 from astropy import units
 from astropy.table import Column, Table
-from data_table import load_table
 from scipy.optimize import root_scalar
-from scipy.special import gamma, gammainc
+from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
+
+from table_tools import load_table
 
 
 def f_R_e(R, R_e_Disk, R_e_Bulge, f_B, percentile=0.5):
-    if R_e_Disk == 0.0 or f_B == 1.0:
+    """
+    Function used to find the effective radius of a galaxy with combined
+    bulge and disk component. Computes the fraction of the total flux emitted
+    within a radius R minus a percentile. The percentile sets the zero-point
+    of this function.
+
+    By running a root-finding algorithm, the radius corresponding to a given
+    percentile of emitted flux within can be computed. Setting the percentile
+    to 0.5 yields the effective radius, the radius from within which 50% of the
+    total flux are emitted.
+
+    Parameters
+    ----------
+    R : float
+        Radius (angular) at which to evaluate the function.
+    R_e_Disk : float
+        Effective angular size of the disk component.
+    R_e_Bulge : float
+        Effective angular size of the bulge component.
+    f_B : float
+        Bulge fraction, (flux bulge / total flux).
+    percentile : float
+        The percentile subtracted from the calculated flux fraction within R.
+
+    Returns
+    -------
+    flux_fraction_offset : float
+        Fraction of flux emitted within R minus percentile.
+    """
+    if R_e_Disk == 0.0 or f_B == 1.0:  # no disk component
         disk_term = 0.0
-    else:
+    else:  # evaluate the integrated Sersic n=1 profile
         x_D = 1.6721 * R / R_e_Disk
         disk_term = (1.0 - f_B) * gammainc(2, x_D)
-    if R_e_Bulge == 0.0 or f_B == 0.0:
+    if R_e_Bulge == 0.0 or f_B == 0.0:  # no bulge component
         bulge_term = 0.0
-    else:
+    else:  # evaluate the integrated Sersic n=4 profile
         x_B = 7.6697 * (R / R_e_Bulge) ** 0.25
         bulge_term = f_B * gammainc(8, x_B)
-    return disk_term + bulge_term - percentile
+    # disk_term and bulge_term are already normalized by the total flux
+    flux_fraction_offset = disk_term + bulge_term - percentile
+    return flux_fraction_offset
 
 
 def f_R_e_derivative(R, R_e_Disk, R_e_Bulge, f_B, *args):
-    if R_e_Disk == 0.0 or f_B == 1.0:
+    """
+    Derivative of f_R_e wrt. the radius used by the root-finding algorithm.
+
+    Parameters
+    ----------
+    R : float
+        Radius (angular) at which to evaluate the derivative.
+    R_e_Disk : float
+        Effective angular size of the disk component.
+    R_e_Bulge : float
+        Effective angular size of the bulge component.
+    f_B : float
+        Bulge fraction, (flux bulge / total flux).
+
+    Returns
+    -------
+    flux_fraction_der : float
+        Derivative of f_R_e.
+    """
+    if R_e_Disk == 0.0 or f_B == 1.0:  # no disk component
         disk_term = 0.0
-    else:
+    else:  # evaluate the derivative of the integrated Sersic n=1 profile
         b_1 = 1.6721
         x_D = b_1 * R / R_e_Disk
         disk_term = (1.0 - f_B) * np.exp(-x_D) * x_D / R_e_Disk * b_1
-    if R_e_Bulge == 0.0 or f_B == 0.0:
+    if R_e_Bulge == 0.0 or f_B == 0.0:  # no bulge component
         bulge_term = 0.0
-    else:
+    else:  # evaluate the derivative of the integrated Sersic n=4 profile
         b_4 = 7.6697
         x_B = b_4 * (R / R_e_Bulge) ** 0.25
         bulge_term = (
             f_B * np.exp(-x_B) / 5040.0 * x_B**4 / R_e_Bulge * b_4**4 / 4.0)
-    return disk_term + bulge_term
+    # combined derivative is sum of disk and bulge derivatives
+    flux_fraction_der = disk_term + bulge_term
+    return flux_fraction_der
 
 
 def find_percentile(
         percentile, R_e_Disk, R_e_Bulge, f_B, method="newton"):
+    """
+    Compute the radius within which a certain percentile of flux is emitted
+    using the scipy.optimize.root_scalar root-finding algorithm. By default
+    the Newton's method is used.
+
+    Parameters
+    ----------
+    percentile : float
+        The percentile of emitted flux from within the radius of interest.
+    R_e_Disk : float
+        Effective angular size of the disk component.
+    R_e_Bulge : float
+        Effective angular size of the bulge component.
+    f_B : float
+        Bulge fraction, (flux bulge / total flux).
+    method : sting
+        Root-finding method to use (from scipy.optimize.root_scalar).
+
+    Returns
+    -------
+    solution.root : float
+        The radius within which the percentile of flux is emitted.
+    """
     assert(0.0 <= f_B <= 1.0)
     assert(R_e_Disk >= 0.0 and R_e_Bulge >= 0.0)
     x0 = (1.0 - f_B) * R_e_Disk + f_B * R_e_Bulge
@@ -56,6 +132,9 @@ def find_percentile(
 
 
 def root_function(args):
+    """
+    Wrapper for multiprocessing
+    """
     return find_percentile(*args)
 
 
@@ -146,22 +225,26 @@ if __name__ == "__main__":
     flux_fraction = np.full_like(bulge_ratio, args.flux_frac)
     # create an argument list for map / multiprocessing.pool.map
     arguments = list(zip(flux_fraction, disk_size, bulge_size, bulge_ratio))
-    print(
-        "compute intrinsic galaxy sizes" +
-        (" using %d threads" % args.threads if args.threads > 1 else ""))
+    message = "compute intrinsic galaxy sizes"
+    # compute the radius of galaxies that emits a certain fraction of the
+    # total flux
     if args.threads > 1:
+        print(message + " using %d threads" % args.threads)
         with multiprocessing.Pool(args.threads) as pool:
             galaxy_size = pool.map(root_function, arguments)
     else:
+        print(message)
         galaxy_size = tuple(map(root_function, arguments))
-    # create the output data table
+    # compute the intrinsic galaxy major and minor axes and area
     galaxy_major = np.asarray(galaxy_size) * args.scale
     galaxy_minor = galaxy_major * ba_ratio
     galaxy_area = np.pi * galaxy_major * galaxy_minor
 
     # compute the convoluted galaxy properties and collect the data
     print("compute observed galaxy sizes")
+    # create the output data table
     table = Table()
+    # add minimal intrinsic properties need to re-compute galaxy size and shape
     table["R_E"] = Column(
         galaxy_size, unit=units.arcsec,
         description="effective radius, L(<R_E) = %f L_tot" % args.flux_frac)
@@ -171,14 +254,19 @@ if __name__ == "__main__":
     table["aper_area_intr"] = Column(
         galaxy_area, unit=units.arcsec**2,
         description="PSF corrected aperture area")
+    # compute the observational galaxy sizes utilizing the PSF per filter
     for filt in args.filters:
         psf = psf_sizes[filt]
         print("processing filter '%s' (PSF=%.2f\")" % (filt, psf))
+        # "convolution" with the PSF
         observed_major = np.sqrt(galaxy_major**2 + psf**2)
         observed_minor = np.sqrt(galaxy_minor**2 + psf**2)
+        # compute the observed axis ratio
         observed_ba = observed_minor / observed_major
+        # compute the aperture area
         observed_area = np.pi * observed_major * observed_minor
         psf_area = np.pi * psf**2
+        # compute the S/N correction by comparing the aperture area to the PSF
         sn_weight = np.sqrt(psf_area / observed_area)
         # collect data in table
         table["aper_a_%s" % filt] = Column(
