@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import sys
+
+import numpy as np
+import stomp
+from astropy.io import fits as pyfits
+
+
+def next_DEC(pointing_area, RAmin, RAmax, current_DEC):
+    """
+    Calculate the upper declination bound of a tile based on its lower bound
+    declination, extend in right ascension and tile area.
+
+    Parameters
+    ----------
+    pointing_area : float
+        Area the tile should cover.
+    RAmin : float
+        Minimum right ascension of the tile.
+    RAmax : float
+        Maximum right ascension of the tile.
+    current_DEC : float
+        Minimum declination of the tile.
+
+    Returns
+    -------
+    next_DEC : float
+        Maximum declination of the tile such that it fits the requested area.
+    """
+    dRA = (RAmax - RAmin) / 180.0 * np.pi
+    sin_current_DEC = np.sin(current_DEC / 180.0 * np.pi)
+    next_DEC_rad = np.arcsin(pointing_area / dRA + sin_current_DEC)
+    return next_DEC_rad / np.pi * 180.0
+
+
+def pointing_name(prefix, RAmin, RAmax, DECmin, DECmax):
+    """
+    Find an automatic name for a pointing based on its centeral coordinate.
+    This matches the KiDS internal naming scheme.
+
+    Parameters
+    ----------
+    RAmin : float
+        Minimum right ascension of the tile.
+    RAmax : float
+        Maximum right ascension of the tile.
+    DECmin : float
+        Minimum declination of the tile.
+    DECmax : float
+        Maximum declination of the tile.
+
+    Returns
+    -------
+    name : str
+        Propsed name for the tile.
+    """
+    RAcenter = (RAmin + RAmax) / 2.0
+    DECcenter = (DECmin + DECmax) / 2.0
+    fragments = [
+        prefix.strip("_"),
+        ("%.1f" % RAcenter).replace(".", "p"),
+        ("%.1f" % DECcenter).replace(".", "p").replace("-", "m")]
+    return "_".join(fragments)
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(
+        description='Generate a rectangular survey footprint from RA and DEC '
+                    'bounds, represented by a STOMP map. The bounds are '
+                    'appended to the file ./footprint.txt. Optionally split '
+                    'the footprint into equal area pointings, exported to '
+                    'a pointings list file')
+    parser.add_argument(
+        '-b', '--bounds', nargs=4, type=float, required=True,
+        help='bounds of polygon in degrees: DEC_min, DEC_max, RA_min, RA_max')
+    parser.add_argument(
+        '-r', '--resolution', type=int, default=int(2**14),
+        help='angular resolution of the polygon map (default: %(default)s), '
+             'must be a power of base 2 between 2 and 32768')
+    parser.add_argument(
+        '--survey', default='survey',
+        help='name to idenify survey in ./footprint.txt')
+    parser.add_argument(
+        '--n-pointings', type=int, help='number of pointings to generate')
+    parser.add_argument(
+        '--pointings-ra', type=int,
+        help='number of pointings along the RA baseline')
+    parser.add_argument(
+        '--footprint-file', default="footprint.txt",
+        help='file in which the survey meta data is collected '
+             '(default: %(default)s)')
+    parser.add_argument(
+        '--pointings-file', default="pointings.txt",
+        help='file in which the pointing boundaries are collected '
+             '(default: %(default)s)')
+    parser.add_argument(
+        '-o', '--output', help='file path of output STOMP map')
+    parser.add_argument(
+        '-a', '--append', action='store_true',
+        help='register survey in existing footprint file')
+    args = parser.parse_args()
+
+    DECmin, DECmax, RAmin, RAmax = args.bounds
+    # check bounds
+    if not all(-90.0 <= dec <= 90.0 for dec in (DECmin, DECmax)):
+        sys.exit(
+            "ERROR: DEC_min and DEC_max must be between -90 and 90 degrees")
+    if not all(0.0 <= ra <= 360.0 for ra in (RAmin, RAmax)):
+        sys.exit("ERROR: RA_min and RA_max must be between 0 and 360 degrees")
+    if DECmax <= DECmin:
+        sys.exit("ERROR: DEC_min must be lower than DEC_max")
+    if RAmax <= RAmin:
+        sys.exit("ERROR: RA_min must be lower than RA_max")
+    # check resolution
+    if args.resolution not in tuple(int(2**n) for n in range(1, 16)):
+        sys.exit(
+            "ERROR: resolution must be a power of base 2 between 2 and 32768")
+    # check pointings related arguements
+    if args.n_pointings is None or args.pointings_ra is None:
+        if not(args.n_pointings is None and args.pointings_ra is None):
+            sys.exit(
+                "ERROR: --n-pointings requires --pointings-ra")
+
+    # create footprint map
+    print(
+        "create bounds with RA: %.3f-%.3f and DEC: %.3f-%.3f at resolution %d "
+        % (RAmin, RAmax, DECmin, DECmax, args.resolution))
+    tile_corners = stomp.LatLonBound(
+        DECmin, DECmax, RAmin, RAmax, stomp.AngularCoordinate.Equatorial)
+    tile_map = stomp.Map(tile_corners, 1.0, args.resolution, True)
+    # write STOMP map to disk
+    if args.output is not None:
+        # append a file name suffix indicating the map resolution
+        outfile = ("_r%d" % args.resolution).join(
+            os.path.splitext(args.output))
+        print("write output map to: %s" % outfile)
+        tile_map.Write(outfile)
+    # create footprint.txt file that lists the RA/DEC boundaries of this
+    # survey (and others created with this script in the same folder)
+    if args.append:
+        print("register survey in: %s" % args.footprint_file)
+        # check if the file exists and already contains the survey
+        surveys = []
+        if os.path.exists(args.footprint_file):
+            write_header = False
+            with open(args.footprint_file) as f:
+                for line in f.readlines():
+                    if line.startswith("# ") or len(line.strip()) == 0:
+                        continue
+                    survey_name = line.split()[0]
+                    # remove trailing "..." introduced if the name was longer
+                    # than 20 characters
+                    surveys.append(survey_name.strip("."))
+        else:
+            write_header = True
+        # do not put the survey into the file if it already exists
+        if any(args.survey[:17] == s[:17] for s in surveys):
+            print(
+                "WARNING: survey '%s' already registered - continue ..." %
+                args.survey)
+        else:
+            with open(args.footprint_file, "a") as f:
+                if write_header:
+                    f.write(
+                        "%-20s   %-15s   %-15s   %-9s\n" % (
+                            "# FIELD", "DEC min/max", "RA min/max", "AREA"))
+                # limit survey name to 20 characters, truncate with dots
+                if len(args.survey) > 20:
+                    fieldname = args.survey[:17] + "..."
+                else:
+                    fieldname = args.survey
+                f.write(
+                    "%-20s   %+7.3f %+7.3f   %7.3f %7.3f   %9.3f\n" % (
+                        fieldname, DECmin, DECmax, RAmin, RAmax,
+                        tile_map.Area()))
+
+    # create the pointings file
+    if args.n_pointings is not None:
+        # split the footprint into equal RA columns
+        RAs = np.linspace(RAmin, RAmax, args.pointings_ra + 1)
+        ra_mins = RAs[:-1]
+        ra_maxs = RAs[1:]
+        # split the RA columns in DEC rows such that all pointings have the
+        # same area (up to the pixel resolution)
+        DECs = [DECmin]
+        pointing_area = tile_map.Area() / args.n_pointings
+        area_rad = pointing_area * (np.pi / 180.0)**2
+        pointings_dec = int(args.n_pointings / args.pointings_ra)
+        print(
+            "create %d x %d = %d pointings with %f sqdeg each" % (
+                args.pointings_ra, pointings_dec,
+                args.pointings_ra * pointings_dec, pointing_area))
+        for i in range(pointings_dec):
+            # calculate the next declination cut using the width in RA and
+            # the targeted pointing area
+            DECs.append(next_DEC(area_rad, RAs[0], RAs[1], DECs[-1]))
+        dec_mins = DECs[:-1]
+        dec_maxs = DECs[1:]
+        # generate a file that defines the pointing boundaries
+        print("write pointing file: %s" % args.pointings_file)
+        with open(args.pointings_file, "w") as f:
+            for i_dec in range(len(dec_mins)):
+                for i_ra in range(len(ra_mins)):
+                    bounds_tuple = (
+                        ra_mins[i_ra], ra_maxs[i_ra],
+                        dec_mins[i_dec], dec_maxs[i_dec])
+                    name = pointing_name(args.survey, *bounds_tuple)
+                    # line format: tile name, RAmin, RAmax, DECmin, DECmax
+                    f.write("%s %f %f %f %f\n" % (name, *bounds_tuple))
