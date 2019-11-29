@@ -63,8 +63,8 @@ if __name__ == "__main__":
              '(python%s.%s)' % (sys.version[0], sys.version[1]))
     params_group.add_argument(
         '--r-max', type=float,
-        help='maximum distance at which neighbours are considered a match, '
-             'this requires specifying --fallback')
+        help='maximum Minkowski distance at which neighbours are considered a '
+             'match, this requires specifying --fallback')
     params_group.add_argument(
         '--fallback', nargs='*',
         help='value to assign if no neighbour is found within --r-max, one '

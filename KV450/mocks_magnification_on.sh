@@ -177,7 +177,10 @@ echo ""
 echo "==> assign galaxy weights"
 # Assign lensfit weights by matching mock galaxies in 9-band magnitude space to
 # their nearest neighbour KV450 galaxies using the super-user catalogues which
-# contain objects with recal_weight<=0.
+# contain objects with recal_weight<=0. Mock galaxies that do not have a
+# nearest neighbour within --r-max (Minkowski distance) are assigned the
+# --fallback values.
+
 mocks_draw_property \
     -s ${MOCKoutfull} \
     --s-attr \
@@ -263,7 +266,7 @@ data_table_hstack \
 echo ""
 
 echo "==> apply final KV450 selection"
-# select objects with recal_weight==0 and M_0<90
+# select objects with recal_weight>0 and M_0<90
 data_table_filter \
     -i ${MOCKoutfull} \
     --rule recal_weight gg 0.0 \

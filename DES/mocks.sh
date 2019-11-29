@@ -8,34 +8,43 @@
 #                                                                             #
 ###############################################################################
 
+# data paths
 DATADIR=${HOME}/DATA/MICE2_DES/DES_sigma_12
 mkdir -p ${DATADIR}
-
 MAPDIR=${HOME}/CC/STOMP_MAPS/MICE2_DES
 mkdir -p ${MAPDIR}
 
+# static file names
 MOCKraw=${HOME}/DATA/MICE2_DES/MICE2_deep_BgVrRciIcY_shapes_halos_WL.fits
 MOCKmasked=${DATADIR}/MICE2_deep_BgVrRciIcY_shapes_halos_WL_masked.fits
 MOCKoutfull=${DATADIR}/MICE2_all.fits
 MOCKout=${DATADIR}/MICE2_DES.fits
-
+# DES data table for check plots
 dataDES=${HOME}/DATA/DES/mcal_photo_100th_mags.fits
 
+# constant parameters
 RAname=ra_gal_mag
 DECname=dec_gal_mag
 PSFs="    1.25  1.07  0.97  0.89  1.07"  # from Drlica-Wagner+17/18
 MAGlims="23.4  23.2  22.5  21.8  20.1"   # from Drlica-Wagner+17/18
-MAGsig=12.0
+MAGsig=12.0  # the original value is 10.0, however a slightly larger values
+             # yields smaller photometric uncertainties and a better match in
+             # the spec-z vs phot-z distribution between data and mocks
 
 export BPZPATH=~/src/bpz-1.99.3
 
 echo "==> generate base masks for DES footprint"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
+# STOMP map that encompasses the data downloaded from COSMOHUB
 mocks_generate_footprint \
     -b  0.00 30.00 30.00 60.00 \
     --survey MICE2_deep_BgVrRciIcY_shapes_halos_WL \
     --footprint-file ${DATADIR}/footprint.txt -a \
     -o ${MAPDIR}/MICE2_deep_BgVrRciIcY_shapes_halos_WL.map
+# STOMP map that masks the data to ~343 sqdeg (effective KV450 area). This
+# does not match the true DES footprint but is sufficeint for the use case.
+# Create a pointing list of 120 pointings (10x12). Might be of interest only
+# for a future DES mock cross-correlation analysis.
 mocks_generate_footprint \
     -b  6.00 24.00 35.00 55.00 \
     --survey DES \
@@ -46,6 +55,7 @@ mocks_generate_footprint \
 echo ""
 
 echo "==> mask MICE2 to DES footprint"
+# apply the STOMP map to the MICE2 catalogue
 data_table_mask \
     -i ${MOCKraw} \
     -s ${MAPDIR}/MICE2_DES_r16384.map \
@@ -54,9 +64,11 @@ data_table_mask \
 echo ""
 
 echo "==> apply evolution correction"
+# automatically applied to any existing MICE2 filter column
 mocks_MICE_mag_evolved \
     -i ${MOCKmasked} \
     -o ${DATADIR}/magnitudes_evolved.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -64,6 +76,8 @@ data_table_hstack \
 echo ""
 
 echo "==> apply flux magnification"
+# based on mock convergence field, apply to all KiDS bands and Johnson filters
+# for deep field spec-z mocks
 mocks_flux_magnification \
     -i ${MOCKoutfull} \
     --filters \
@@ -78,6 +92,7 @@ mocks_flux_magnification \
         des_asahi_full_y_evo \
     --convergence kappa \
     -o ${DATADIR}/magnitudes_magnified.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -86,6 +101,11 @@ data_table_hstack \
 echo ""
 
 echo "==> compute point source S/N correction"
+# Compute the effective radius (that contains 50% of the luminosity), compute
+# the observational size using the PSFs, scale this with a factor of 2.5
+# (similar to what sextractor would do) to get a mock aperture. Finally
+# calculate a correction factor for the S/N based on the aperture area compared
+# to a point source (= PSF area).
 mocks_extended_object_sn \
     -i ${MOCKoutfull} \
     --bulge-ratio bulge_fraction --bulge-size bulge_length \
@@ -99,6 +119,7 @@ mocks_extended_object_sn \
         des_asahi_full_y \
     --scale 2.5 --flux-frac 0.5 \
     -o ${DATADIR}/apertures.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -108,6 +129,9 @@ data_table_hstack \
 echo ""
 
 echo "==> generate photometry realisation"
+# Based on the KiDS limiting magnitudes, calcalute the mock galaxy S/N and
+# apply the aperture size S/N correction to obtain a KiDS-like magnitude
+# realisation.
 mocks_photometry_realisation \
     -i ${MOCKoutfull} \
     --filters \
@@ -125,6 +149,7 @@ mocks_photometry_realisation \
         sn_factor_des_asahi_full_z \
         sn_factor_des_asahi_full_y \
     -o ${DATADIR}/magnitudes_observed.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -135,6 +160,11 @@ data_table_hstack \
 echo ""
 
 echo "==> assign galaxy weights"
+# Assign lensfit weights by matching mock galaxies in 4-band magnitude space to
+# their nearest neighbour DES galaxies. Additionally clone flags_select which
+# is essential to obtain the correct object selection with flags_select==0.
+# Mock galaxies that do not have a nearest neighbour within --r-max (Minkowski
+# distance) are assigned the --fallback values.
 mocks_draw_property \
     -s ${MOCKoutfull} \
     --s-attr \
@@ -154,6 +184,7 @@ mocks_draw_property \
     --r-max 1.0 \
     --fallback -99 0.0 \
     -o ${DATADIR}/weights.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -165,6 +196,9 @@ data_table_hstack \
 echo ""
 
 echo "==> compute photo-zs"
+# Run BPZ on the mock galaxy photometry using the KV450 setup (prior: NGVS,
+# templates: Capak CWWSB), assuming this is close enough to the DES photo-z.
+# The prior limited to 0.7 < z < 1.43.
 mocks_bpz_wrapper \
     -i ${MOCKoutfull} \
     --filters \
@@ -184,6 +218,7 @@ mocks_bpz_wrapper \
     --prior NGVS \
     --prior-filter des_asahi_full_i_obs_mag \
     -o ${DATADIR}/photoz.fits
+# update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
@@ -196,6 +231,7 @@ data_table_hstack \
 echo ""
 
 echo "==> apply final DES selection"
+# select objects with flags_select==0 and M_0<90
 data_table_filter \
     -i ${MOCKoutfull} \
     --rule flags_select eq 0 \
@@ -204,6 +240,7 @@ data_table_filter \
 echo ""
 
 echo "==> reduce number of columns"
+# create copies of the output catalogues with a minimal subset of colums
 data_table_copy \
     -i ${MOCKoutfull} \
     -c unique_gal_id $RAname $DECname \
@@ -239,6 +276,10 @@ data_table_copy \
        des_asahi_full_y_obs_mag \
     -o ${MOCKout%.*}_CC.fits
 echo ""
+
+###############################################################################
+# create check plots
+###############################################################################
 
 echo "==> plot aperture statistics"
 plot_extended_object_sn \

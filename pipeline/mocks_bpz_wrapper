@@ -47,7 +47,9 @@ def make_columns_file(column_file, temp_table):
 
 def make_thread_tables(temp_table, logdir):
     """
-    Create a BPZ columns file specifying the input data table columns.
+    Split the data table into chucks by the number of threads and write these
+    as temporary files to disk. Returns the list of file paths and
+    corresponding log file paths that should be used by the threads.
 
     Parameters
     ----------
