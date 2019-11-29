@@ -7,7 +7,6 @@ from hashlib import md5
 import numpy as np
 from data_table import load_table
 from matplotlib import pyplot as plt
-from plots import hist_step_filled, subplot_grid
 from scipy.integrate import cumtrapz
 from scipy.stats import gaussian_kde
 
