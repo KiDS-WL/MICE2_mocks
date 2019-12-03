@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+import argparse
+import os
+
+import numpy as np
+from data_table import load_table
+from matplotlib import pyplot as plt
+from plots import (get_plotting_folder, scatter_dense, scatter_per_filter,
+                   subplot_grid, subsampling_mask)
+
+
+if __name__ == "__main__":
+    plt.switch_backend("agg")
+
+    parser = argparse.ArgumentParser(
+        description='Create check plots for data created with '
+                    '"mocks_draw_weights"')
+
+    parser.add_argument(
+        '--fig-scale', type=float, default=1.0,
+        help='scaling factor for image size (default: %(default)s)')
+    parser.add_argument(
+        '--o-format', default='png',
+        help='format of plots (matplotlib supported image format, '
+             'default: %(default)s)')
+
+    sim_group = parser.add_argument_group('simulation')
+    sim_group.add_argument(
+        '-s', '--simulated', required=True,
+        help='file path of the simulation table')
+    sim_group.add_argument(
+        '--s-format', default='fits',
+        help='astropy.table format specifier of the simulation table')
+    sim_group.add_argument(
+        '--s-filters', nargs='*', required=True,
+        help='list of table column names of magnitudes in simulation table')
+    sim_group.add_argument(
+        '--s-attr', nargs='*',
+        help='list of column names of simulation attributes which are no '
+             'magnitudes')
+    sim_group.add_argument(
+        '--s-prop', required=True,
+        help='column name of weights in simulation table')
+    sim_group.add_argument(
+        '--s-points', metavar="N", type=int, default=50000,
+        help='plot a subsample of N points from the simulation table '
+             '(default: %(default)s)')
+
+    data_group = parser.add_argument_group('data')
+    data_group.add_argument(
+        '-d', '--data', required=True,
+        help='file path of the data table')
+    data_group.add_argument(
+        '--d-format', default='fits',
+        help='astropy.table format specifier of the data table')
+    data_group.add_argument(
+        '--d-filters', nargs='*', required=True,
+        help='list of table column names of magnitudes in data table')
+    data_group.add_argument(
+        '--d-attr', nargs='*',
+        help='list of column names of data attributes which are no magnitudes')
+    data_group.add_argument(
+        '--d-prop', required=True,
+        help='column name of weights in data table')
+    data_group.add_argument(
+        '--d-points', metavar="N", type=int, default=100000,
+        help='plot a subsample of N points from the data table '
+             '(default: %(default)s)')
+
+    args = parser.parse_args()
+
+    # get simulation data
+    columns = [args.s_prop]
+    if args.s_attr is not None:
+        columns.extend(args.s_attr)
+    columns.extend(args.s_filters)
+    simul = load_table(args.simulated, args.s_format, columns)
+    simul_sparse = simul[subsampling_mask(simul, args.s_points)]
+    # get real data
+    columns = [args.d_prop]
+    if args.d_attr is not None:
+        columns.extend(args.d_attr)
+    if args.d_filters is not None:
+        columns.extend(args.d_filters)
+    data = load_table(args.data, args.d_format, columns)
+    data_sparse = data[subsampling_mask(data, args.d_points)]
+
+    plot_dir = get_plotting_folder(args.simulated)
+
+    # get the limits of the drawn property
+    dlims = np.percentile(data[args.d_prop], [0.25, 99.75])
+    slims = np.percentile(simul[args.s_prop], [0.25, 99.75])
+    ymin = min(dlims[0], slims[0])
+    ymax = max(dlims[1], slims[1])
+
+    print("plot '%s' against magnitudes" % args.s_prop)
+    # plot the property against the magnitudes
+    xmin = []
+    xmax = []
+    for skey, dkey in zip(args.s_filters, args.d_filters):
+        sdata = simul[skey]
+        ddata = data[dkey]
+        xmin.append(min(
+            np.percentile(sdata[np.abs(sdata) < 99.0], 0.5),
+            np.percentile(ddata[np.abs(ddata) < 99.0], 0.5)))
+        xmax.append(max(
+            np.percentile(sdata[np.abs(sdata) < 99.0], 99.5),
+            np.percentile(ddata[np.abs(ddata) < 99.0], 99.5)))
+    fig = scatter_per_filter(
+        data_sparse[args.d_prop], data_sparse[args.d_filters],
+        args.d_filters,
+        simul_sparse[args.s_prop], simul_sparse[args.s_filters],
+        args.s_filters,
+        xlim=[min(xmin), max(xmax)], ylabel=args.s_prop,
+        label_pos="center left", n_filters=len(args.s_filters),
+        scale=args.fig_scale)
+    for ax in fig.axes:
+        if ymin == ymax:
+            ymin -= 1
+            ymax += 1
+        ax.set_ylim(ymin, ymax)
+    plt.savefig(
+        os.path.join(plot_dir, "%s_mags.%s" % (args.s_prop, args.o_format)))
+    plt.close(fig)
+
+    if args.s_attr is not None:
+        print("plot '%s' against '%s'" % (args.s_prop, ", ".join(args.s_attr)))
+        # plot the property against any of the remaining properties
+        n_plots, n_cols = len(args.s_attr), 3
+        fig, axes = subplot_grid(
+            n_plots, n_cols, sharex=False, scale=args.fig_scale)
+        # plot each attribute on the x-axis
+        for i in range(n_plots):
+            i_row, i_col = i // n_cols, i % n_cols
+            ax = axes[i_row, i_col]
+            # create scatter plot and create fake handles for the legend
+            handles = []
+            labels = []
+            handles.append(
+                scatter_dense(
+                    data_sparse[args.d_attr[i]], data_sparse[args.d_prop],
+                    "C3", ax=ax, alpha=0.25))
+            labels.append(args.d_attr[i])
+            handles.append(
+                scatter_dense(
+                    simul_sparse[args.s_attr[i]], simul_sparse[args.s_prop],
+                    "C0", ax=ax, alpha=0.25))
+            labels.append(args.s_attr[i])
+            ax.legend(
+                handles=handles, labels=labels, loc="best", prop={"size": 7})
+            # add labels to the left-most and bottom axes and set limits
+            if i_col == 0:
+                ax.set_ylabel(args.s_prop)
+            dlims = np.percentile(data[args.d_attr[i]], [0.25, 99.75])
+            slims = np.percentile(simul[args.s_attr[i]], [0.25, 99.75])
+            ax.set_xlim(
+                left=min(dlims[0], slims[0]), right=max(dlims[1], slims[1]))
+            ax.set_ylim(ymin, ymax)
+            ax.grid(alpha=0.25)
+        plt.tight_layout(h_pad=0.0, w_pad=0.0)
+        fig.subplots_adjust(hspace=0.0, wspace=0.0)
+        plt.savefig(
+            os.path.join(plot_dir, "%s_other.%s" % (
+                args.s_prop, args.o_format)))
+        plt.close(fig)
