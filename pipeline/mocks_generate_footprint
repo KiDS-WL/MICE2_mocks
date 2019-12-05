@@ -72,7 +72,9 @@ if __name__ == "__main__":
                     'bounds, represented by a STOMP map. The bounds are '
                     'appended to the file ./footprint.txt. Optionally split '
                     'the footprint into equal area pointings, exported to '
-                    'a pointings list file')
+                    'a pointings list file. If the footprint extends across '
+                    'RA = 0 or crosses the poles it will lead to unexpected '
+                    'behaviour.')
     parser.add_argument(
         '-b', '--bounds', nargs=4, type=float, required=True,
         help='bounds of polygon in degrees: RA_min RA_max DEC_min DEC_max')
