@@ -1,3 +1,13 @@
+###############################################################################
+#                                                                             #
+#   This is a collection of spectroscopic redshift survey selection           #
+#   functions that are most relevant for KiDS. Due to differences between     #
+#   true and mock galaxy SED some tweaking to literature selections have      #
+#   been applied. Whenever there are deviations from the cited literture      #
+#   the lines have comment listing the true values.                           #
+#                                                                             #
+###############################################################################
+
 import inspect
 import os
 import pickle
@@ -340,30 +350,33 @@ class make_2dFLenS(make_specz):
         self.k = micedata.ks("obs")
 
     def photometryCut(self):
+        ###############################################################
+        #   based on Blake+16                                         #
+        ###############################################################
         # colour masking
         mask = (np.abs(self.g) < 99.0) & (np.abs(self.r) < 99.0)
         mask &= (np.abs(self.r) < 99.0) & (np.abs(self.i) < 99.0)
         mask &= (np.abs(self.r) < 99.0) & (np.abs(self.k) < 99.0)
         mask &= (np.abs(self.i) < 99.0) & (np.abs(self.z) < 99.0)
-        # cut quantities
+        # cut quantities (unchanged)
         c_p = 0.7 * (self.g-self.r) + 1.2 * (self.r-self.i - 0.18)
         c_r = (self.r-self.i) - (self.g-self.r) / 4.0 - 0.18
         d_r = (self.r-self.i) - (self.g-self.r) / 8.0
         # defining the LOWZ sample
         low_z1 = (
-            (self.r > 16.5) &
+            (self.r > 16.5) &  # 16.0
             (self.r < 19.2) &
-            (self.r < (13.1 + c_p / 0.32)) &
+            (self.r < (13.1 + c_p / 0.32)) &  # 13.1, 0.3
             (np.abs(c_r) < 0.2))
         low_z2 = ~low_z1 & (
-            (self.r > 16.5) &
+            (self.r > 16.5) &  # 16.0
             (self.r < 19.5) &
             (self.g-self.r > (1.3 + 0.25 * (self.r-self.i))) &
             (c_r > 0.45 - (self.g-self.r) / 6.0))
         low_z3 = ~low_z1 & ~low_z2 & (
-            (self.r > 16.5) &
+            (self.r > 16.5) &  # 16.0
             (self.r < 19.6) &
-            (self.r < (13.5 + c_p / 0.32)) &
+            (self.r < (13.5 + c_p / 0.32)) &  # 13.5, 0.3
             (np.abs(c_r) < 0.2))
         low_z = low_z1 | low_z2 | low_z3
         # defining the MIDZ sample
@@ -372,12 +385,13 @@ class make_2dFLenS(make_specz):
             (self.i < 19.9) &
             ((self.r-self.i) < 2.0) &
             (d_r > 0.55) &
-            (self.i < 19.86 + 1.6 * (d_r - 0.9)))
+            (self.i < 19.86 + 1.6 * (d_r - 0.9)))  # 19.86, 1.6, 0.8
         # defining the HIGHZ sample
         high_z = (
-            (self.z < 19.9) &
+            (self.z < 19.9) &  # 19.95
             (self.i > 19.9) &
             (self.i < 21.8) &
+            # the 2dFLenS paper uses r-W1, we must use the substitute r-Ks
             ((self.r-self.k) > 1.9 * (self.r-self.i)) &
             ((self.r-self.i) > 0.98) &
             ((self.i-self.z) > 0.6))
@@ -402,7 +416,10 @@ class make_GAMA(make_specz):
         self.r = micedata.r("obs")
 
     def photometryCut(self):
-        mask = (self.r < 19.87)
+        ###############################################################
+        #   based on Driver+11                                        #
+        ###############################################################
+        mask = (self.r < 19.87)  # close to literature, best match to data n(z)
         # update the internal state
         self.mask &= mask
         return self.stats()
@@ -423,7 +440,10 @@ class make_SDSS_main(make_specz):
         self.r = micedata.r("obs")
 
     def photometryCut(self):
-        mask = (self.r < 17.7)
+        ###############################################################
+        #   based on Strauss+02                                       #
+        ###############################################################
+        mask = (self.r < 17.7)  # r_pet~17.5
         # update the internal state
         self.mask &= mask
         return self.stats()
@@ -446,27 +466,34 @@ class make_SDSS_BOSS(make_specz):
         self.i = micedata.i("obs")
 
     def photometryCut(self):
+        ###############################################################
+        #   based on                                                  #
+        #   http://www.sdss3.org/dr9/algorithms/boss_galaxy_ts.php    #
+        #   The selection has changed slightly compared to Dawson+13  #
+        ###############################################################
         # colour masking
         mask = (np.abs(self.g) < 99.0) & (np.abs(self.r) < 99.0)
         mask &= (np.abs(self.r) < 99.0) & (np.abs(self.i) < 99.0)
-        # cut quantities
+        # cut quantities (unchanged)
         c_p = 0.7 * (self.g-self.r) + 1.2 * (self.r-self.i - 0.18)
         c_r = (self.r-self.i) - (self.g-self.r) / 4.0 - 0.18
         d_r = (self.r-self.i) - (self.g-self.r) / 8.0
         # defining the LOWZ sample
+        # we cannot apply the r_psf - r_cmod cut
         low_z = (
             (self.r > 16.0) &
-            (self.r < 20.0) &
+            (self.r < 20.0) &  # 19.6
             (np.abs(c_r) < 0.2) &
-            (self.r < 13.35 + c_p / 0.3))
+            (self.r < 13.35 + c_p / 0.3))  # 13.5, 0.3
         # defining the CMASS sample
+        # we cannot apply the i_fib2, i_psf - i_mod and z_psf - z_mod cuts
         cmass = (
             (self.i > 17.5) &
-            (self.i < 20.1) &
+            (self.i < 20.1) &  # 19.9
             (d_r > 0.55) &
-            (self.i < 19.98 + 1.6 * (d_r - 0.7)) &
+            (self.i < 19.98 + 1.6 * (d_r - 0.7)) &  # 19.86, 1.6, 0.8
             ((self.r-self.i) < 2.0))
-        # CMASS sparse is ignored
+        # NOTE: we ignore the CMASS sparse sample
         mask = low_z | cmass
         # update the internal state
         self.mask &= mask
@@ -483,28 +510,32 @@ class make_SDSS_BOSS(make_specz):
 class make_SDSS_BOSS_original(make_SDSS_BOSS):
 
     def photometryCut(self):
-        # THIS USES THE ORIGINAL CUTS USED ON THE BOSS DATA
+        ###############################################################
+        #   based on                                                  #
+        #   http://www.sdss3.org/dr9/algorithms/boss_galaxy_ts.php    #
+        #   The selection has changed slightly compared to Dawson+13  #
+        ###############################################################
         # colour masking
         mask = (np.abs(self.g) < 99.0) & (np.abs(self.r) < 99.0)
         mask &= (np.abs(self.r) < 99.0) & (np.abs(self.i) < 99.0)
-        # cut quantities
+        # cut quantities (unchanged)
         c_p = 0.7 * (self.g-self.r) + 1.2 * (self.r-self.i - 0.18)
         c_r = (self.r-self.i) - (self.g-self.r) / 4.0 - 0.18
         d_r = (self.r-self.i) - (self.g-self.r) / 8.0
-        # defining the LOWZ sample
+        # defining the LOWZ sample (unchanged)
         low_z = (
             (self.r > 16.0) &
-            (self.r < 19.5) &
+            (self.r < 19.6) &
             (np.abs(c_r) < 0.2) &
             (self.r < 13.5 + c_p / 0.3))
-        # defining the CMASS sample
+        # defining the CMASS sample (unchanged)
         cmass = (
             (self.i > 17.5) &
             (self.i < 19.9) &
             (d_r > 0.55) &
             (self.i < 19.98 + 1.6 * (d_r - 0.8)) &
             ((self.r-self.i) < 2.0))
-        # CMASS sparse is ignored
+        # NOTE: we ignore the CMASS sparse sample
         mask = low_z | cmass
         # update the internal state
         self.mask &= mask
@@ -520,7 +551,9 @@ class make_SDSS_QSO(make_specz):
         """
         Method create a fake MICE2 quasar sample. Quasars do not exists in
         MICE2, therefore the assumption is made that quasars sit in the central
-        galaxies of the most massive halos.
+        galaxies of the most massive halos. This approach is only justifed by
+        compairing the tails of the mock and data n(z) for the combined
+        SDSS main, SDSS BOSS and SDSS QSO samples.
 
         Returns
         -------
@@ -591,6 +624,9 @@ class make_WiggleZ(make_specz):
         self.z = micedata.z("obs")
 
     def photometryCut(self):
+        ###############################################################
+        #   based on Drinkwater+10                                    #
+        ###############################################################
         # colour masking
         colour_mask = (np.abs(self.g) < 99.0) & (np.abs(self.r) < 99.0)
         colour_mask &= (np.abs(self.r) < 99.0) & (np.abs(self.i) < 99.0)
@@ -598,6 +634,7 @@ class make_WiggleZ(make_specz):
         colour_mask &= (np.abs(self.g) < 99.0) & (np.abs(self.i) < 99.0)
         colour_mask &= (np.abs(self.r) < 99.0) & (np.abs(self.z) < 99.0)
         # photometric cuts
+        # we cannot reproduce the FUV, NUV, S/N and position matching cuts
         include = (
             (self.r > 20.0) &
             (self.r < 22.5) &
@@ -611,8 +648,6 @@ class make_WiggleZ(make_specz):
             (self.r-self.i < 0.4) &
             (self.g-self.r > 0.6) &
             (self.r-self.z < 0.7 * (self.g-self.r)))
-        # further selection done on NUV, FUV and IR observations cannot be
-        # be reproduced on the mocks
         mask = include & ~exclude
         # update the internal state
         self.mask &= mask
@@ -644,12 +679,19 @@ class make_DEEP2(make_specz):
         self.I = self.data.I("evo")
 
     def photometryCut(self):
+        ###############################################################
+        #   based on Newman+13                                        #
+        ###############################################################
+        # this modified selection gives the best match to the data n(z) with
+        # its cut at z~0.75 and the B-R/R-I distribution (Newman+13, Fig. 12)
+        # NOTE: We cannot apply the surface brightness cut and do not apply the
+        #       Gaussian weighted sampling near the original colour cuts.
         mask = (
-            (self.R > 18.5) &                                    # 18.5
-            (self.R < 24.0) & (                                  # 24.1
+            (self.R > 18.5) &
+            (self.R < 24.0) & (  # 24.1
                 (self.B-self.R < 2.0 * (self.R-self.I) - 0.4) |  # 2.45, 0.2976
-                (self.R-self.I > 1.1) |                          # 1.1
-                (self.B-self.R < 0.2)))                          # 0.5
+                (self.R-self.I > 1.1) |
+                (self.B-self.R < 0.2)))  # 0.5
         # update the internal state
         self.mask &= mask
         return self.stats()
@@ -688,6 +730,11 @@ class make_DEEP2(make_specz):
 class make_DEEP2_original(make_DEEP2):
 
     def photometryCut(self):
+        ###############################################################
+        #   based on Newman+13                                        #
+        ###############################################################
+        # NOTE: We cannot apply the surface brightness cut and do not apply the
+        #       Gaussian weighted sampling near the original colour cuts.
         mask = (
             (self.R > 18.5) &
             (self.R < 24.1) & (
@@ -709,12 +756,20 @@ class make_VVDSf02(make_specz):
         self.I = self.data.I("evo")
 
     def photometryCut(self):
-        mask = (self.I > 18.5) & (self.I < 24.0)
+        ###############################################################
+        #   based on LeFèvre+05                                       #
+        ###############################################################
+        mask = (self.I > 18.5) & (self.I < 24.0)  # 17.5, 24.0
+        # NOTE: The oversight of 1.0 magnitudes on the bright end misses 0.2 %
+        #       of galaxies.
         # update the internal state
         self.mask &= mask
         return self.stats()
 
     def speczSuccess(self):
+        # NOTE: We use a redshift-based and I-band based success rate
+        #       independently here since we do not know their correlation,
+        #       which makes the success rate worse than in reality.
         # Spec-z success rate as function of i_AB read of Figure 16 in
         # LeFevre+05 for the VVDS 2h field. Values are binned in steps of
         # 0.5 mag with the first starting at 17 and the last bin ending at 24.
@@ -779,7 +834,11 @@ class make_zCOSMOS(make_specz):
         self.I = self.data.I("evo")
 
     def photometryCut(self):
-        mask = (self.I > 15.0) & (self.I < 22.5)
+        ###############################################################
+        #   based on Lilly+09                                         #
+        ###############################################################
+        mask = (self.I > 15.0) & (self.I < 22.5)  # 15.0, 22.5
+        # NOTE: This only includes zCOSMOS bright.
         # update the internal state
         self.mask &= mask
         return self.stats()
