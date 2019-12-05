@@ -63,7 +63,11 @@ SELECT
     `disk_length`, `disk_axis_ratio`
 FROM micecatv2_0_view WHERE `dec_gal` <= 30 AND `ra_gal` >= 30 AND `ra_gal` <= 60
 ```
-and for DES correspondingly
+where `des_asahi_full_y_true` is the best match for the VISTA (`vhs_*_true`)
+_Y_-band that is missing in MICE2. The VST _ugriz_-bands are covered by
+`sdss_*_true`.
+
+For DES we can select
 ```
 SELECT
     `unique_gal_id`, `ra_gal`, `dec_gal`, `z_cgal`, `z_cgal_v`,
@@ -76,6 +80,9 @@ SELECT
     `disk_length`, `disk_axis_ratio`
 FROM micecatv2_0_view WHERE `dec_gal` <= 30 AND `ra_gal` >= 30 AND `ra_gal` <= 60
 ```
+correspondingly and make use of the fact that MICE2 comes by default with all
+DES model magnitudes.
+
 This selection uses the most complete patch of MICE (`30 <= RA <= 60` and
 `0 <= DEC <= 30`). Some of these columns are only needed to additionaly select
 spectoscopic samples.
@@ -99,4 +106,25 @@ in magnitude space
 
 ### Creating Spectroscopic Catalogues
 
-[coming soon]
+The pipeline bundles a variety of spectroscopic (target) selection functions:
+- 2dFLenS (Blake et al. 2016)
+- DEEP2 (Newman et al. 2013)
+- GAMA (Driver et al. 2011)
+- SDSS
+  - main sample (Strauss et al. 2002)
+  - BOSS (Dawson et al. 2013)
+  - QSO sample (Schneider et al. 2010a, only attempting to match the redshift 
+    distribution)
+- WiggleZ (Drinkwater et al. 2010, missing UV information replaced by redshift 
+  distribution matching)
+- VVDS (LeFèvre et al. 2005, only 2h field)
+- zCOSMOS (Lilly et al. 2009, only bright sample)
+
+These selection functions are defined in `./pipeline/specz_selection.py` and
+have some adjustments applied in order to give a better match to the data
+colour and/or redshift distributions.
+
+There are wrapper scripts in `./KV450` and `./DES` that produce photometry
+and/or line of sight realisations of the deep spectroscopic catalouges (DEEP2,
+VVDS and zCOSMOS) as they are used e.g. in Wright et al. (2019) for tests of
+the SOM DIR redshift calibration method.
