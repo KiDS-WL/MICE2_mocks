@@ -637,10 +637,7 @@ class make_WiggleZ(make_specz):
         # we cannot reproduce the FUV, NUV, S/N and position matching cuts
         include = (
             (self.r > 20.0) &
-            (self.r < 22.5) &
-            (self.u-self.i > 1.5) &
-            (self.u-self.i < 2.0) &
-            (self.g-self.i > 0.9))
+            (self.r < 22.5))
         exclude = (
             (self.g < 22.5) &
             (self.i < 21.5) &
