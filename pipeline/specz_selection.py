@@ -685,6 +685,20 @@ class make_DEEP2(make_specz):
         return self.data.data[self.mask], stats
 
 
+class make_DEEP2_original(make_DEEP2):
+
+    def photometryCut(self):
+        mask = (
+            (self.R > 18.5) &
+            (self.R < 24.1) & (
+                (self.B-self.R < 2.45 * (self.R-self.I) - 0.2976) |
+                (self.R-self.I > 1.1) |
+                (self.B-self.R < 0.5)))
+        # update the internal state
+        self.mask &= mask
+        return self.stats()
+
+
 class make_VVDSf02(make_specz):
 
     needs_n_tot = True
