@@ -32,21 +32,21 @@ export BPZPATH=~/src/bpz-1.99.3
 # DEEP2: 0.82 sqdeg, VVDSf02: 0.51 sqdeg, zCOSMOS: 1.73 sqdeg
 echo "==> generate footprints for 100 survey dithers"
 mocks_generate_footprint \
-    -b 6 22.9 35 40 \
+    -b 35.0 40.0  6.0 22.9 \
     --survey DEEP2_dithers \
     --footprint-file ${OUTROOT}/dither_footprint.txt -a \
     --n-pointings 100 --pointings-ra 5 \
     --pointings-file ${OUTROOT}/DEEP2_dithers.txt \
     -o ${OUTROOT}/DEEP2_dithers.map
 mocks_generate_footprint \
-    -b 6 16.5 40 45 \
+    -b 40.0 45.0  6.0 16.5 \
     --survey VVDSf02_dithers \
     --footprint-file ${OUTROOT}/dither_footprint.txt -a \
     --n-pointings 100 --pointings-ra 5 \
     --pointings-file ${OUTROOT}/VVDSf02_dithers.txt \
     -o ${OUTROOT}/VVDSf02_dithers.map
 mocks_generate_footprint \
-    -b 6 24 45 55 \
+    -b 45.0 55.0  6.0 24.0 \
     --survey zCOSMOS_dithers \
     --footprint-file ${OUTROOT}/dither_footprint.txt -a \
     --n-pointings 100 --pointings-ra 10 \

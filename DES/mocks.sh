@@ -37,7 +37,7 @@ echo "==> generate base masks for DES footprint"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
 # STOMP map that encompasses the data downloaded from COSMOHUB
 mocks_generate_footprint \
-    -b  0.00 30.00 30.00 60.00 \
+    -b 30.00 60.00  0.00 30.00 \
     --survey MICE2_deep_BgVrRciIcY_shapes_halos_WL \
     --footprint-file ${DATADIR}/footprint.txt -a \
     -o ${MAPDIR}/MICE2_deep_BgVrRciIcY_shapes_halos_WL.map
@@ -46,7 +46,7 @@ mocks_generate_footprint \
 # Create a pointing list of 120 pointings (10x12). Might be of interest only
 # for a future DES mock cross-correlation analysis.
 mocks_generate_footprint \
-    -b  6.00 24.00 35.00 55.00 \
+    -b 35.00 55.00  6.00 24.00 \
     --survey DES \
     --footprint-file ${DATADIR}/footprint.txt -a \
     -o ${MAPDIR}/MICE2_DES.map \

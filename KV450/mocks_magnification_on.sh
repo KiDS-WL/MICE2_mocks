@@ -38,7 +38,7 @@ echo "==> generate base masks for KV450 footprint"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
 # STOMP map that encompasses the data downloaded from COSMOHUB
 mocks_generate_footprint \
-    -b  0.00 30.00 30.00 60.00 \
+    -b 30.0 60.0  0.0 30.0 \
     --survey MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL \
     --footprint-file ${DATADIR}/footprint.txt -a \
     -o ${MAPDIR}/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL.map
@@ -46,7 +46,7 @@ mocks_generate_footprint \
 # Create a pointing list of 440 pointings (20x22) with ~0.7 sqdeg each (mean
 # pointing area in KV450 CC data).
 mocks_generate_footprint \
-    -b  6.00 24.00 35.00 55.00 \
+    -b 35.0 55.0  6.0 24.0 \
     --survey KV450 \
     --footprint-file ${DATADIR}/footprint.txt -a \
     -o ${MAPDIR}/MICE2_KV450.map \

@@ -75,7 +75,7 @@ if __name__ == "__main__":
                     'a pointings list file')
     parser.add_argument(
         '-b', '--bounds', nargs=4, type=float, required=True,
-        help='bounds of polygon in degrees: DEC_min, DEC_max, RA_min, RA_max')
+        help='bounds of polygon in degrees: RA_min RA_max DEC_min DEC_max')
     parser.add_argument(
         '-r', '--resolution', type=int, default=int(2**14),
         help='angular resolution of the polygon map (default: %(default)s), '
@@ -103,7 +103,7 @@ if __name__ == "__main__":
         help='register survey in existing footprint file')
     args = parser.parse_args()
 
-    DECmin, DECmax, RAmin, RAmax = args.bounds
+    RAmin, RAmax, DECmin, DECmax = args.bounds
     # check bounds
     if not all(-90.0 <= dec <= 90.0 for dec in (DECmin, DECmax)):
         sys.exit(
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     print(
         "create bounds with RA: %.3f-%.3f and DEC: %.3f-%.3f at resolution %d "
         % (RAmin, RAmax, DECmin, DECmax, args.resolution))
-    tile_corners = stomp.LatLonBound(
+    tile_corners = stomp.LatLonBound(  # STOMP has RA and DEC reversed
         DECmin, DECmax, RAmin, RAmax, stomp.AngularCoordinate.Equatorial)
     tile_map = stomp.Map(tile_corners, 1.0, args.resolution, True)
     # write STOMP map to disk
@@ -166,7 +166,7 @@ if __name__ == "__main__":
                 if write_header:
                     f.write(
                         "%-20s   %-15s   %-15s   %-9s\n" % (
-                            "# FIELD", "DEC min/max", "RA min/max", "AREA"))
+                            "# FIELD", "RA min/max", "DEC min/max", "AREA"))
                 # limit survey name to 20 characters, truncate with dots
                 if len(args.survey) > 20:
                     fieldname = args.survey[:17] + "..."
@@ -174,7 +174,7 @@ if __name__ == "__main__":
                     fieldname = args.survey
                 f.write(
                     "%-20s   %+7.3f %+7.3f   %7.3f %7.3f   %9.3f\n" % (
-                        fieldname, DECmin, DECmax, RAmin, RAmax,
+                        fieldname, RAmin, RAmax, DECmin, DECmax,
                         tile_map.Area()))
 
     # create the pointings file
