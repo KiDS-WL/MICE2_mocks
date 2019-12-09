@@ -4,8 +4,67 @@ import sys
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import gaussian_kde
-from utils.plots import (hist_smooth_filled, hist_step_filled, scatter_dense,
-                         subplot_grid)
+
+
+def subplot_grid(
+        n_plots, n_cols, sharex=True, sharey=True, scale=1.0, dpi=None):
+    n_cols = min(n_cols, n_plots)
+    n_rows = (n_plots // n_cols) + min(1, n_plots % n_cols)
+    fig, axes = plt.subplots(
+        n_rows, n_cols, sharex=sharex, sharey=sharey,
+        dpi=dpi, figsize=(
+            scale * (0.5 + 3.8 * n_cols),
+            scale * (0.5 + 2.8 * n_rows)))
+    axes = np.atleast_2d(axes)
+    if n_cols == 1:
+        axes = axes.T
+    for i in range(n_cols * n_rows):
+        i_row, i_col = i // n_cols, i % n_cols
+        if i < n_plots:
+            axes[i_row, i_col].tick_params(
+                "both", direction="in",
+                bottom=True, top=True, left=True, right=True)
+        else:
+            fig.delaxes(axes[i_row, i_col])
+    fig.set_facecolor("white")
+    return fig, axes
+
+
+def hist_step_filled(
+        data, bins, color, label=None, ax=None, normed=True, rescale=1.0,
+        weight=None):
+    count = np.histogram(
+        data, bins, density=normed, weights=weight)[0] * rescale
+    y = np.append(count[0], count)
+    if ax is None:
+        ax = plt.gca()
+    ax.fill_between(
+        bins, y, 0.0, color=color, step="pre", alpha=0.4, label=label)
+    ax.step(bins, y, color=color)
+
+
+def hist_smooth_filled(
+        data, bins, color, label=None, ax=None, normed=True, kwidth="scott"):
+    z = np.linspace(bins[0], bins[-1], 251)
+    kde = gaussian_kde(data, bw_method=kwidth)
+    y = kde(z)
+    if not normed:
+        y *= len(data)
+    if ax is None:
+        ax = plt.gca()
+    ax.fill_between(z, y, 0.0, color=color, alpha=0.4, label=label)
+    ax.plot(z, y, color=color)
+
+
+def scatter_dense(xdata, ydata, color, s=1, ax=None, alpha=0.25):
+    if ax is None:
+        ax = plt.gca()
+    handle = ax.scatter(
+        xdata, ydata, s=s, color=color, marker=".", alpha=alpha)
+    hcolor = handle.get_facecolors()[0].copy()
+    hcolor[-1] = 1.0
+    handle = plt.scatter([], [], color=hcolor)
+    return handle
 
 
 def subsampling_mask(data, npoints):
