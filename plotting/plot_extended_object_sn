@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import sys
 
 import numpy as np
-from data_table import load_table
 from matplotlib import pyplot as plt
-from plots import get_plotting_folder, histogram_per_filter
+
+from MICE2_mocks.plotting import get_plotting_folder, histogram_per_filter
+from table_tools import load_table
 
 
 if __name__ == "__main__":

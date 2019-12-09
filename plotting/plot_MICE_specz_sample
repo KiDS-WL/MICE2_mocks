@@ -4,25 +4,16 @@ import os
 import sys
 
 import numpy as np
-from data_table import load_table
 from matplotlib import pyplot as plt
-from plots import hist_step_filled, subplot_grid
 from scipy.integrate import cumtrapz
 from scipy.stats import gaussian_kde
 
-import specz_selection
+from MICE2_mocks.plotting import hist_step_filled, subplot_grid
+from table_tools import load_table
 
 
 if __name__ == "__main__":
     plt.switch_backend("agg")
-
-    survey_names = []
-    selection_functions = {}
-    for s in specz_selection.__dir__():
-        if s.startswith("make_"):
-            survey = s[5:]
-            survey_names.append(survey)
-            selection_functions[survey] = getattr(specz_selection, s)
 
     parser = argparse.ArgumentParser(
         description='Plot histograms of spectroscopic redshifts.')

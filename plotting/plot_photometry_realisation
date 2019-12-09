@@ -5,10 +5,12 @@ import sys
 
 import matplotlib
 import numpy as np
-from data_table import load_table
 from matplotlib import pyplot as plt
-from plots import (get_plotting_folder, histogram_per_filter,
-                   scatter_per_filter, subsampling_mask)
+
+from MICE2_mocks.plotting import (
+    get_plotting_folder, subsampling_mask,
+    scatter_per_filter, histogram_per_filter)
+from table_tools import load_table
 
 
 if __name__ == "__main__":

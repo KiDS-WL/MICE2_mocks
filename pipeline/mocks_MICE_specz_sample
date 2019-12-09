@@ -5,23 +5,23 @@ import sys
 from hashlib import md5
 
 import numpy as np
-from data_table import load_table
 from matplotlib import pyplot as plt
 from scipy.integrate import cumtrapz
 from scipy.stats import gaussian_kde
 
-import specz_selection
+from MICE2_mocks import pipeline  # provides spec-z selection functions
+from table_tools import load_table
 
 
 if __name__ == "__main__":
 
     survey_names = []
     selection_functions = {}
-    for s in specz_selection.__dir__():
+    for s in pipeline.__dir__():
         if s.startswith("make_"):
             survey = s[5:]
             survey_names.append(survey)
-            selection_functions[survey] = getattr(specz_selection, s)
+            selection_functions[survey] = getattr(pipeline, s)
 
     parser = argparse.ArgumentParser(
         description='Mimic the selection of common spectroscopic surveys for '
@@ -84,10 +84,10 @@ if __name__ == "__main__":
 
     # get simulation data
     if args.s_type == "KV450":
-        simul = specz_selection.KV450_MICE_data(
+        simul = pipeline.KV450_MICE_data(
             load_table(args.simulated, args.s_format))
     elif args.s_type == "DES":
-        simul = specz_selection.DES_MICE_data(
+        simul = pipeline.DES_MICE_data(
             load_table(args.simulated, args.s_format))
     else:
         raise ValueError("unspecified survey --s-type '%s'" % args.s_type)

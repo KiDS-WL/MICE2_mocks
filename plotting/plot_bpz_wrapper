@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import sys
 
 import matplotlib
 import numpy as np
-from data_table import load_table
 from matplotlib import pyplot as plt
-from plots import (get_plotting_folder, hist_step_filled, photoz_statistics,
-                   subplot_grid, subsampling_mask)
+
+from MICE2_mocks.plotting import (
+    get_plotting_folder, hist_step_filled, photoz_statistics,
+    subplot_grid, subsampling_mask)
+from table_tools import load_table
 
 
 if __name__ == "__main__":

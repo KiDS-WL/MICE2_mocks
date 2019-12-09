@@ -6,6 +6,7 @@ import sys
 import numpy as np
 from astropy import units
 from astropy.table import Column, Table
+
 from table_tools import load_table
 
 
