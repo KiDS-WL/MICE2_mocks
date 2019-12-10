@@ -5,7 +5,6 @@ import sys
 from itertools import product
 
 import numpy as np
-from astropy.io import fits as pyfits
 
 from table_tools import read_footprint_file
 
@@ -80,13 +79,13 @@ def pointing_name(prefix, RAmin, RAmax, DECmin, DECmax):
     Parameters
     ----------
     RAmin : float
-        Minimum right ascension of the tile.
+        Minimum right ascension of the tile in degrees.
     RAmax : float
-        Maximum right ascension of the tile.
+        Maximum right ascension of the tile in degrees.
     DECmin : float
-        Minimum declination of the tile.
+        Minimum declination of the tile in degrees.
     DECmax : float
-        Maximum declination of the tile.
+        Maximum declination of the tile in degrees.
 
     Returns
     -------
