@@ -126,7 +126,7 @@ if __name__ == "__main__":
             args.pass_phot_detection)
 
     # process the statistics
-    if args.stats_file is not None:
+    if args.stats_file != "n":
         filename = os.path.join(
             os.path.dirname(args.output), "%s_selection.stats" % args.survey)
         print(
