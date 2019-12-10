@@ -27,69 +27,54 @@ MAGsig=1.5
 
 export BPZPATH=~/src/bpz-1.99.3
 
-# STOMP for each deep field that covers 100x the masked CC data footprint.
-# This is slightly less area then the DIR spec-z catalogues cover:
+# For each survey create a footprint that covers 100x the masked CC data
+# footprint. This is slightly less area then the DIR spec-z catalogues cover:
 # DEEP2: 0.82 sqdeg, VVDSf02: 0.51 sqdeg, zCOSMOS: 1.73 sqdeg
 echo "==> generate footprints for 100 survey dithers"
 mocks_generate_footprint \
-    -b 35.0 40.0  6.0 22.9 \
+    -b 35.0 40.0 6.0 22.9 \
     --survey DEEP2_dithers \
-    --footprint-file ${OUTROOT}/dither_footprint.txt -a \
-    --n-pointings 100 --pointings-ra 5 \
-    --pointings-file ${OUTROOT}/DEEP2_dithers.txt \
-    -o ${OUTROOT}/DEEP2_dithers.map
+    -f ${OUTROOT}/dither_footprint.txt \
+    -p ${OUTROOT}/DEEP2_dithers.txt \
+    --grid 5 20
 mocks_generate_footprint \
-    -b 40.0 45.0  6.0 16.5 \
+    -b 40.0 45.0 6.0 16.5 \
     --survey VVDSf02_dithers \
-    --footprint-file ${OUTROOT}/dither_footprint.txt -a \
-    --n-pointings 100 --pointings-ra 5 \
-    --pointings-file ${OUTROOT}/VVDSf02_dithers.txt \
-    -o ${OUTROOT}/VVDSf02_dithers.map
+    -f ${OUTROOT}/dither_footprint.txt \
+    -p ${OUTROOT}/VVDSf02_dithers.txt \
+    --grid 5 20
 mocks_generate_footprint \
-    -b 45.0 55.0  6.0 24.0 \
+    -b 45.0 55.0 6.0 24.0 \
     --survey zCOSMOS_dithers \
-    --footprint-file ${OUTROOT}/dither_footprint.txt -a \
-    --n-pointings 100 --pointings-ra 10 \
-    --pointings-file ${OUTROOT}/zCOSMOS_dithers.txt \
-    -o ${OUTROOT}/zCOSMOS_dithers.map
+    -f ${OUTROOT}/dither_footprint.txt \
+    -p ${OUTROOT}/zCOSMOS_dithers.txt \
+    --grid 5 20
 echo
 
-# Split the STOMP masks according to their line of sight boundaries and then
-# mask the data catalogues to the mask footprint. The relevant file is
-# MICE2_all_CC.fits on which the spec-z selection function will be applied.
+# Split the data catalogues according to the pointing boundaries. The relevant
+# file is MICE2_all_CC.fits on which the spec-z selection function will be
+# applied.
 for survey in DEEP2 VVDSf02 zCOSMOS; do
     echo "==> split ${survey} into dithers"
-    # This script is from the stomp_tools package
-    pointings_split_data \
-        ${OUTROOT}/${survey}_dithers \
-        --pointing-file ${OUTROOT}/${survey}_dithers.txt \
-        --ref-file ${DATADIR}/MICE2_all_CC.fits \
-        --test-file ${DATADIR}/MICE2_KV450_CC.fits \
+    data_table_to_pointings \
+        -i ${DATADIR}/MICE2_all_CC.fits \
+        -p ${OUTROOT}/${survey}_dithers.txt \
         --ra $RAname --dec $DECname \
-        --map-file ${OUTROOT}/${survey}_dithers_r16384.map
+        -o ${OUTROOT}/${survey}_dithers
     echo
 done
 
-# Pick the STOMP map of the 50th sight realisation (for each survey) as basis
-# for creating photometry realisations.
-echo "==> prepare the patches needed for the photometry realizations"
-survey=DEEP2
-cp -vf ${OUTROOT}/${survey}_dithers/${survey}_dithers_37p5_18p1/pointing_stomp.map \
-       ${OUTROOT}/MICE2_all_CC_${survey}_photnoise_base_r16384.map
-survey=VVDSf02
-cp -vf ${OUTROOT}/${survey}_dithers/${survey}_dithers_42p5_15p2/pointing_stomp.map \
-       ${OUTROOT}/MICE2_all_CC_${survey}_photnoise_base_r16384.map
-survey=zCOSMOS
-cp -vf ${OUTROOT}/${survey}_dithers/${survey}_dithers_49p5_8p6/pointing_stomp.map \
-       ${OUTROOT}/MICE2_all_CC_${survey}_photnoise_base_r16384.map
-# Go back to the raw MICE2 input table and apply the mock pipeline steps
-# needed to generate a photometry realisation (see ./mocks*.sh).
+# Pick the 50th sight realisation (for each survey) as basis for creating
+# photometry realisations. Go back to the raw MICE2 input table, apply the
+# bounds and the mock pipeline steps needed to generate a photometry
+# realisation (see ./mocks*.sh).
 for survey in DEEP2 VVDSf02 zCOSMOS; do
+    bounds=$(mocks_get_pointing -p ${OUTROOT}/${survey}_dithers.txt -n 50)
     patchcat=${OUTROOT}/MICE2_all_CC_${survey}_photnoise_base.fits
     echo "--> mask MICE2 to KV450 footprint"
-    data_table_mask \
+    data_table_mask_ra_dec \
         -i ${MOCKmasked} \
-        -s ${OUTROOT}/MICE2_all_CC_${survey}_photnoise_base_r16384.map \
+        -b $bounds \
         --ra $RAname --dec $DECname \
         -o ${patchcat}
     echo "--> apply evolution correction"
@@ -158,10 +143,10 @@ for survey in DEEP2 VVDSf02 zCOSMOS; do
             -o ${OUTROOT}/temp.fits
         data_table_hstack \
             -i ${patchcat} ${OUTROOT}/temp.fits \
-            -o ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}_all.fits
+            -o ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}.fits
         # Run BPZ on the photometry realisation.
         mocks_bpz_wrapper \
-            -i ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}_all.fits \
+            -i ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}.fits \
             --filters \
                 sdss_u_obs_mag \
                 sdss_g_obs_mag \
@@ -191,39 +176,34 @@ for survey in DEEP2 VVDSf02 zCOSMOS; do
             --threads $(($(nproc) / 2)) \
             -o ${OUTROOT}/temp.fits
         data_table_hstack \
-            -i ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}_all.fits \
+            -i ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}.fits \
                ${OUTROOT}/temp.fits \
-            -o ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}_all.fits
+            -o ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}.fits
         # Apply the spec-z survey selection function, sample down to the number
         # of objects in the DIR spec-z catalogues.
         mocks_MICE_specz_sample \
-            -s ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}_all.fits \
+            -s ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}.fits \
             --s-type KV450 --n-data ${n_obj} \
             --survey ${survey} --pass-phot-detection --stats-file a \
-            -o ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}_specz.fits
+            -o ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}.fits
     done
 done
 rm -v ${OUTROOT}/temp.fits
 
-# Simplify the output data structure and apply the spec-z survey selection
-# functions. Read the number of objects in the DIR spec-z catalogues to sample
-# down the mocks accordingly.
+# Apply the spec-z survey selection functions. Read the number of objects in
+# the DIR spec-z catalogues to sample down the mocks accordingly.
 for survey in DEEP2 VVDSf02 zCOSMOS; do
     echo "==> apply ${survey} selection function"
     n_obj=$(data_table_shape ${HOME}/DATA/KV450/SPECZ/DIR_${survey}.fits)
     statfile=${OUTROOT}/${survey}_dithers/${survey}_selection.stats
     test -e $statfile && rm -v $statfile
-    for fits in ${OUTROOT}/${survey}_dithers/${survey}_dither*/pointing_spec.cat; do
-        pointing_id=$(basename $(dirname $fits))
-        echo "--> processing pointing $pointing_id"
+    for fits in ${OUTROOT}/${survey}_dithers/${survey}*.fits; do
+        # overwriting the input file since we don't need it anymore
         mocks_MICE_specz_sample \
-            -s $fits \
-            --s-type KV450 --n-data ${n_obj} \
-            --survey ${survey} --pass-phot-detection --stats-file a \
-            -o ${OUTROOT}/${survey}_dithers/$(basename $(dirname $fits))_specz.fits
-        mv -v $(dirname $fits)/pointing_phot.cat \
-              ${OUTROOT}/${survey}_dithers/$(basename $(dirname $fits))_KV450.fits
-        rm -r $(dirname $fits)
+            -s $fits --s-type DES \
+            --n-data ${n_obj} --survey ${survey} \
+            --pass-phot-detection --stats-file a \
+            -o $fits
     done
     echo
 done

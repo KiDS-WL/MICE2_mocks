@@ -23,6 +23,7 @@ MOCKout=${DATADIR}/MICE2_DES.fits
 dataDES=${HOME}/DATA/DES/mcal_photo_100th_mags.fits
 
 # constant parameters
+BOUNDS="35 55 6 24"  # footprint that is used for mocks: RAmin/max DECmin/max
 RAname=ra_gal_mag
 DECname=dec_gal_mag
 PSFs="    1.25  1.07  0.97  0.89  1.07"  # from Drlica-Wagner+17/18
@@ -33,32 +34,25 @@ MAGsig=12.0  # the original value is 10.0, however a slightly larger values
 
 export BPZPATH=~/src/bpz-1.99.3
 
-echo "==> generate base masks for DES footprint"
+echo "==> generate base footprint for DES"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
-# STOMP map that encompasses the data downloaded from COSMOHUB
+# Create bounds of ~343 sqdeg (effective KV450 area). This does not match the
+# true DES footprint but is sufficeint for the use case. Create a pointing list
+# of 120 pointings (10x12). Only of interest for a potential DES mock
+# cross-correlation analysis.
 mocks_generate_footprint \
-    -b 30.00 60.00  0.00 30.00 \
-    --survey MICE2_deep_BgVrRciIcY_shapes_halos_WL \
-    --footprint-file ${DATADIR}/footprint.txt -a \
-    -o ${MAPDIR}/MICE2_deep_BgVrRciIcY_shapes_halos_WL.map
-# STOMP map that masks the data to ~343 sqdeg (effective KV450 area). This
-# does not match the true DES footprint but is sufficeint for the use case.
-# Create a pointing list of 120 pointings (10x12). Might be of interest only
-# for a future DES mock cross-correlation analysis.
-mocks_generate_footprint \
-    -b 35.00 55.00  6.00 24.00 \
+    -b $BOUNDS \
     --survey DES \
-    --footprint-file ${DATADIR}/footprint.txt -a \
-    -o ${MAPDIR}/MICE2_DES.map \
-    --pointings-file ${DATADIR}/pointings_DES.txt \
-    --n-pointings 120 --pointings-ra 10
+    -f ${DATADIR}/footprint.txt \
+    -p ${DATADIR}/pointings_DES.txt \
+    --grid 10 12
 echo ""
 
 echo "==> mask MICE2 to DES footprint"
-# apply the STOMP map to the MICE2 catalogue
-data_table_mask \
+# apply the bounds to the MICE2 catalogue
+data_table_mask_ra_dec \
     -i ${MOCKraw} \
-    -s ${MAPDIR}/MICE2_DES_r16384.map \
+    -b $BOUNDS \
     --ra $RAname --dec $DECname \
     -o ${MOCKmasked}
 echo ""

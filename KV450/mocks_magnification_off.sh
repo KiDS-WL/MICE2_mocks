@@ -25,39 +25,35 @@ MOCKout=${DATADIR}/MICE2_KV450.fits
 dataKV450=${HOME}/DATA/KV450/KiDS_VIKING/KV450_north.cat
 
 # constant parameters
+BOUNDS="35 55 6 24"  # footprint that is used for mocks: RAmin/max DECmin/max
 RAname=ra_gal
 DECname=dec_gal
 PSFs="    1.0  0.9  0.7  0.8  1.0   1.0  0.9  1.0  0.9"
 MAGlims="25.5 26.3 26.2 24.9 24.85 24.1 24.2 23.3 23.2"
-MAGsig=1.5
+MAGsig=1.5  # the original value is 1.0, however a slightly larger values
+            # yields smaller photometric uncertainties and a better match in
+            # the spec-z vs phot-z distribution between data and mocks
 
 export BPZPATH=~/src/bpz-1.99.3
 
-echo "==> generate base masks for KV450 footprint"
+echo "==> generate base footprint for DES"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
-# STOMP map that encompasses the data downloaded from COSMOHUB
-mocks_generate_footprint \
-    -b 30.0 60.0  0.0 30.0 \
-    --survey MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL \
-    --footprint-file ${DATADIR}/footprint.txt -a \
-    -o ${MAPDIR}/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL.map
 # STOMP map that masks the data to ~343 sqdeg (effective KV450 area).
 # Create a pointing list of 440 pointings (20x22) with ~0.7 sqdeg each (mean
 # pointing area in KV450 CC data).
 mocks_generate_footprint \
-    -b 35.0 55.0  6.0 24.0 \
+    -b $BOUNDS \
     --survey KV450 \
-    --footprint-file ${DATADIR}/footprint.txt -a \
-    -o ${MAPDIR}/MICE2_KV450.map \
-    --pointings-file ${DATADIR}/pointings_KV450.txt \
-    --n-pointings 440 --pointings-ra 20
+    -f ${DATADIR}/footprint.txt \
+    -p ${DATADIR}/pointings_KV450.txt \
+    --grid 20 22
 echo ""
 
 echo "==> mask MICE2 to KV450 footprint"
 # apply the STOMP map to the MICE2 catalogue
-data_table_mask \
+data_table_mask_ra_dec \
     -i ${MOCKraw} \
-    -s ${MAPDIR}/MICE2_KV450_r16384.map \
+    -b $BOUNDS \
     --ra $RAname --dec $DECname \
     -o ${MOCKmasked}
 echo ""
