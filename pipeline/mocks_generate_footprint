@@ -32,7 +32,10 @@ def footprint_area(RAmin, RAmax, DECmin, DECmax):
     """
     # np.radians and np.degrees avoids rounding errors
     sin_DEC_min, sin_DEC_max = np.sin(np.radians([DECmin, DECmax]))
-    area = (RAmax - RAmin) * np.degrees(sin_DEC_max - sin_DEC_min)
+    dRA = RAmax - RAmin
+    if RAmin > RAmax:
+        dRA += 360.0
+    area = dRA * np.degrees(sin_DEC_max - sin_DEC_min)
     return area
 
 
@@ -60,9 +63,11 @@ def next_DEC(area, RAmin, RAmax, current_DEC):
     """
     # np.radians and np.degrees avoids rounding errors
     area_sterad = np.radians(np.radians(area))
-    dRA = np.radians(RAmax - RAmin)
+    dRA = RAmax - RAmin
+    if RAmin > RAmax:
+        dRA += 360.0
     sin_current_DEC = np.sin(np.radians(current_DEC))
-    next_DEC_rad = np.arcsin(area_sterad / dRA + sin_current_DEC)
+    next_DEC_rad = np.arcsin(area_sterad / np.radians(dRA) + sin_current_DEC)
     next_DEC = np.degrees(next_DEC_rad)
     return next_DEC
 
@@ -104,9 +109,7 @@ if __name__ == "__main__":
                     'bounds, represented by a STOMP map. The bounds are '
                     'appended to the file ./footprint.txt. Optionally split '
                     'the footprint into equal area pointings, exported to '
-                    'a pointings list file. If the footprint extends across '
-                    'RA = 0 or crosses the poles it will lead to unexpected '
-                    'behaviour.')
+                    'a pointings list file.')
     parser.add_argument(
         '-b', '--bounds', nargs=4, type=float, required=True,
         help='bounds of polygon in degrees: RA_min RA_max DEC_min DEC_max')
@@ -137,8 +140,6 @@ if __name__ == "__main__":
         sys.exit("ERROR: RA_min and RA_max must be between 0 and 360 degrees")
     if DECmax <= DECmin:
         sys.exit("ERROR: DEC_min must be lower than DEC_max")
-    if RAmax <= RAmin:
-        sys.exit("ERROR: RA_min must be lower than RA_max")
     # check pointings related arguements
     if args.pointings_file is not None and args.grid is None:
         parser.error(
@@ -178,7 +179,11 @@ if __name__ == "__main__":
         n_pointings = pointings_ra * pointings_dec
         area = footprint_area(RAmin, RAmax, DECmin, DECmax) / n_pointings
         # split the footprint into equal RA columns
-        RAs = np.linspace(RAmin, RAmax, pointings_ra + 1)
+        if RAmax >= RAmin:
+            RAs = np.linspace(RAmin, RAmax, pointings_ra + 1)
+        else:
+            RAs = np.linspace(RAmin, RAmax + 360.0, pointings_ra + 1)
+            RAs[RAs >= 360.0] -= 360.0
         ra_mins = RAs[:-1]
         ra_maxs = RAs[1:]
         # split the RA columns in DEC rows such that all pointings have the
