@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     # create footprint.txt file that lists the RA/DEC boundaries of this
     # survey (and others created with this script in the same folder)
-    area = footprint_area(RAmin, RAmax, DECmin, DECmax)
+    area = footprint_area(*args.bounds)
     print("registering survey in: %s" % args.footprint_file)
     if os.path.exists(args.footprint_file):
         surveys = read_footprint_file(args.footprint_file)
@@ -157,19 +157,20 @@ if __name__ == "__main__":
             print(
                 "WARNING: survey '%s' already registered, updating values" %
                 args.survey)
-            surveys[args.survey] = (RAmin, RAmax, DECmin, DECmax, area)
+        surveys[args.survey] = (*args.bounds, area)
     else:
-        surveys = {args.survey: (RAmin, RAmax, DECmin, DECmax, area)}
+        surveys = {args.survey: (*args.bounds, area)}
 
     # rewrite the footprint file with possibly updated footprint
     with open(args.footprint_file, "w") as f:
         f.write(
             "# RA min/max               DEC min/max                " +
             "AREA             FIELD NAME\n")
-        for survey, (RAmin, RAmax, DECmin, DECmax, area) in surveys.items():
+        for survey, props in surveys.items():
+            ra_min, ra_max, dec_min, dec_max, area = props
             f.write(
                 "%11.7f %11.7f    %+11.7f %+11.7f    %13.7e    %s\n" % (
-                    RAmin, RAmax, DECmin, DECmax, area, survey))
+                    ra_min, ra_max, dec_min, dec_max, area, survey))
 
     # create the pointings file
     if args.pointings_file is not None:

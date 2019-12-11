@@ -21,6 +21,7 @@ DECname=dec_gal_mag
 # footprint. This is slightly less area then the DIR spec-z catalogues cover:
 # DEEP2: 0.82 sqdeg, VVDSf02: 0.51 sqdeg, zCOSMOS: 1.73 sqdeg
 echo "==> generate footprints for 100 dithers"
+test -e ${OUTROOT}/dither_footprint.txt && rm ${OUTROOT}/dither_footprint.txt
 mocks_generate_footprint \
     -b 35.0 40.0 6.0 22.9 \
     --survey DEEP2_dithers \
