@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # read the pointings file
     if not os.path.exists(args.pointings_file):
         sys.exit("ERROR: input file not found: " + args.pointings_file)
-    pointings = read_pointing_file(args.pointings_file)
+    pointings = read_pointing_file(args.pointings_file, verbose=False)
     # get the requested pointing and display the bounds
     if len(pointings) < args.n:
         sys.exit(

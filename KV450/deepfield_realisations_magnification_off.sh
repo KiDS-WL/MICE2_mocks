@@ -31,6 +31,7 @@ export BPZPATH=~/src/bpz-1.99.3
 # footprint. This is slightly less area then the DIR spec-z catalogues cover:
 # DEEP2: 0.82 sqdeg, VVDSf02: 0.51 sqdeg, zCOSMOS: 1.73 sqdeg
 echo "==> generate footprints for 100 survey dithers"
+test -e ${OUTROOT}/dither_footprint.txt && rm ${OUTROOT}/dither_footprint.txt
 mocks_generate_footprint \
     -b 35.0 40.0 6.0 22.9 \
     --survey DEEP2_dithers \
@@ -155,7 +156,6 @@ for survey in DEEP2 VVDSf02 zCOSMOS; do
                 vhs_j_obserr \
                 vhs_h_obserr \
                 vhs_ks_obserr \
-            --z-true z_cgal_v \
             --z-min 0.06674 \
             --z-max 1.42667 \
             --templates CWWSB_capak \
@@ -188,7 +188,7 @@ for survey in DEEP2 VVDSf02 zCOSMOS; do
     for fits in ${OUTROOT}/${survey}_dithers/${survey}*.fits; do
         # overwriting the input file since we don't need it anymore
         mocks_MICE_specz_sample \
-            -s $fits --s-type DES \
+            -s $fits --s-type KV450 \
             --n-data ${n_obj} --survey ${survey} \
             --pass-phot-detection --stats-file a \
             -o $fits
