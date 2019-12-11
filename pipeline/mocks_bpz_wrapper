@@ -108,7 +108,7 @@ def run_BPZ(arguments):
         "-INTERP", "10", "-NEW_AB", "no",
         "-ODDS", "0.68", "-MIN_RMS", "0.0", "-INTERACTIVE", "no",
         "-VERBOSE", "yes" if args.verbose else "no",
-        "-CHECK", "no"]
+        "-PROBS_LITE", "no", "-CHECK", "no"]
     # open the log file
     if logfile is not None:
         with open(logfile, 'w') as log:
@@ -289,6 +289,10 @@ if __name__ == "__main__":
         # correct the index offset (each threads starts indexing from 0)
         if args.id is None:
             table["ID"] = np.arange(1, len(table["ID"]) + 1, dtype=np.int64)
+
+        # write to specified output path
+        print("write table to: %s" % args.output)
+        table.write(args.output, format=args.o_format, overwrite=True)
 
     # cleaning up code, always executed before leaving the script
     finally:
