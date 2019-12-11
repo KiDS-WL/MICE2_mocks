@@ -25,6 +25,9 @@ files and STOMP pixel maps:
 starting with `data_table_`)
 - [jlvdb/stomp_tools](https://github.com/jlvdb/stomp_tools) (script calls
 starting with `stomp_`)
+The path to `table_tools` must be included in `$PYTHONPATH` and to run the
+provided wrapper scripts both `table_tools` and `stomp_tools` must be included
+in `$PATH`.
 
 To be able to compute photometric redshifts
 [BPZ](http://www.stsci.edu/~dcoe/BPZ/) is requried.

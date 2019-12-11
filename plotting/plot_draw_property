@@ -3,10 +3,12 @@ import argparse
 import os
 
 import numpy as np
-from data_table import load_table
 from matplotlib import pyplot as plt
-from plots import (get_plotting_folder, scatter_dense, scatter_per_filter,
-                   subplot_grid, subsampling_mask)
+
+from MICE2_mocks.plotting import (
+    get_plotting_folder, scatter_dense, scatter_per_filter,
+    subplot_grid, subsampling_mask)
+from table_tools import load_table
 
 
 if __name__ == "__main__":
