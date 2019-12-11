@@ -14,8 +14,6 @@
 # data paths
 DATADIR=${HOME}/DATA/MICE2_KV450/KV450_magnification_on
 mkdir -p ${DATADIR}
-MAPDIR=${HOME}/CC/STOMP_MAPS/MICE2_KV450
-mkdir -p ${MAPDIR}
 
 # static file names
 MOCKraw=${HOME}/DATA/MICE2_KV450/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL.fits

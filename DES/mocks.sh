@@ -11,8 +11,6 @@
 # data paths
 DATADIR=${HOME}/DATA/MICE2_DES/DES_sigma_12
 mkdir -p ${DATADIR}
-MAPDIR=${HOME}/CC/STOMP_MAPS/MICE2_DES
-mkdir -p ${MAPDIR}
 
 # static file names
 MOCKraw=${HOME}/DATA/MICE2_DES/MICE2_deep_BgVrRciIcY_shapes_halos_WL.fits
