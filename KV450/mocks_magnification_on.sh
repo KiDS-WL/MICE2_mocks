@@ -35,11 +35,11 @@ MAGsig=1.5  # the original value is 1.0, however a slightly larger values
 
 export BPZPATH=~/src/bpz-1.99.3
 
-echo "==> generate base footprint for DES"
+echo "==> generate base footprint for KV450"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
-# STOMP map that masks the data to ~343 sqdeg (effective KV450 area).
-# Create a pointing list of 440 pointings (20x22) with ~0.7 sqdeg each (mean
-# pointing area in KV450 CC data).
+# Create bounds of ~343 sqdeg (effective KV450 area). Create a pointing list of
+# 440 pointings (20x22) with ~0.7 sqdeg each (mean pointing area in KV450 CC
+# data).
 mocks_generate_footprint \
     -b $BOUNDS \
     --survey KV450 \
@@ -49,7 +49,7 @@ mocks_generate_footprint \
 echo ""
 
 echo "==> mask MICE2 to KV450 footprint"
-# apply the STOMP map to the MICE2 catalogue
+# apply the bounds to the MICE2 catalogue
 data_table_mask_ra_dec \
     -i ${MOCKraw} \
     -b $BOUNDS \
@@ -240,7 +240,6 @@ mocks_bpz_wrapper \
         vhs_j_obserr_mag \
         vhs_h_obserr_mag \
         vhs_ks_obserr_mag \
-    --z-true z_cgal_v \
     --z-min 0.06674 \
     --z-max 1.42667 \
     --templates CWWSB_capak \
