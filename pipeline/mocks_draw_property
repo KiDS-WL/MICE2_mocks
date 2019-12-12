@@ -119,10 +119,15 @@ if __name__ == "__main__":
             # for compatibility with the data table
             try:
                 if dtype.kind == "b":  # conversion of booleans
-                    # TODO: this fails silently if the fallback is misspelled
-                    fallbacks[i] = Column(
-                        [args.fallback[i].upper() == "TRUE"],
-                        colname, dtype=dtype)
+                    if args.fallback[i].upper() == "TRUE":
+                        fallbacks[i] = Column([True], colname, dtype=dtype)
+                    elif args.fallback[i].upper() == "FALSE":
+                        fallbacks[i] = Column([False], colname, dtype=dtype)
+                    else:
+                        raise ValueError(
+                            ("expected boolean but the fallback '%s' " %
+                             args.fallback[i]) +
+                            "matches neither TRUE or FALSE")
                 else:
                     fallbacks[i] = Column(
                         [args.fallback[i]], colname, dtype=dtype)
@@ -171,7 +176,11 @@ if __name__ == "__main__":
                     "ERROR: folder does not exit: %s" %
                     os.path.dirname(args.tree))
 
-    print("assign values from nearest data neighbour")
+    message = "assign values from nearest data neighbour"
+    if args.threads > 1:
+        print(message + " with %d threads" % args.threads)
+    else:
+        print(message)
     dist, idx_nearest = tree.query(
         simul_attr, k=1, distance_upper_bound=args.r_max, n_jobs=args.threads)
 
