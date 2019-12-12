@@ -133,7 +133,7 @@ done
 # of the photometry and according photo-zs (see ./mocks*.sh).
 for survey in DEEP2 VVDSf02 zCOSMOS; do
     echo "==> generate photometry realizations and apply ${survey} selection"
-    mkdir -p ${OUTROOT}/${survey}_phot_samples \
+    mkdir -p ${OUTROOT}/${survey}_phot_samples
     patchcat=${OUTROOT}/MICE2_all_CC_${survey}_photnoise_base.fits
     n_obj=$(data_table_shape ${HOME}/DATA/KV450/SPECZ/DIR_${survey}.fits)
     statfile=${OUTROOT}/${survey}_phot_samples/${survey}_selection.stats
@@ -188,7 +188,6 @@ for survey in DEEP2 VVDSf02 zCOSMOS; do
             --templates CWWSB_capak \
             --prior NGVS \
             --prior-filter sdss_i_obs_mag \
-            --threads $(($(nproc) / 2)) \
             -o ${OUTROOT}/temp.fits
         data_table_hstack \
             -i ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}_all.fits \
