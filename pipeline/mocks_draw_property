@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    setattr(args, "threads", min(cpu_count(), max(0, args.threads)))
+    setattr(args, "threads", min(cpu_count(), max(1, args.threads)))
 
     if args.s_prop is None:  # copy column names from input data
         setattr(args, "s_prop", args.d_prop)
