@@ -297,7 +297,10 @@ class make_specz(object):
         z_preselect = self.redshift[self.mask]
         # create Gaussian KDEs of the redshift distributions
         kde_spec = gaussian_kde(n_z, 0.05)
-        kde_phot = gaussian_kde(z_preselect, 0.05)
+        # the accuracy will be governed by the spec-z KDE, therefore select
+        # only the same number of photometric objects for its KDE
+        idx = np.linspace(0.0, len(z_preselect)).astype(np.int64)
+        kde_phot = gaussian_kde(z_preselect[idx], 0.05)
         # compute the rejection probability based on the data to mock redshift
         # probabilty densities
         p_keep = (
