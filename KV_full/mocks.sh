@@ -10,7 +10,7 @@
 #                                                                             #
 ###############################################################################
 
-THREADS=echo ${1:-$(nproc)}
+THREADS=$(echo ${1:-$(nproc)})
 
 
 function process_chunk(){
@@ -26,20 +26,20 @@ export -f process_chunk
 
 # data paths
 export PIPEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-DATADIR=/net/home/fohlen11/jlvdb/DATA/MICE2_KV_full/KiDS_VIKING
+DATADIR=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/KiDS_VIKING
 mkdir -p ${DATADIR}
 CHUNKDIR=${DATADIR}/CHUNKS
 mkdir -p ${CHUNKDIR}
 
 # static file names
-MOCKraw=/net/home/fohlen11/jlvdb/DATA/MICE2_KV_full/MICE2_256th_uBgVrRciIcYJHKs_shapes_halos_WL.fits
+MOCKraw=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/MICE2_all_uBgVrRciIcYJHKs_shapes_halos_WL.fits
 export MOCKoutfull=${DATADIR}/MICE2_all.fits
 export MOCKout=${DATADIR}/MICE2_KV450.fits
 # KV450 data table for check plots
-dataKV450=${HOME}/DATA/KV450/KiDS_VIKING/KV450_north.cat
+dataKV450=/net/home/${HOSTNAME}/jlvdb/DATA/KV450/KiDS_VIKING/KV450_north.cat
 
 # constant parameters
-BOUNDS="0.1 89.9 0.1 89.5"  # footprint that can be used for mocks: RAmin/max DECmin/max
+BOUNDS="0.0 90.0 0.0 90.0"  # footprint that can be used for mocks: RAmin/max DECmin/max
 RAname=ra_gal_mag
 DECname=dec_gal_mag
 PSFs="    1.0  0.9  0.7  0.8  1.0   1.0  0.9  1.0  0.9"
@@ -52,13 +52,13 @@ export BPZPATH=~/src/bpz-1.99.3
 
 echo "==> split MICE2 footprint into chunks"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
-# Create 16x16=256 data chunks that can be processed in parallel.
+# Create 32x32=1024 data chunks that can be processed in parallel.
 mocks_generate_footprint \
     -b $BOUNDS \
     --survey KV_full \
     -f ${DATADIR}/footprint.txt \
     -p ${DATADIR}/chunks.txt \
-    --grid 16 16
+    --grid 32 32
 test -e ${CHUNKDIR} && rm -r ${CHUNKDIR}
 data_table_to_pointings \
     -i ${MOCKraw} \
