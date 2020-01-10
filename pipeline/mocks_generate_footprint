@@ -66,8 +66,14 @@ def next_DEC(area, RAmin, RAmax, current_DEC):
     if RAmin > RAmax:
         dRA += 360.0
     sin_current_DEC = np.sin(np.radians(current_DEC))
-    next_DEC_rad = np.arcsin(area_sterad / np.radians(dRA) + sin_current_DEC)
-    next_DEC = np.degrees(next_DEC_rad)
+    arcsin_argument = area_sterad / np.radians(dRA) + sin_current_DEC
+    if arcsin_argument >= 1.0:
+        next_DEC = 90.0
+    elif arcsin_argument <= -1.0:
+        next_DEC = -90.0
+    else:
+        next_DEC_rad = np.arcsin(arcsin_argument)
+        next_DEC = np.degrees(next_DEC_rad)
     return next_DEC
 
 
