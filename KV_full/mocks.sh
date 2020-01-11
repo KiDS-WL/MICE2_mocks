@@ -29,17 +29,15 @@ export PIPEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd 
 DATADIR=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/KiDS_VIKING
 mkdir -p ${DATADIR}
 CHUNKDIR=${DATADIR}/CHUNKS
-mkdir -p ${CHUNKDIR}
 
 # static file names
-MOCKraw=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/MICE2_all_uBgVrRciIcYJHKs_shapes_halos_WL.fits
+MOCKraw=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/MICE2_256th_uBgVrRciIcYJHKs_shapes_halos_WL.fits
 export MOCKoutfull=${DATADIR}/MICE2_all.fits
 export MOCKout=${DATADIR}/MICE2_KV450.fits
 # KV450 data table for check plots
 dataKV450=/net/home/${HOSTNAME}/jlvdb/DATA/KV450/KiDS_VIKING/KV450_north.cat
 
 # constant parameters
-BOUNDS="0.0 90.0 0.0 90.0"  # footprint that can be used for mocks: RAmin/max DECmin/max
 RAname=ra_gal_mag
 DECname=dec_gal_mag
 PSFs="    1.0  0.9  0.7  0.8  1.0   1.0  0.9  1.0  0.9"
@@ -52,21 +50,15 @@ export BPZPATH=~/src/bpz-1.99.3
 
 echo "==> split MICE2 footprint into chunks"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
-# Create 32x32=1024 data chunks that can be processed in parallel.
-mocks_generate_footprint \
-    -b $BOUNDS \
-    --survey KV_full \
-    -f ${DATADIR}/footprint.txt \
-    -p ${DATADIR}/chunks.txt \
-    --grid 32 32
+# Create data chunks that can be processed in parallel.
 test -e ${CHUNKDIR} && rm -r ${CHUNKDIR}
-data_table_to_pointings \
+mkdir -p ${CHUNKDIR}
+data_table_split_rows \
     -i ${MOCKraw} \
-    -p ${DATADIR}/chunks.txt \
-    --ra $RAname --dec $DECname \
-    -o ${CHUNKDIR} \
-    --remainder
-for fits in ${CHUNKDIR}/KV_full*.fits; do
+    --n-splits 960 \
+    -o ${CHUNKDIR}/KV_full.fits \
+
+for fits in ${CHUNKDIR}/KV_full_*.fits; do
     subdir=${fits::-5}
     mkdir ${subdir}
     mv $fits ${subdir}/
