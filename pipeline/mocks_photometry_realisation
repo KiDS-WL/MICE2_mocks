@@ -121,8 +121,8 @@ if __name__ == "__main__":
         real_SN *= SN_factor
         real_SN = np.maximum(real_SN, SN_limit)
         real_mags_err = 2.5 / np.log(10.0) / real_SN
-        # set magnitudes of undetected objects to 99.0
-        not_detected = real_SN < SN_detect
+        # set magnitudes of undetected objects and mag < 5.0 to 99.0
+        not_detected = (real_SN < SN_detect) | (real_mags < 5.0)
         real_mags[not_detected] = non_detection_magnitude
         real_mags_err[not_detected] = (
             mag_model_limits[filt] - detect_sigma_to_mag)
