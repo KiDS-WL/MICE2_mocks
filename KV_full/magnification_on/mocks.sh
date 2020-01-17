@@ -68,10 +68,4 @@ data_table_vstack \
 data_table_vstack \
     -i ${CHUNKDIR}/*/$(basename $MOCKout) \
     -o ${MOCKout}
-data_table_vstack \
-    -i ${CHUNKDIR}/*/$(basename ${MOCKoutfull%.*}_CC.fits) \
-    -o ${MOCKoutfull%.*}_CC.fits
-data_table_vstack \
-    -i ${CHUNKDIR}/*/$(basename ${MOCKout%.*}_CC.fits) \
-    -o ${MOCKout%.*}_CC.fits
 echo ""
