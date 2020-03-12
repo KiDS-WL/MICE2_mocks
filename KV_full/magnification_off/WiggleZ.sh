@@ -21,7 +21,7 @@ for file in ${CHUNKDIR}/*/MICE2_all.fits; do
     mocks_MICE_specz_sample \
         -s $file --s-type KV450 \
         --survey WiggleZ \
-        -d ${HOME}/DATA/KV450/SPECZ/${survey}_masked.fits --d-z-spec z_spec \
+        -d ${HOME}/DATA/KV450/SPECZ/WiggleZ_masked.fits --d-z-spec z_spec \
         -o $(dirname $file)/$(basename ${MOCKout})
 done
 echo ""
