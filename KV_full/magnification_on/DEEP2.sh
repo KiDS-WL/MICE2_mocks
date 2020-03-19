@@ -17,11 +17,12 @@ export MOCKout=${DATADIR}/MICE2_DEEP2.fits
 
 echo "==> process the mock chucks"
 # Process each chunk sequentially and collect the output logs for debugging.
+n_chunks=$(ls ${CHUNKDIR}/*/MICE2_all.fits | wc -l)
 for file in ${CHUNKDIR}/*/MICE2_all.fits; do
     mocks_MICE_specz_sample \
         -s $file --s-type KV450 \
         --survey DEEP2 \
-        --n-data $(python -c "print(int(8698 / 0.815761 * 5156.625))") \
+        --n-data $(python -c "print(int(8698 / 0.815761 * 5156.625 / ${n_chunks}))") \
         -o $(dirname $file)/$(basename ${MOCKout})
 done
 echo ""

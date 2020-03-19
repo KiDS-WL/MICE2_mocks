@@ -8,7 +8,7 @@
 ###############################################################################
 
 # data paths
-DATADIR=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/KiDS_VIKING_magnification_off
+DATADIR=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/KiDS_VIKING_magnification_on
 mkdir -p ${DATADIR}
 CHUNKDIR=${DATADIR}/CHUNKS
 
@@ -17,11 +17,12 @@ export MOCKout=${DATADIR}/MICE2_zCOSMOS.fits
 
 echo "==> process the mock chucks"
 # Process each chunk sequentially and collect the output logs for debugging.
+n_chunks=$(ls ${CHUNKDIR}/*/MICE2_all.fits | wc -l)
 for file in ${CHUNKDIR}/*/MICE2_all.fits; do
     mocks_MICE_specz_sample \
         -s $file --s-type KV450 \
         --survey zCOSMOS \
-        --n-data $(python -c "print(int(8422 / 0.510801 * 5156.625))") \
+        --n-data $(python -c "print(int(8422 / 0.510801 * 5156.625 / ${n_chunks}))") \
         -o $(dirname $file)/$(basename ${MOCKout})
 done
 echo ""
