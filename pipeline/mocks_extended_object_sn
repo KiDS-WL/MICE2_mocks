@@ -14,6 +14,16 @@ from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 from table_tools import load_table
 
 
+def sigma_to_FWHM(sigma):
+    conv = 2.0 * np.sqrt(2.0 * np.log(2.0))  # 2.355
+    return sigma * conv
+
+
+def FWHM_to_sigma(FWHM):
+    conv = 2.0 * np.sqrt(2.0 * np.log(2.0))  # 2.355
+    return FWHM / conv
+
+
 def f_R_e(R, R_e_Disk, R_e_Bulge, f_B, percentile=0.5):
     """
     Function used to find the effective radius of a galaxy with combined
@@ -183,15 +193,18 @@ if __name__ == "__main__":
              '(default: %(default)s)')
     params_group.add_argument(
         '--psf', nargs='*', type=float, required=True,
-        help='list of point-spread functions in arcsec, '
+        help='list of FWHM point-spread functions in arcsec, '
              'additionally computes observed galaxy sizes (PSF convolved)')
     params_group.add_argument(
         '--filters', nargs='*',
         help='filter names associated with each --psf given (optional, used '
              'to name the output table columns)')
     params_group.add_argument(
-        '--scale', type=float, default=1.0,
-        help='factor to scale the aperture size (default: %(default)s)')
+        '--aper-min', type=float, default=0.0,
+        help='minimum aperture size (default: %(default)s)')
+    params_group.add_argument(
+        '--aper-max', type=float, default=np.inf,
+        help='maximum aperture size (default: no limit)')
     params_group.add_argument(
         '--threads', type=int, default=cpu_count(),
         help='number of threads to use (default: %(default)s)')
@@ -235,53 +248,54 @@ if __name__ == "__main__":
     else:
         print(message)
         galaxy_size = tuple(map(root_function, arguments))
+
+    # create the output data table
+    table = Table()
     # compute the intrinsic galaxy major and minor axes and area
-    galaxy_major = np.asarray(galaxy_size) * args.scale
+    galaxy_major = np.asarray(galaxy_size)
     galaxy_minor = galaxy_major * ba_ratio
     galaxy_area = np.pi * galaxy_major * galaxy_minor
+    table["a_intr"] = Column(
+        galaxy_major, unit=units.arcsec,
+        description="intrinsic galaxy major axis (sigma)")
+    table["b_intr"] = Column(
+        galaxy_minor, unit=units.arcsec,
+        description="intrinsic galaxy minor axis (sigma)")
 
     # compute the convoluted galaxy properties and collect the data
     print("compute observed galaxy sizes")
-    # create the output data table
-    table = Table()
-    # add minimal intrinsic properties need to re-compute galaxy size and shape
-    table["R_E"] = Column(
-        galaxy_size, unit=units.arcsec,
-        description="effective radius, L(<R_E) = %f L_tot" % args.flux_frac)
-    table["aper_a_intr"] = Column(
-        galaxy_major, unit=units.arcsec,
-        description="PSF corrected aperture major axis")
-    table["aper_area_intr"] = Column(
-        galaxy_area, unit=units.arcsec**2,
-        description="PSF corrected aperture area")
     # compute the observational galaxy sizes utilizing the PSF per filter
     for filt in args.filters:
         psf = psf_sizes[filt]
+        psf_sigma = FWHM_to_sigma(psf)
         print("processing filter '%s' (PSF=%.2f\")" % (filt, psf))
-        # "convolution" with the PSF
-        observed_major = np.sqrt(galaxy_major**2 + psf**2)
-        observed_minor = np.sqrt(galaxy_minor**2 + psf**2)
-        # compute the observed axis ratio
-        observed_ba = observed_minor / observed_major
-        # compute the aperture area
-        observed_area = np.pi * observed_major * observed_minor
-        psf_area = np.pi * psf**2
-        # compute the S/N correction by comparing the aperture area to the PSF
-        sn_weight = np.sqrt(psf_area / observed_area)
-        # collect data in table
-        table["aper_a_%s" % filt] = Column(
+        # "convolution" with the PSF, corresponds to THELI A/B_WORLD
+        observed_major = np.sqrt(galaxy_major**2 + psf_sigma**2)
+        observed_minor = np.sqrt(galaxy_minor**2 + psf_sigma**2)
+        table["a_obs_%s" % filt] = Column(
             observed_major, unit=units.arcsec,
-            description="aperture major axis")
-        table["aper_ba_ratio_%s" % filt] = Column(
-            observed_ba,
-            description="aperture minor-to-major axis-ratio")
-        table["aper_area_%s" % filt] = Column(
-            observed_area, unit=units.arcsec**2,
-            description="aperture area")
-        table["sn_factor_%s" % filt] = Column(
-            sn_weight,
-            description="signal-to-noise correction factor for extended "
-                        "source")
+            description="observed galaxy major axis (sigma, A_WORLD)")
+        table["b_obs_%s" % filt] = Column(
+            observed_minor, unit=units.arcsec,
+            description="observed galaxy minor axis (sigma, B_WORLD)")
+        # compute the GAaP-like aperture
+        aperture_major = np.minimum(
+            np.sqrt(observed_major**2 + args.aper_min**2),
+            args.aper_max)  # clip at maximum aperture
+        aperture_minor = np.minimum(
+            np.sqrt(observed_minor**2 + args.aper_min**2),
+            args.aper_max)  # clip at maximum aperture
+        table["a_aper_%s" % filt] = Column(
+            aperture_major, unit=units.arcsec,
+            description="aperture major axis (sigma, Agaper)")
+        table["b_aper_%s" % filt] = Column(
+            aperture_minor, unit=units.arcsec,
+            description="aperture minor axis (sigma, Bgaper)")
+        # compute the aperture area
+        aperture_area = np.pi * aperture_major * aperture_minor
+        table["area_aper_%s" % filt] = Column(
+            aperture_area, unit=units.arcsec**2,
+            description="aperture area (sigma^2)")
 
     # write to specified output path
     print("write table to: %s" % args.output)
