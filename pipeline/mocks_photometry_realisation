@@ -11,6 +11,11 @@ from astropy.table import Column, Table
 from table_tools import load_table
 
 
+def FWHM_to_sigma(FWHM):
+    conv = 2.0 * np.sqrt(2.0 * np.log(2.0))  # 2.355
+    return FWHM / conv
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
@@ -117,6 +122,7 @@ if __name__ == "__main__":
         # compute the magnitde realisation and S/N
         real_flux = np.random.normal(  # approximation for Poisson error
             model_flux, flux_err, size=len(model_SN))
+        real_flux = np.maximum(real_flux, 1e-3 * flux_err)
         real_SN = real_flux / flux_err * args.significance
         real_SN *= SN_factor  # aperture correction
         real_SN = np.maximum(real_SN, SN_limit)  # clip SN

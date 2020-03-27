@@ -14,11 +14,6 @@ from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 from table_tools import load_table
 
 
-def sigma_to_FWHM(sigma):
-    conv = 2.0 * np.sqrt(2.0 * np.log(2.0))  # 2.355
-    return sigma * conv
-
-
 def FWHM_to_sigma(FWHM):
     conv = 2.0 * np.sqrt(2.0 * np.log(2.0))  # 2.355
     return FWHM / conv
