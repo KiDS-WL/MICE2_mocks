@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 from MICE2_mocks.plotting import (
     get_plotting_folder, subsampling_mask,
-    scatter_per_filter, histogram_per_filter)
+    contour_per_filter, histogram_per_filter)
 from table_tools import load_table
 
 
@@ -220,18 +220,18 @@ if __name__ == "__main__":
                 np.percentile(e_simul[-1], 0.0),
                 np.percentile(e_data[-1], 0.0)))
             emax.append(max(
-                np.percentile(e_simul[-1], 95),
-                np.percentile(e_data[-1], 95)))
-        fig = scatter_per_filter(
+                np.percentile(e_simul[-1], 80),
+                np.percentile(e_data[-1], 80)))
+        fig = contour_per_filter(
             e_data if args.d_errors is not None else None,
             m_data if args.d_errors is not None else None,
             args.d_errors,
             e_simul, m_simul, args.s_errors,
-            xlim=[min(mmin), max(mmax)], ylabel="magnitude error",
+            xlim=[min(mmin) - 0.1, max(mmax) - 0.3],
+            ylim=[min(emin) - 0.01, max(emax) + 0.01],
+            ylabel="magnitude error",
             label_pos="upper left", n_filters=len(args.s_filters),
             scale=args.fig_scale)
-        for ax in fig.axes:
-            ax.set_ylim(min(emin), max(emax))
         plt.savefig(
             os.path.join(plot_dir, "magnitude_errors." + args.o_format))
         plt.close(fig)

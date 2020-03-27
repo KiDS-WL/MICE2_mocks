@@ -4,6 +4,7 @@ import sys
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import gaussian_kde
+from scipy.ndimage import gaussian_filter
 
 
 def subplot_grid(
@@ -170,6 +171,67 @@ def scatter_per_filter(
             labels.append(dlabel)
         handles.append(
             scatter_dense(scol, sy, "C0", ax=ax, alpha=0.25))
+        labels.append(slabel)
+        ax.legend(
+            handles=handles, labels=labels, loc=label_pos, prop={"size": 8})
+    # decorate all axes with labels and grids, even if not used
+    for i in range(n_cols * n_rows):
+        i_row, i_col = i // n_cols, i % n_cols
+        ax = axes[i_row, i_col]
+        # add labels to the left-most and bottom axes and set limits
+        if ylabel is not None and i_col == 0:
+            ax.set_ylabel(ylabel)
+        if i_row == n_rows - 1:
+            ax.set_xlabel("magnitude")
+        ax.set_xlim(xlim)
+        ax.grid(alpha=0.25)
+    fig.tight_layout(h_pad=0.0, w_pad=0.0)
+    fig.subplots_adjust(hspace=0.0, wspace=0.0)
+    return fig
+
+
+def contour_per_filter(
+        dydata, dcols, dlabels, sydata, scols, slabels, n_filters,
+        xlim=[16.5, 26.5], ylim=[0.0, 3.0], ylabel=None, label_pos="best",
+        n_bins=200, n_cols=3, scale=1.0):
+    sigma = 1.5
+    # make a figure grid
+    fig, axes = subplot_grid(n_filters, n_cols, scale=scale)
+    try:
+        n_rows, n_cols = axes.shape
+    except ValueError:
+        n_rows = 1
+    for i in range(n_filters):
+        i_row, i_col = i // n_cols, i % n_cols
+        ax = axes[i_row, i_col]
+        # get the data and labels to plot
+        dcol, dlabel = parse_data_labels(dcols, dlabels, idx=i)
+        dy, dlabel = parse_data_labels(dydata, dlabels, idx=i)
+        scol, slabel = parse_data_labels(scols, slabels, idx=i)
+        sy, slabel = parse_data_labels(sydata, slabels, idx=i)
+        # create scatter plot and create fake handles for the legend
+        handles = []
+        labels = []
+        if dcols is not None:
+            counts, x, y = np.histogram2d(
+                dcol, dy, bins=[
+                    np.linspace(*xlim, n_bins), np.linspace(*ylim, n_bins)])
+            X, Y = np.meshgrid(
+                (x[1:] + x[:-1]) / 2.0, (y[1:] + y[:-1]) / 2.0)
+            plot_data = gaussian_filter(counts.T, sigma)
+            levels = np.linspace(0, plot_data.max(), 8)[1:-1:2]
+            handles.append(ax.contour(
+                X, Y, plot_data, levels=levels, colors="C3").collections[0])
+            labels.append(dlabel)
+        counts, x, y = np.histogram2d(
+                scol, sy, bins=[
+                    np.linspace(*xlim, n_bins), np.linspace(*ylim, n_bins)])
+        X, Y = np.meshgrid(
+            (x[1:] + x[:-1]) / 2.0, (y[1:] + y[:-1]) / 2.0)
+        plot_data = gaussian_filter(counts.T, sigma)
+        levels = np.linspace(0, plot_data.max(), 8)[1:-1:2]
+        handles.append(ax.contour(
+            X, Y, plot_data, levels=levels, colors="C0").collections[0])
         labels.append(slabel)
         ax.legend(
             handles=handles, labels=labels, loc=label_pos, prop={"size": 8})
