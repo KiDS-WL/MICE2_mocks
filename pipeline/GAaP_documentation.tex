@@ -1,0 +1,30 @@
+% description of the GAaP apertures and photometry
+
+\section{Alternative Mock Photometry}
+
+The signal-to-noise ration (SNR) and therefore whether an object is detected in KiDS, depends on the point-spread function (PSF), which determines how much of the flux of a galaxy is captured in during flux measurement. In KiDS, fluxes are measured using GAaP \citet[][probably not the correct reference here]{Kuijken19}. For MICE2 we therefore compute a comparable aperture size based on the median PSF size in KiDS (see Table~\ref{tab:obs_stats}).
+
+First we compute the observational size of each galaxy, which depends on its half light radius $R_{\rm E}$ convolved with the PSF. Assuming that both PSF and the light profile are Gaussian, we approximate the convolution with
+\begin{align}
+  a_{{\rm obs},i} = \sqrt{R_{\rm E}^2 + \sigma_{{\rm PSF},i}^2} \\
+  b_{{\rm obs},i} = \sqrt{R_{\rm E}^2 + \sigma_{{\rm PSF},i}^2}
+\end{align}
+to compute the observational galaxy major ($a_{{\rm obs},i}$) and minor ($b_{{\rm obs},i}$) axes in each filter $i$. Then, following \citet[][Eq.~8]{Kuijken19}, we compute the aperture size major and minor axes from
+\begin{align}
+  a_{{\rm gaper},i} = \sqrt{a_{{\rm obs},i}^2 + A_{\rm min}^2} \\
+  b_{{\rm gaper},i} = \sqrt{b_{{\rm obs},i}^2 + A_{\rm min}^2} ~,
+\end{align}
+where $A_{\rm min} = \SI{0.7}{\arcsec}$ is the lower \textsc{GAaP} aperture limit. Like in KiDS, we limit the aperture size to $A_{\rm max} = \SI{2.0}{\arcsec}$.
+
+Next, we calculate the signal-to-noise-ratio (SNR) of the evolution (magnification) corrected model magnitudes $m_{\rm evo}$ from
+\begin{equation}
+  \text{S/N}_{\rm evo} = \frac{f}{\Delta f} = 10^{-0.4 (m_{\rm evo} - m_{\rm lim})} \sigma
+\end{equation}
+using the magnitude median KV450 limits $m_{\rm lim}$ reported in Table~\ref{tab:obs_stats}. {\tiny Instead of using these magnitude limits as $1~\sigma$, we assume them to be $X~\sigma$ instead, since we find that this gives us a better match with the observational $\Delta$mag--mag relation.}
+
+These SNRs must be corrected for the aperture size relative to the aperture in which the limiting magitudes are computed, which is \SI{2.0}{\arcsec}. The corrected SNR are:
+\begin{equation}
+  {\rm S/N}_{\rm evo} \rightarrow {\rm S/N}_{\rm evo} \times \sqrt{\frac{\pi \langle \sigma_{{\rm PSF},i} \rangle^2}{\pi a_{{\rm gaper},i} b_{{\rm gaper},i}}}
+\end{equation}
+
+\dots
