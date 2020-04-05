@@ -175,7 +175,7 @@ if __name__ == "__main__":
     logger = pipeline.pipe_logger(__file__)
 
     index_path = "unique_gal_id"
-    with HDF5table(args.dataset, index_path, "w", False) as table:
+    with HDF5table(args.dataset, index_path, "w", True) as table:
 
         # find the shape columns
         path_dict = {
