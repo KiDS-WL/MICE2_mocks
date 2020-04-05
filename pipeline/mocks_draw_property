@@ -6,11 +6,10 @@ import sys
 from multiprocessing import cpu_count
 
 import numpy as np
-from astropy import units
-from astropy.table import Column, Table, hstack, vstack
 from scipy.spatial import cKDTree
 
-from table_tools import load_table
+from MICE2_mocks import pipeline
+from MICE2_mocks import pipeline
 
 
 if __name__ == "__main__":
@@ -81,8 +80,9 @@ if __name__ == "__main__":
         help='number of threads to use for the nearest neighbour query')
 
     args = parser.parse_args()
+    args.threads = min(cpu_count(), max(1, args.threads))
 
-    setattr(args, "threads", min(cpu_count(), max(1, args.threads)))
+    logger = pipeline.pipe_logger(__file__)
 
     if args.s_prop is None:  # copy column names from input data
         setattr(args, "s_prop", args.d_prop)

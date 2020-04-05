@@ -4,10 +4,9 @@ import os
 import sys
 
 import numpy as np
-from astropy import units
-from astropy.table import Column, Table
 
-from table_tools import load_table
+from h5table.table import HDF5table
+from MICE2_mocks import pipeline
 
 
 def magnification_correction(mag, kappa):
@@ -36,45 +35,53 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Compute magnitudes corrected for gravitational lensing '
                     'magnification in the limit of weak lensing.')
-
-    data_group = parser.add_argument_group('data')
-    data_group.add_argument(
-        '-i', '--input', required=True, help='file path of input data table')
-    data_group.add_argument(
-        '--i-format', default='fits',
-        help='astropy.table format specifier of the input table '
-             '(default: %(default)s)')
-    data_group.add_argument(
-        '-o', '--output', required=True, help='file path of output table')
-    data_group.add_argument(
-        '--o-format', default='fits',
-        help='astropy.table format specifier of the output table '
-             '(default: %(default)s)')
-
-    params_group = parser.add_argument_group('parameters')
-    params_group.add_argument(
-        '--filters', nargs='*', required=True,
-        help='list of table column names providing model magnitudes')
-    params_group.add_argument(
-        '--convergence', required=True,
-        help='table column name of convergence')
-
+    parser.add_argument(
+        'dataset', help='HDF5 data set with MICE2 raw data')
+    parser.add_argument(
+        '-c', '--chunksize', type=int, default=100000,
+        help='HDF5 data set with MICE2 raw data (default: %(default)s)')
     args = parser.parse_args()
 
-    columns = [f for f in args.filters]
-    columns.append(args.convergence)
-    data = load_table(args.input, args.i_format, columns)
-    print("use input filters: %s" % ", ".join(args.filters))
+    logger = pipeline.pipe_logger(__file__)
 
-    # create new table that only contains magnification corrected magnitudes
-    table = Table()
-    for filt in args.filters:
-        table[filt + "_mag"] = Column(
-            # apply the magnification correction
-            magnification_correction(data[filt], data[args.convergence]),
-            unit=units.mag,
-            description="magnitude magnified by gravitational lensing")
+    index_path = "unique_gal_id"
+    with HDF5table(args.dataset, index_path, "w", False) as table:
 
-    # write to specified output path
-    print("write table to: %s" % args.output)
-    table.write(args.output, format=args.o_format, overwrite=True)
+        # find convergence column
+        kappa_path = "kappa"
+        if kappa_path not in table:
+            message = "convergence column {:} not found in data set"
+            logger.error(message.format(kappa_path))
+            raise KeyError(message.format(kappa_path))
+
+        # find all magnitude columns
+        mag_paths = []
+        for col in table.colnames:
+            if col.endswith("_true") and \
+                    col.replace("_true", "_evo") not in table.colnames:
+                mag_paths.append(col)
+            if col.endswith("_evo"):
+                mag_paths.append(col)
+        if len(mag_paths) == 0:
+            message = "no magnitude columns found in data set"
+            logger.error(message)
+            raise KeyError(message)
+
+        # apply the magnification
+        for mag_path in mag_paths:
+            logger.info("applying magnification to '{:}'".format(mag_path))
+            # create new output columns
+            lensed_path = mag_path + "_mag"
+            try:
+                table.add_column(lensed_path, dtype=table.dtype[mag_path])
+            except ValueError:
+                message = "column '{:}' will be overwritten"
+                logger.warning(message.format(lensed_path))
+            # iterate the data set in chunks
+            for start, end in table.iter_rows(args.chunksize):
+                kappa = table.read_column(kappa_path, start=start, end=end)
+                mags = table.read_column(mag_path, start=start, end=end)
+                lensed = magnification_correction(mags, kappa)
+                table.write_column(lensed, lensed_path, start=start, end=end)
+                # description: "magnitude magnified by gravitational lensing"
+            logger.info("done writing")

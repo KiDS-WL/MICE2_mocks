@@ -6,12 +6,11 @@ import sys
 from multiprocessing import cpu_count
 
 import numpy as np
-from astropy import units
-from astropy.table import Column, Table
 from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 
-from table_tools import load_table
+from h5table.table import HDF5table
+from MICE2_mocks import pipeline
 
 
 def f_R_e(R, R_e_Disk, R_e_Bulge, f_B, percentile=0.5):
@@ -147,142 +146,147 @@ if __name__ == "__main__":
                     'Sersic profile for the disk component. The size is '
                     'defined in terms of a fraction of the total emitted flux '
                     '(i.e. 0.5 for the half-light radius.')
-
-    data_group = parser.add_argument_group('data')
-    data_group.add_argument(
-        '-i', '--input', required=True, help='file path of input data table')
-    data_group.add_argument(
-        '--iformat', default='fits',
-        help='astropy.table format specifier of the input table '
-             '(default: %(default)s)')
-    data_group.add_argument(
-        '-o', '--output', required=True, help='file path of output table')
-    data_group.add_argument(
-        '--oformat', default='fits',
-        help='astropy.table format specifier of the output table '
-             '(default: %(default)s)')
-
-    params_group = parser.add_argument_group('parameters')
-    params_group.add_argument(
-        '--bulge-ratio', required=True,
-        help='column name of bulge-to-total-flux ratio')
-    params_group.add_argument(
-        '--bulge-size', required=True,
-        help='column name of projected bulge size (half light radius) in '
-             'arcsec')
-    params_group.add_argument(
-        '--disk-size', required=True,
-        help='column name of projected disk size (half light radius) in '
-             'arcsec')
-    params_group.add_argument(
-        '--ba-ratio',
-        help='column name of minor-to-major axis ratio')
-    params_group.add_argument(
+    parser.add_argument(
+        'dataset', help='HDF5 data set with MICE2 raw data')
+    parser.add_argument(
+        '-c', '--chunksize', type=int, default=100000,
+        help='HDF5 data set with MICE2 raw data (default: %(default)s)')
+    parser.add_argument(
         '--flux-frac', type=float, default=0.5,
         help='fraction of total flux emitted from within computed radius '
              '(default: %(default)s)')
-    params_group.add_argument(
+    parser.add_argument(
         '--psf', nargs='*', type=float, required=True,
         help='list of point-spread functions in arcsec, '
              'additionally computes observed galaxy sizes (PSF convolved)')
-    params_group.add_argument(
-        '--filters', nargs='*',
+    parser.add_argument(
+        '--filters', nargs='*', required=True,
         help='filter names associated with each --psf given (optional, used '
              'to name the output table columns)')
-    params_group.add_argument(
+    parser.add_argument(
         '--scale', type=float, default=1.0,
         help='factor to scale the aperture size (default: %(default)s)')
-    params_group.add_argument(
+    parser.add_argument(
         '--threads', type=int, default=cpu_count(),
         help='number of threads to use (default: %(default)s)')
-
     args = parser.parse_args()
+    args.threads = min(cpu_count(), max(1, args.threads))
 
-    setattr(args, "threads", min(cpu_count(), max(1, args.threads)))
+    logger = pipeline.pipe_logger(__file__)
 
-    data = load_table(
-        args.input, args.iformat,
-        [args.bulge_ratio, args.bulge_size, args.disk_size, args.ba_ratio])
+    index_path = "unique_gal_id"
+    with HDF5table(args.dataset, index_path, "w", False) as table:
 
-    # generate list of PSF sizes and output columns names
-    if args.filters is not None:
+        # find the shape columns
+        path_dict = {
+            "bulge ratio": "bulge_fraction",
+            "bulge size": "bulge_length",
+            "disk size": "disk_length",
+            "axis ratio": "bulge_axis_ratio"}
+        for name, path in path_dict.items():
+            if path not in table:
+                message = "{:} column {:} not found in data set"
+                logger.error(message.format(name, path))
+                raise KeyError(message.format(name, path))
+
+        # generate list of PSF sizes and output columns names
         if len(args.psf) != len(args.filters):
-            sys.exit("ERROR: length of --filter and --psf lists do not match")
+            message = "length of --filter and --psf lists do not match"
+            logger.error(message)
+            raise ValueError(message)
         for psf in args.psf:
             if psf <= 0.0:
-                sys.exit("ERROR: PSF size must be positive")
-    else:
-        setattr(
-            args, "filters", ["filter%d" % d for d in range(len(args.psf))])
-    psf_sizes = {
-        key: val for key, val in zip(args.filters, args.psf)}
+                message = "PSF size must be positive"
+                logger.error(message)
+                raise ValueError(message)
+        psf_sizes = {
+            key: val for key, val in zip(args.filters, args.psf)}
 
-    # compute intrinsic galaxy sizes
-    bulge_ratio = data[args.bulge_ratio]
-    bulge_size = data[args.bulge_size]
-    disk_size = data[args.disk_size]
-    ba_ratio = data[args.ba_ratio]
-    flux_fraction = np.full_like(bulge_ratio, args.flux_frac)
-    # create an argument list for map / multiprocessing.pool.map
-    arguments = list(zip(flux_fraction, disk_size, bulge_size, bulge_ratio))
-    message = "compute intrinsic galaxy sizes"
-    # compute the radius of galaxies that emits a certain fraction of the
-    # total flux
-    if args.threads > 1:
-        print(message + " using %d threads" % args.threads)
-        with multiprocessing.Pool(args.threads) as pool:
-            galaxy_size = pool.map(root_function, arguments)
-    else:
-        print(message)
-        galaxy_size = tuple(map(root_function, arguments))
-    # compute the intrinsic galaxy major and minor axes and area
-    galaxy_major = np.asarray(galaxy_size) * args.scale
-    galaxy_minor = galaxy_major * ba_ratio
-    galaxy_area = np.pi * galaxy_major * galaxy_minor
+        logger.info("computing intrinsic galaxy sizes")
+        for path in ["R_E", "aper_a_intr", "aper_area_intr"]:
+            try:
+                table.add_column(path, dtype=np.float32)
+            except ValueError:
+                message = "column '{:}' will be overwritten"
+                logger.warning(message.format(path))
+        # iterate the data set in chunks and compute the apertures
+        for start, end in table.iter_rows(args.chunksize):
+            # compute intrinsic galaxy sizes
+            bulge_ratio = table.read_column(
+                path_dict["bulge ratio"], start=start, end=end)
+            bulge_size = table.read_column(
+                path_dict["bulge size"], start=start, end=end)
+            disk_size = table.read_column(
+                path_dict["disk size"], start=start, end=end)
+            ba_ratio = table.read_column(
+                path_dict["axis ratio"], start=start, end=end)
+            flux_fraction = np.full_like(bulge_ratio, args.flux_frac)
+            # compute the radius of galaxies that emits a certain fraction of
+            # the total luminosity
+            with multiprocessing.Pool(args.threads) as pool:
+                arguments = list(zip(
+                    flux_fraction, disk_size, bulge_size, bulge_ratio))
+                galaxy_size = pool.map(root_function, arguments)
+            # compute the intrinsic galaxy major and minor axes and area
+            galaxy_major = np.asarray(galaxy_size) * args.scale
+            galaxy_minor = galaxy_major * ba_ratio
+            galaxy_area = np.pi * galaxy_major * galaxy_minor
+            # write the data
+            table.write_column(
+                galaxy_size, "R_E", start=start, end=end)
+            # description: "effective radius, L(<R_E) = %f L_tot" % args.flux_frac
+            table.write_column(
+                galaxy_major, "aper_a_intr", start=start, end=end)
+            # description: "PSF corrected aperture major axis"
+            table.write_column(
+                galaxy_area, "aper_area_intr", start=start, end=end)
+            # description: "PSF corrected aperture area"
+        logger.info("done writing")
 
-    # compute the convoluted galaxy properties and collect the data
-    print("compute observed galaxy sizes")
-    # create the output data table
-    table = Table()
-    # add minimal intrinsic properties need to re-compute galaxy size and shape
-    table["R_E"] = Column(
-        galaxy_size, unit=units.arcsec,
-        description="effective radius, L(<R_E) = %f L_tot" % args.flux_frac)
-    table["aper_a_intr"] = Column(
-        galaxy_major, unit=units.arcsec,
-        description="PSF corrected aperture major axis")
-    table["aper_area_intr"] = Column(
-        galaxy_area, unit=units.arcsec**2,
-        description="PSF corrected aperture area")
-    # compute the observational galaxy sizes utilizing the PSF per filter
-    for filt in args.filters:
-        psf = psf_sizes[filt]
-        print("processing filter '%s' (PSF=%.2f\")" % (filt, psf))
-        # "convolution" with the PSF
-        observed_major = np.sqrt(galaxy_major**2 + psf**2)
-        observed_minor = np.sqrt(galaxy_minor**2 + psf**2)
-        # compute the observed axis ratio
-        observed_ba = observed_minor / observed_major
-        # compute the aperture area
-        observed_area = np.pi * observed_major * observed_minor
-        psf_area = np.pi * psf**2
-        # compute the S/N correction by comparing the aperture area to the PSF
-        sn_weight = np.sqrt(psf_area / observed_area)
-        # collect data in table
-        table["aper_a_%s" % filt] = Column(
-            observed_major, unit=units.arcsec,
-            description="aperture major axis")
-        table["aper_ba_ratio_%s" % filt] = Column(
-            observed_ba,
-            description="aperture minor-to-major axis-ratio")
-        table["aper_area_%s" % filt] = Column(
-            observed_area, unit=units.arcsec**2,
-            description="aperture area")
-        table["sn_factor_%s" % filt] = Column(
-            sn_weight,
-            description="signal-to-noise correction factor for extended "
-                        "source")
-
-    # write to specified output path
-    print("write table to: %s" % args.output)
-    table.write(args.output, format=args.oformat, overwrite=True)
+        # compute the observational galaxy sizes utilizing the PSF per filter
+        for filt in args.filters:
+            logger.info(
+                "computing observed galaxy sizes in filter '{:}'".format(filt))
+            psf = psf_sizes[filt]
+            for path in [
+                    "aper_a_{:}", "aper_ba_ratio_{:}",
+                    "aper_area_{:}", "sn_factor_{:}"]:
+                try:
+                    table.add_column(path.format(filt), dtype=np.float32)
+                except ValueError:
+                    message = "column '{:}' will be overwritten"
+                    logger.warning(message.format(path.format(filt)))
+            # iterate the data set in chunks and compute the apertures
+            for start, end in table.iter_rows(args.chunksize):
+                ba_ratio = table.read_column(
+                    path_dict["axis ratio"], start=start, end=end)
+                galaxy_major = table.read_column(
+                    "aper_a_intr", start=start, end=end)
+                # "convolution" with the PSF
+                observed_major = np.sqrt(galaxy_major**2 + psf**2)
+                observed_minor = np.sqrt((galaxy_major * ba_ratio)**2 + psf**2)
+                # compute the observed axis ratio
+                observed_ba = observed_minor / observed_major
+                # compute the aperture area
+                observed_area = np.pi * observed_major * observed_minor
+                psf_area = np.pi * psf**2
+                # compute the S/N correction by comparing the aperture area to the PSF
+                sn_weight = np.sqrt(psf_area / observed_area)
+                # write the data
+                table.write_column(
+                    observed_major, "aper_a_{:}".format(filt),
+                    start=start, end=end)
+                # description: "aperture major axis"
+                table.write_column(
+                    observed_ba, "aper_ba_ratio_{:}".format(filt),
+                    start=start, end=end)
+                # description: "aperture minor-to-major axis-ratio"
+                table.write_column(
+                    observed_area, "aper_area_{:}".format(filt),
+                    start=start, end=end)
+                # description: "aperture area"
+                table.write_column(
+                    sn_weight, "sn_factor_{:}".format(filt),
+                    start=start, end=end)
+                # description: "signal-to-noise correction factor for extended source")
+            logger.info("done writing")

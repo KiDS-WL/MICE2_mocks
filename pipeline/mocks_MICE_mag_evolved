@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import argparse
+import logging
 import os
 import sys
 
 import numpy as np
-from astropy import units
-from astropy.table import Column, Table
 
-from table_tools import load_table
+from h5table.table import HDF5table
+from MICE2_mocks import pipeline
 
 
 def mag_correction(mag, redshift):
@@ -36,36 +36,50 @@ if __name__ == "__main__":
         description='Apply the missing magnitude evolution correction to '
                     'MICE2.')
     parser.add_argument(
-        '-i', '--input', required=True, help='file path of MICE2 data table')
+        'dataset', help='HDF5 data set with MICE2 raw data')
     parser.add_argument(
-        '--i-format', default='fits',
-        help='astropy.table format specifier of the input table')
-    parser.add_argument(
-        '-o', '--output', required=True,
-        help='file path of output table containing only the corrected colours')
-    parser.add_argument(
-        '--o-format', default='fits',
-        help='astropy.table format specifier of the output table '
-             '(default: %(default)s)')
+        '-c', '--chunksize', type=int, default=100000,
+        help='HDF5 data set with MICE2 raw data (default: %(default)s)')
     args = parser.parse_args()
 
-    # check if all required columns exist
-    z_col = "z_cgal"
-    data = load_table(args.input, args.i_format, [z_col])
-    # find all model magnitude columns, ending with _true
-    mag_cols = [col for col in data.colnames if col.endswith("_true")]
-    if len(mag_cols) == 0:
-        sys.exit("ERROR: table does not contain any MICE2 magnitude columns")
+    logger = pipeline.pipe_logger(__file__)
 
-    # collect data and apply correction
-    z_data = data[z_col]
-    # create a new table that only contains the evolution corrected magnitudes
-    table = Table()
-    for filt in mag_cols:
-        table[filt.split("_true")[0] + "_evo"] = Column(
-            mag_correction(data[filt], z_data), unit=units.mag,
-            description="evolution corrected model magnitude")
+    index_path = "unique_gal_id"
+    with HDF5table(args.dataset, index_path, "w", False) as table:
 
-    # write to specified output path
-    print("write table to: %s" % args.output)
-    table.write(args.output, format=args.o_format, overwrite=True)
+        # find redshift column
+        z_path = "z_cgal"
+        if z_path not in table:
+            message = "redshift column {:} not found in data set"
+            logger.error(message.format(z_path))
+            raise KeyError(message.format(z_path))
+
+        # find all magnitude columns
+        mag_paths = []
+        for col in table.colnames:
+            if col.endswith("_true"):
+                mag_paths.append(col)
+        if len(mag_paths) == 0:
+            message = "no magnitude columns found in data set"
+            logger.error(message)
+            raise KeyError(message)
+
+        # apply the evolution correction
+        for mag_path in mag_paths:
+            logger.info(
+                "applying evolution correction to '{:}'".format(mag_path))
+            # create new output columns
+            evo_path = mag_path.split("_true")[0] + "_evo"
+            try:
+                table.add_column(evo_path, dtype=table.dtype[mag_path])
+            except ValueError:
+                message = "column '{:}' will be overwritten"
+                logger.warning(message.format(evo_path))
+            # iterate the data set in chunks
+            for start, end in table.iter_rows(args.chunksize):
+                redshifts = table.read_column(z_path, start=start, end=end)
+                mags = table.read_column(mag_path, start=start, end=end)
+                evos = mag_correction(mags, redshifts)
+                table.write_column(evos, evo_path, start=start, end=end)
+                # description: "evolution corrected model magnitude"
+            logger.info("done writing")
