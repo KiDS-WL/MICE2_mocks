@@ -226,7 +226,9 @@ if __name__ == "__main__":
             with multiprocessing.Pool(args.threads) as pool:
                 arguments = list(zip(
                     flux_fraction, disk_size, bulge_size, bulge_ratio))
-                galaxy_size = pool.map(root_function, arguments)
+                chunksize = args.chunksize // args.threads + 1
+                galaxy_size = pool.map(
+                    root_function, arguments, chunksize=chunksize)
             # compute the intrinsic galaxy major and minor axes and area
             galaxy_major = np.asarray(galaxy_size) * args.scale
             galaxy_minor = galaxy_major * ba_ratio
