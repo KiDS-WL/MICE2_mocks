@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-from h5table.table import HDF5table
+from h5table.memmap import BinaryTable
 from MICE2_mocks import pipeline
 
 
@@ -36,16 +36,15 @@ if __name__ == "__main__":
         description='Apply the missing magnitude evolution correction to '
                     'MICE2.')
     parser.add_argument(
-        'dataset', help='HDF5 data set with MICE2 raw data')
+        'dataset', help='memory mapped table data set with MICE2 raw data')
     parser.add_argument(
-        '-c', '--chunksize', type=int, default=100000,
-        help='HDF5 data set with MICE2 raw data (default: %(default)s)')
+        '-c', '--chunksize', type=int, default=10000,
+        help='row chunk size to process at once (default: %(default)s)')
     args = parser.parse_args()
 
     logger = pipeline.pipe_logger(__file__)
 
-    index_path = "unique_gal_id"
-    with HDF5table(args.dataset, index_path, "w", True) as table:
+    with BinaryTable(args.dataset, mode="r+") as table:
 
         # find redshift column
         z_path = "z_cgal"
@@ -70,16 +69,10 @@ if __name__ == "__main__":
                 "applying evolution correction to '{:}'".format(mag_path))
             # create new output columns
             evo_path = mag_path.split("_true")[0] + "_evo"
-            try:
-                table.add_column(evo_path, dtype=table.dtype[mag_path])
-            except ValueError:
-                message = "column '{:}' will be overwritten"
-                logger.warning(message.format(evo_path))
-            # iterate the data set in chunks
-            for start, end in table.iter_rows(args.chunksize):
-                redshifts = table.read_column(z_path, start=start, end=end)
-                mags = table.read_column(mag_path, start=start, end=end)
-                evos = mag_correction(mags, redshifts)
-                table.write_column(evos, evo_path, start=start, end=end)
-                # description: "evolution corrected model magnitude"
-            logger.info("done writing")
+            evos = table.add_column(evo_path, dtype=table[mag_path].dtype.str)
+            evos.attr = {"description": "evolution corrected model magnitude"}
+            # compute the corrected magnitudes
+            for start, end in table.row_iter(args.chunksize):
+                mags = table[mag_path][start:end]
+                redshifts = table[z_path][start:end]
+                evos[start:end] = mag_correction(mags, redshifts)

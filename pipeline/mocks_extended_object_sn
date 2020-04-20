@@ -9,7 +9,7 @@ import numpy as np
 from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 
-from h5table.table import HDF5table
+from h5table.memmap import BinaryTable
 from MICE2_mocks import pipeline
 
 
@@ -147,10 +147,10 @@ if __name__ == "__main__":
                     'defined in terms of a fraction of the total emitted flux '
                     '(i.e. 0.5 for the half-light radius.')
     parser.add_argument(
-        'dataset', help='HDF5 data set with MICE2 raw data')
+        'dataset', help='memory mapped table data set with MICE2 raw data')
     parser.add_argument(
-        '-c', '--chunksize', type=int, default=100000,
-        help='HDF5 data set with MICE2 raw data (default: %(default)s)')
+        '-c', '--chunksize', type=int, default=10000 * cpu_count(),
+        help='row chunk size to process at once (default: %(default)s)')
     parser.add_argument(
         '--flux-frac', type=float, default=0.5,
         help='fraction of total flux emitted from within computed radius '
@@ -174,8 +174,7 @@ if __name__ == "__main__":
 
     logger = pipeline.pipe_logger(__file__)
 
-    index_path = "unique_gal_id"
-    with HDF5table(args.dataset, index_path, "w", True) as table:
+    with BinaryTable(args.dataset, mode="r+") as table:
 
         # find the shape columns
         path_dict = {
@@ -201,69 +200,65 @@ if __name__ == "__main__":
                 raise ValueError(message)
         psf_sizes = {
             key: val for key, val in zip(args.filters, args.psf)}
+        # create new output columns
+        col = table.add_column("R_E", dtype=np.float32)
+        col.attr = {
+            "description":
+            "effective radius, L(<R_E) = {:2f} L_tot".format(args.flux_frac)}
+        col = table.add_column("aper_a_intr", dtype=np.float32)
+        col.attr = {"description": "PSF corrected aperture major axis"}
+        col = table.add_column("aper_area_intr", dtype=np.float32)
+        col.attr = {"description": "PSF corrected aperture area"}
 
+        # compute intrinsic galaxy sizes
         logger.info("computing intrinsic galaxy sizes")
-        for path in ["R_E", "aper_a_intr", "aper_area_intr"]:
-            try:
-                table.add_column(path, dtype=np.float32)
-            except ValueError:
-                message = "column '{:}' will be overwritten"
-                logger.warning(message.format(path))
-        # iterate the data set in chunks and compute the apertures
-        for start, end in table.iter_rows(args.chunksize):
-            # compute intrinsic galaxy sizes
-            bulge_ratio = table.read_column(
-                path_dict["bulge ratio"], start=start, end=end)
-            bulge_size = table.read_column(
-                path_dict["bulge size"], start=start, end=end)
-            disk_size = table.read_column(
-                path_dict["disk size"], start=start, end=end)
-            ba_ratio = table.read_column(
-                path_dict["axis ratio"], start=start, end=end)
-            flux_fraction = np.full_like(bulge_ratio, args.flux_frac)
-            # compute the radius of galaxies that emits a certain fraction of
-            # the total luminosity
-            with multiprocessing.Pool(args.threads) as pool:
+        with multiprocessing.Pool(args.threads) as pool:
+            for start, end in table.row_iter(args.chunksize):
+                bulge_ratio = table[path_dict["bulge ratio"]][start:end]
+                bulge_size = table[path_dict["bulge size"]][start:end]
+                disk_size = table[path_dict["disk size"]][start:end]
+                ba_ratio = table[path_dict["axis ratio"]][start:end]
+                flux_fraction = np.full_like(bulge_ratio, args.flux_frac)
+                # compute the radius of galaxies that emits a certain fraction of
+                # the total luminosity
                 arguments = list(zip(
                     flux_fraction, disk_size, bulge_size, bulge_ratio))
                 chunksize = args.chunksize // args.threads + 1
                 galaxy_size = pool.map(
                     root_function, arguments, chunksize=chunksize)
-            # compute the intrinsic galaxy major and minor axes and area
-            galaxy_major = np.asarray(galaxy_size) * args.scale
-            galaxy_minor = galaxy_major * ba_ratio
-            galaxy_area = np.pi * galaxy_major * galaxy_minor
-            # write the data
-            table.write_column(
-                galaxy_size, "R_E", start=start, end=end)
-            # description: "effective radius, L(<R_E) = %f L_tot" % args.flux_frac
-            table.write_column(
-                galaxy_major, "aper_a_intr", start=start, end=end)
-            # description: "PSF corrected aperture major axis"
-            table.write_column(
-                galaxy_area, "aper_area_intr", start=start, end=end)
-            # description: "PSF corrected aperture area"
-        logger.info("done writing")
+                # compute the intrinsic galaxy major and minor axes and area
+                galaxy_major = np.asarray(galaxy_size) * args.scale
+                galaxy_minor = galaxy_major * ba_ratio
+                galaxy_area = np.pi * galaxy_major * galaxy_minor
+                # write the data
+                table["R_E"][start:end] = galaxy_size
+                table["aper_a_intr"][start:end] = galaxy_major
+                table["aper_area_intr"][start:end] = galaxy_area
 
         # compute the observational galaxy sizes utilizing the PSF per filter
         for filt in args.filters:
             logger.info(
                 "computing observed galaxy sizes in filter '{:}'".format(filt))
             psf = psf_sizes[filt]
-            for path in [
-                    "aper_a_{:}", "aper_ba_ratio_{:}",
-                    "aper_area_{:}", "sn_factor_{:}"]:
-                try:
-                    table.add_column(path.format(filt), dtype=np.float32)
-                except ValueError:
-                    message = "column '{:}' will be overwritten"
-                    logger.warning(message.format(path.format(filt)))
-            # iterate the data set in chunks and compute the apertures
-            for start, end in table.iter_rows(args.chunksize):
-                ba_ratio = table.read_column(
-                    path_dict["axis ratio"], start=start, end=end)
-                galaxy_major = table.read_column(
-                    "aper_a_intr", start=start, end=end)
+            # create new output columns
+            col = table.add_column(
+                "aper_a_{:}".format(filt), dtype=np.float32)
+            col.attr = {"description": "aperture major axis"}
+            col = table.add_column(
+                "aper_ba_ratio_{:}".format(filt), dtype=np.float32)
+            col.attr = {"description": "aperture minor-to-major axis-ratio"}
+            col = table.add_column(
+                "aper_area_{:}".format(filt), dtype=np.float32)
+            col.attr = {"description": "aperture area"}
+            col = table.add_column(
+                "sn_factor_{:}".format(filt), dtype=np.float32)
+            col.attr = {
+                "description":
+                "signal-to-noise correction factor for extended source"}
+            # compute the apertures
+            for start, end in table.row_iter(args.chunksize):
+                ba_ratio = table[path_dict["axis ratio"]][start:end]
+                galaxy_major = table["aper_a_intr"][start:end]
                 # "convolution" with the PSF
                 observed_major = np.sqrt(galaxy_major**2 + psf**2)
                 observed_minor = np.sqrt((galaxy_major * ba_ratio)**2 + psf**2)
@@ -275,20 +270,7 @@ if __name__ == "__main__":
                 # compute the S/N correction by comparing the aperture area to the PSF
                 sn_weight = np.sqrt(psf_area / observed_area)
                 # write the data
-                table.write_column(
-                    observed_major, "aper_a_{:}".format(filt),
-                    start=start, end=end)
-                # description: "aperture major axis"
-                table.write_column(
-                    observed_ba, "aper_ba_ratio_{:}".format(filt),
-                    start=start, end=end)
-                # description: "aperture minor-to-major axis-ratio"
-                table.write_column(
-                    observed_area, "aper_area_{:}".format(filt),
-                    start=start, end=end)
-                # description: "aperture area"
-                table.write_column(
-                    sn_weight, "sn_factor_{:}".format(filt),
-                    start=start, end=end)
-                # description: "signal-to-noise correction factor for extended source")
-            logger.info("done writing")
+                table["aper_a_{:}".format(filt)][start:end] = observed_major
+                table["aper_ba_ratio_{:}".format(filt)][start:end] = observed_ba
+                table["aper_area_{:}".format(filt)][start:end] = observed_area
+                table["sn_factor_{:}".format(filt)][start:end] = sn_weight

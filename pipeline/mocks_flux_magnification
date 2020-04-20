@@ -5,7 +5,7 @@ import sys
 
 import numpy as np
 
-from h5table.table import HDF5table
+from h5table.memmap import BinaryTable
 from MICE2_mocks import pipeline
 
 
@@ -36,16 +36,15 @@ if __name__ == "__main__":
         description='Compute magnitudes corrected for gravitational lensing '
                     'magnification in the limit of weak lensing.')
     parser.add_argument(
-        'dataset', help='HDF5 data set with MICE2 raw data')
+        'dataset', help='memory mapped table data set with MICE2 raw data')
     parser.add_argument(
-        '-c', '--chunksize', type=int, default=100000,
-        help='HDF5 data set with MICE2 raw data (default: %(default)s)')
+        '-c', '--chunksize', type=int, default=10000,
+        help='row chunk size to process at once (default: %(default)s)')
     args = parser.parse_args()
 
     logger = pipeline.pipe_logger(__file__)
 
-    index_path = "unique_gal_id"
-    with HDF5table(args.dataset, index_path, "w", True) as table:
+    with BinaryTable(args.dataset, mode="r+") as table:
 
         # find convergence column
         kappa_path = "kappa"
@@ -72,16 +71,12 @@ if __name__ == "__main__":
             logger.info("applying magnification to '{:}'".format(mag_path))
             # create new output columns
             lensed_path = mag_path + "_mag"
-            try:
-                table.add_column(lensed_path, dtype=table.dtype[mag_path])
-            except ValueError:
-                message = "column '{:}' will be overwritten"
-                logger.warning(message.format(lensed_path))
-            # iterate the data set in chunks
-            for start, end in table.iter_rows(args.chunksize):
-                kappa = table.read_column(kappa_path, start=start, end=end)
-                mags = table.read_column(mag_path, start=start, end=end)
-                lensed = magnification_correction(mags, kappa)
-                table.write_column(lensed, lensed_path, start=start, end=end)
-                # description: "magnitude magnified by gravitational lensing"
-            logger.info("done writing")
+            lensed = table.add_column(
+                lensed_path, dtype=table[mag_path].dtype.str)
+            lensed.attr = {
+                "description": "magnitude magnified by gravitational lensing"}
+            # compute the corrected magnitudes
+            for start, end in table.row_iter(args.chunksize):
+                mags = table[mag_path][start:end]
+                kappa = table[kappa_path][start:end]
+                lensed[start:end] = magnification_correction(mags, kappa)

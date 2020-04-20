@@ -6,7 +6,7 @@ from hashlib import md5
 
 import numpy as np
 
-from h5table.table import HDF5table
+from h5table.memmap import BinaryTable
 from MICE2_mocks import pipeline
 
 
@@ -17,10 +17,10 @@ if __name__ == "__main__":
                     'on a table with simulated model magnitudes and '
                     'observational detection limits.')
     parser.add_argument(
-        'dataset', help='HDF5 data set with MICE2 raw data')
+        'dataset', help='memory mapped table data set with MICE2 raw data')
     parser.add_argument(
-        '-c', '--chunksize', type=int, default=100000,
-        help='HDF5 data set with MICE2 raw data (default: %(default)s)')
+        '-c', '--chunksize', type=int, default=10000,
+        help='row chunk size to process at once (default: %(default)s)')
     parser.add_argument(
         '--filters', nargs='*', required=True,
         help='list of table column names providing model magnitudes')
@@ -51,8 +51,7 @@ if __name__ == "__main__":
 
     logger = pipeline.pipe_logger(__file__)
 
-    index_path = "unique_gal_id"
-    with HDF5table(args.dataset, index_path, "w", True) as table:
+    with BinaryTable(args.dataset, mode="r+") as table:
 
         # check if all argument lengths match
         filters = args.filters
@@ -81,38 +80,39 @@ if __name__ == "__main__":
 
         # compute the photometry realisation
         for mag_path, mag_lim, sn_path in zip(
-                args.filters, sn_factors, args.limits):
+                args.filters, args.limits, sn_factors):
             logger.info("processing filter '{:}'".format(mag_path))
-
-            # iterate the data set in chunks
-            for start, end in table.iter_rows(args.chunksize):
-                # find the correct magnitude path depending on whether
-                # magnification was applied or not
-                if mag_path.endswith("_evo"):
-                    obs_path = mag_path.replace("_evo", "_obs")
-                    err_path = mag_path.replace("_evo", "_obserr")
+            # find the correct magnitude path depending on whether
+            # magnification was applied or not
+            if mag_path.endswith("_evo"):
+                obs_path = mag_path.replace("_evo", "_obs")
+                err_path = mag_path.replace("_evo", "_obserr")
+            else:
+                if mag_path.endswith("_mag"):
+                    obs_path = mag_path[:-4] + "_obs_mag"
+                    err_path = mag_path[:-4] + "_obserr_mag"
                 else:
-                    if mag_path.endswith("_mag"):
-                        obs_path = mag_path[:-4] + "_obs_mag"
-                        err_path = mag_path[:-4] + "_obserr_mag"
-                    else:
-                        obs_path = mag_path + "_obs"
-                        err_path = mag_path + "_obserr"
-                for path in [obs_path, err_path]:
-                    try:
-                        table.add_column(path, dtype=table.dtype[mag_path])
-                    except ValueError:
-                        message = "column '{:}' will be overwritten"
-                        logger.warning(message.format(path))
+                    obs_path = mag_path + "_obs"
+                    err_path = mag_path + "_obserr"
+            # create new output columns
+            obs_mags = table.add_column(
+                obs_path, dtype=table[mag_path].dtype.str)
+            obs_mags.attr = {
+                "description": "realisation of model magnitude"}
+            obs_mags_err = table.add_column(
+                err_path, dtype=table[mag_path].dtype.str)
+            obs_mags_err.attr = {
+                "description": "error of realisation of model magnitude"}
 
+            # compute the magnitude realisation
+            for start, end in table.row_iter(args.chunksize):
                 if sn_path is None:
                     SN_factor = 1.0
                 else:
-                    SN_factor = table.read_column(
-                        sn_path, start=start, end=end)
-                model_mags = table.read_column(mag_path, start=start, end=end)
+                    SN_factor = table[sn_path][start:end]
 
                 # compute the S/N of the model magnitudes
+                model_mags = table[mag_path][start:end]
                 model_SN = 10 ** (-0.4 * (
                         model_mags - mag_lim - detect_sigma_to_mag))
                 model_SN *= SN_factor
@@ -120,8 +120,8 @@ if __name__ == "__main__":
                 model_mags_err = 2.5 / np.log(10.0) / model_SN
 
                 # compute the magnitde realisation and S/N
-                real_mags = model_mags + np.random.normal(
-                    0.0, model_mags_err, size=len(model_SN))
+                real_mags = np.random.normal(
+                    model_mags, model_mags_err, size=len(model_SN))
                 real_SN = 10 ** (-0.4 * (
                         real_mags - mag_lim - detect_sigma_to_mag))
                 real_SN *= SN_factor
@@ -132,10 +132,8 @@ if __name__ == "__main__":
                 not_detected = (real_SN < SN_detect) | (real_mags < 5.0)
                 real_mags[not_detected] = non_detection_magnitude
                 real_mags_err[not_detected] = mag_lim - detect_sigma_to_mag
+                
+                # write to disk
+                obs_mags[start:end] = real_mags
+                obs_mags_err[start:end] = real_mags_err
 
-                # write the results
-                table.write_column(obs_path, real_mags, start=start, end=end)
-                # description: "realisation of model magnitude"
-                table.write_column(
-                    err_path, real_mags_err, start=start, end=end)
-                # description: "error of realisation of model magnitude"
