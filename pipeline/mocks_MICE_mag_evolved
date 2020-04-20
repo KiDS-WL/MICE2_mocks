@@ -69,8 +69,9 @@ if __name__ == "__main__":
                 "applying evolution correction to '{:}'".format(mag_path))
             # create new output columns
             evo_path = mag_path.split("_true")[0] + "_evo"
-            evos = table.add_column(evo_path, dtype=table[mag_path].dtype.str)
-            evos.attr = {"description": "evolution corrected model magnitude"}
+            evos = table.add_column(
+                evo_path, dtype=table[mag_path].dtype.str, attr={
+                    "description": "evolution corrected model magnitude"})
             # compute the corrected magnitudes
             for start, end in table.row_iter(args.chunksize):
                 mags = table[mag_path][start:end]

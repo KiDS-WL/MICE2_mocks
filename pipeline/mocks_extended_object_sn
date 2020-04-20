@@ -201,14 +201,17 @@ if __name__ == "__main__":
         psf_sizes = {
             key: val for key, val in zip(args.filters, args.psf)}
         # create new output columns
-        col = table.add_column("R_E", dtype=np.float32)
-        col.attr = {
-            "description":
-            "effective radius, L(<R_E) = {:2f} L_tot".format(args.flux_frac)}
-        col = table.add_column("aper_a_intr", dtype=np.float32)
-        col.attr = {"description": "PSF corrected aperture major axis"}
-        col = table.add_column("aper_area_intr", dtype=np.float32)
-        col.attr = {"description": "PSF corrected aperture area"}
+        col = table.add_column(
+            "R_E", dtype=np.float32, attr={
+                "description":
+                "effective radius, L(<R_E) = {:2f} L_tot".format(
+                    args.flux_frac)})
+        col = table.add_column(
+            "aper_a_intr", dtype=np.float32, attr={
+                "description": "PSF corrected aperture major axis"})
+        col = table.add_column(
+            "aper_area_intr", dtype=np.float32, attr={
+                "description": "PSF corrected aperture area"})
 
         # compute intrinsic galaxy sizes
         logger.info("computing intrinsic galaxy sizes")
@@ -241,20 +244,19 @@ if __name__ == "__main__":
                 "computing observed galaxy sizes in filter '{:}'".format(filt))
             psf = psf_sizes[filt]
             # create new output columns
-            col = table.add_column(
-                "aper_a_{:}".format(filt), dtype=np.float32)
-            col.attr = {"description": "aperture major axis"}
-            col = table.add_column(
-                "aper_ba_ratio_{:}".format(filt), dtype=np.float32)
-            col.attr = {"description": "aperture minor-to-major axis-ratio"}
-            col = table.add_column(
-                "aper_area_{:}".format(filt), dtype=np.float32)
-            col.attr = {"description": "aperture area"}
-            col = table.add_column(
-                "sn_factor_{:}".format(filt), dtype=np.float32)
-            col.attr = {
-                "description":
-                "signal-to-noise correction factor for extended source"}
+            aper_a = table.add_column(
+                "aper_a_{:}".format(filt), dtype=np.float32, attr={
+                    "description": "aperture major axis"})
+            aper_ab = table.add_column(
+                "aper_ba_ratio_{:}".format(filt), dtype=np.float32, attr={
+                    "description": "aperture minor-to-major axis-ratio"})
+            aper_area = table.add_column(
+                "aper_area_{:}".format(filt), dtype=np.float32, attr={
+                    "description": "aperture area"})
+            sn_factor = table.add_column(
+                "sn_factor_{:}".format(filt), dtype=np.float32, attr={
+                    "description":
+                    "signal-to-noise correction factor for extended source"})
             # compute the apertures
             for start, end in table.row_iter(args.chunksize):
                 ba_ratio = table[path_dict["axis ratio"]][start:end]
@@ -270,7 +272,7 @@ if __name__ == "__main__":
                 # compute the S/N correction by comparing the aperture area to the PSF
                 sn_weight = np.sqrt(psf_area / observed_area)
                 # write the data
-                table["aper_a_{:}".format(filt)][start:end] = observed_major
-                table["aper_ba_ratio_{:}".format(filt)][start:end] = observed_ba
-                table["aper_area_{:}".format(filt)][start:end] = observed_area
-                table["sn_factor_{:}".format(filt)][start:end] = sn_weight
+                aper_a[start:end] = observed_major
+                aper_ab[start:end] = observed_ba
+                aper_area[start:end] = observed_area
+                sn_factor[start:end] = sn_weight

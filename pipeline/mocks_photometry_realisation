@@ -96,13 +96,11 @@ if __name__ == "__main__":
                     err_path = mag_path + "_obserr"
             # create new output columns
             obs_mags = table.add_column(
-                obs_path, dtype=table[mag_path].dtype.str)
-            obs_mags.attr = {
-                "description": "realisation of model magnitude"}
+                obs_path, dtype=table[mag_path].dtype.str, attr={
+                    "description": "realisation of model magnitude"})
             obs_mags_err = table.add_column(
-                err_path, dtype=table[mag_path].dtype.str)
-            obs_mags_err.attr = {
-                "description": "error of realisation of model magnitude"}
+                err_path, dtype=table[mag_path].dtype.str, attr={
+                    "description": "error of realisation of model magnitude"})
 
             # compute the magnitude realisation
             for start, end in table.row_iter(args.chunksize):

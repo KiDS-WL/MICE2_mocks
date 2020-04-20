@@ -72,9 +72,9 @@ if __name__ == "__main__":
             # create new output columns
             lensed_path = mag_path + "_mag"
             lensed = table.add_column(
-                lensed_path, dtype=table[mag_path].dtype.str)
-            lensed.attr = {
-                "description": "magnitude magnified by gravitational lensing"}
+                lensed_path, dtype=table[mag_path].dtype.str, attr={
+                    "description":
+                    "magnitude magnified by gravitational lensing"})
             # compute the corrected magnitudes
             for start, end in table.row_iter(args.chunksize):
                 mags = table[mag_path][start:end]
