@@ -44,6 +44,7 @@ if __name__ == "__main__":
 
     logger = pipeline.pipe_logger(__file__)
 
+    logger.info("loading data store '{:}'".format(args.dataset))
     with BinaryTable(args.dataset, mode="r+") as table:
 
         # find redshift column
@@ -65,15 +66,25 @@ if __name__ == "__main__":
 
         # apply the evolution correction
         for mag_path in mag_paths:
-            logger.info(
-                "applying evolution correction to '{:}'".format(mag_path))
             # create new output columns
             evo_path = mag_path.split("_true")[0] + "_evo"
+            if evo_path in table:
+                message = "overwriting output column '{:}'"
+                logger.warn(message.format(evo_path))
+            else:
+                message = "creating output column '{:}'"
+                logger.info(message.format(evo_path))
             evos = table.add_column(
                 evo_path, dtype=table[mag_path].dtype.str, attr={
-                    "description": "evolution corrected model magnitude"})
-            # compute the corrected magnitudes
-            for start, end in table.row_iter(args.chunksize):
-                mags = table[mag_path][start:end]
-                redshifts = table[z_path][start:end]
-                evos[start:end] = mag_correction(mags, redshifts)
+                    "description": "evolution corrected model magnitude"},
+                overwrite=True)
+        # compute the corrected magnitudes
+        redshift_data = table[z_path]
+        for start, end in table.row_iter(args.chunksize, verbose=True):
+            redshifts = redshift_data[start:end]
+            for mag_path in mag_paths:
+                evo_path = mag_path.split("_true")[0] + "_evo"
+                table[evo_path][start:end] = mag_correction(
+                    table[mag_path][start:end], redshifts)
+
+    logger.info("done")

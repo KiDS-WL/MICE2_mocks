@@ -44,6 +44,7 @@ if __name__ == "__main__":
 
     logger = pipeline.pipe_logger(__file__)
 
+    logger.info("loading data store '{:}'".format(args.dataset))
     with BinaryTable(args.dataset, mode="r+") as table:
 
         # find convergence column
@@ -68,15 +69,25 @@ if __name__ == "__main__":
 
         # apply the magnification
         for mag_path in mag_paths:
-            logger.info("applying magnification to '{:}'".format(mag_path))
             # create new output columns
             lensed_path = mag_path + "_mag"
+            if lensed_path in table:
+                message = "overwriting output column '{:}'"
+                logger.warn(message.format(lensed_path))
+            else:
+                message = "creating output column '{:}'"
+                logger.info(message.format(lensed_path))
             lensed = table.add_column(
                 lensed_path, dtype=table[mag_path].dtype.str, attr={
                     "description":
-                    "magnitude magnified by gravitational lensing"})
-            # compute the corrected magnitudes
-            for start, end in table.row_iter(args.chunksize):
-                mags = table[mag_path][start:end]
-                kappa = table[kappa_path][start:end]
-                lensed[start:end] = magnification_correction(mags, kappa)
+                    "magnitude magnified by gravitational lensing"},
+                    overwrite=True)
+        # compute the corrected magnitudes
+        kappa_data = table[kappa_path]
+        for start, end in table.row_iter(args.chunksize, verbose=True):
+            kappa = kappa_data[start:end]
+            for mag_path in mag_paths:
+                table[mag_path + "_mag"][start:end] = magnification_correction(
+                    table[mag_path][start:end], kappa)
+
+    logger.info("done")
