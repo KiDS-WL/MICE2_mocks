@@ -7,7 +7,7 @@ import toml
 
 from MICE2_mocks import pipeline
 from MICE2_mocks.pipeline import conversion
-from h5table.memmap import BinaryTable
+from memmap_table import MemmapTable
 
 
 class ColumnDictTranslator(object):
@@ -110,10 +110,11 @@ if __name__ == "__main__":
             logger.error(message.format(args.output))
             raise OSError(message.format(args.output))
         logger.info("creating data store: {:}".format(args.output))
-        with BinaryTable(args.output, nrows=len(reader), mode="w+") as table:
-            logger.debug("allocated {:,d} table rows".format(len(table)))
+        with MemmapTable(args.output, nrows=len(reader), mode="w+") as table:
 
             # create the new columns
+            logger.debug(
+                "registering {:,d} new columns".format(len(col_map_dict)))
             for path, (colname, dtype) in col_map_dict.items():
                 if dtype is None:
                     dtype = reader.dtype[colname].str
@@ -122,8 +123,10 @@ if __name__ == "__main__":
                     "original name": colname,
                     "last modified": " ".join([
                         os.path.basename(sys.argv[0]), *sys.argv[1:]])})
+            logger.debug("allocated {:,d} table rows".format(len(table)))
 
             # copy the data
+            logger.debug("processing input stream...")
             start = 0
             for chunk in reader:
                 end = reader.current_row  # position after current chunk
