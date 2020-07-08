@@ -2,8 +2,8 @@
 
 ###############################################################################
 #                                                                             #
-#   Create a mock catalogue for WiggleZ derived from the MICE2 galaxy mock    #
-#   catalogue.                                                                #
+#   Create an idealized spectroscopic mock catalogue from the MICE2 galaxy    #
+#   mock catalogue.                                                           #
 #                                                                             #
 ###############################################################################
 
@@ -13,18 +13,14 @@ mkdir -p ${DATADIR}
 CHUNKDIR=${DATADIR}/CHUNKS
 
 # static file names
-export MOCKout=${DATADIR}/MICE2_WiggleZ.fits
-
-echo "ERROR: n(z) must be scaled to the chunk area"
-exit 1;
+export MOCKout=${DATADIR}/MICE2_idealized.fits
 
 echo "==> process the mock chucks"
 # Process each chunk sequentially and collect the output logs for debugging.
 for file in ${CHUNKDIR}/*/MICE2_all.fits; do
     mocks_MICE_specz_sample \
         -s $file --s-type KV450 \
-        --survey WiggleZ \
-        -d ${HOME}/DATA/KV450/SPECZ/WiggleZ_masked.fits --d-z-spec z_spec \
+        --survey idealized \
         -o $(dirname $file)/$(basename ${MOCKout})
 done
 echo ""
