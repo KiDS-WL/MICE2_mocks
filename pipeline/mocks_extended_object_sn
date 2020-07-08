@@ -174,6 +174,7 @@ if __name__ == "__main__":
 
     logger = pipeline.pipe_logger(__file__)
 
+    logger.info("loading data store '{:}'".format(args.dataset))
     with BinaryTable(args.dataset, mode="r+") as table:
 
         # find the shape columns
@@ -276,3 +277,5 @@ if __name__ == "__main__":
                 aper_ab[start:end] = observed_ba
                 aper_area[start:end] = observed_area
                 sn_factor[start:end] = sn_weight
+
+    logger.info("done")

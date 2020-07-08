@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+import argparse
+import sys
+import os
+
+import toml
+
+from MICE2_mocks import pipeline
+from MICE2_mocks.pipeline import conversion
+from h5table.memmap import BinaryTable
+
+
+class ColumnDictTranslator(object):
+
+    def __init__(self, col_dict):
+        self._col_dict = col_dict
+        self.column_map = dict()
+        self._traverse_dict(self._col_dict)
+
+    def _traverse_dict(self, subdict, path=""):
+        for key, value in subdict.items():
+            if type(key) is not str:
+                message = "invalid type {:} for set name"
+                raise TypeError(message.format(str(type(value))))
+            if type(value) is dict:
+                self._traverse_dict(value, os.path.join(path, key))
+            else:
+                if type(value) is list:
+                    dtype_tuple = tuple(value)
+                else:
+                    dtype_tuple = (value, None)
+                self.column_map[os.path.join(path, key)] = dtype_tuple
+
+
+class DumpDefault(argparse.Action):
+
+    def __init__(self, *args, nargs=0,**kwargs):
+        super().__init__(*args, nargs=nargs, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        default = {
+            "index": "...",
+            "position": {
+                "ra/true": "",
+                "ra/obs": "",
+                "dec/true": "",
+                "dec/obs": "",
+                "z/true": "",
+                "z/obs": "",
+            },
+            "mags/model": {},
+        }
+        sys.stdout.write(toml.dumps(default))
+        parser.exit()
+
+
+parser = argparse.ArgumentParser(
+    description='Convert a data set to an internal data store.')
+parser.register('action', 'dump', DumpDefault)
+dump = parser.add_argument_group('default column file')
+dump.add_argument(
+    '--dump', nargs=0, action='dump',
+    help='dump a default columns file to stdout and exit')
+parameters = parser.add_argument_group("parameters")
+parameters.add_argument(
+    '-i', '--input', required=True, help='input data set')
+parameters.add_argument(
+    '--i-format', default="fits", choices=("fits", "csv"),
+    help='file format of the input data (default: %(default)s)')
+parameters.add_argument(
+    '-c', '--columns', required=True,
+    help='parameter file in TOML format that maps the input data column '
+            'names to file paths within the data store, use --dump for '
+            'further help')
+parameters.add_argument(
+    '--fits-ext', type=int, default=1,
+    help='FITS table extension from which data is read (default: %(default)s)')
+parameters.add_argument(
+    '-o', '--output', required=True,
+    help='directory in which the data store is created')
+parameters.add_argument(
+    '--purge', action='store_true',
+    help='delete any existing data in output')
+
+
+if __name__ == "__main__":
+
+    args = parser.parse_args()
+    logger = pipeline.pipe_logger(__file__)
+
+    # create a standardized file reader
+    logger.info("opening input as {:}: {:}".format(
+        args.i_format.upper(), args.input))
+    if args.i_format == "fits":
+        reader = conversion.FITSreader(args.input, ext=args.fits_ext)
+    elif args.i_format == "csv":
+        reader = conversion.CSVreader(args.input)
+    else:  # implement additional readers
+        message = "{:}-files currently not supported"
+        logger.error(message.format(args.i_format))
+        raise NotImplementedError(message.format(args.i_format))
+    # check the columns file
+    logger.info("reading column file: {:}".format(args.columns))
+    with open(args.columns) as f:
+        col_map_dict = ColumnDictTranslator(toml.load(f)).column_map
+
+    with reader:
+        if not args.purge and os.path.exists(args.output):
+            message = "ouput path '{:}' exists, but overwriting not permitted"
+            logger.error(message.format(args.output))
+            raise OSError(message.format(args.output))
+        logger.info("creating data store: {:}".format(args.output))
+        with BinaryTable(args.output, nrows=len(reader), mode="w+") as table:
+            logger.debug("allocated {:,d} table rows".format(len(table)))
+
+            # create the new columns
+            for path, (colname, dtype) in col_map_dict.items():
+                if dtype is None:
+                    dtype = reader.dtype[colname].str
+                table.add_column(path, dtype, attr={
+                    "source": args.input,
+                    "original name": colname,
+                    "last modified": " ".join([
+                        os.path.basename(sys.argv[0]), *sys.argv[1:]])})
+
+            # copy the data
+            start = 0
+            for chunk in reader:
+                end = reader.current_row  # position after current chunk
+                for path, (colname, dtype) in col_map_dict.items():
+                    if end > len(table):
+                        # resize the table
+                        table.resize(len(table) + len(chunk))
+                        logger.debug(
+                            "allocated {:,d} extra rows".format(len(chunk)))
+                    table[path][start:end] = chunk[colname]
+                print("current row: {:,d}".format(end), end="\r")
+                start = end
+
+            # resize to the correct number of lines
+            logger.debug("finalized table with {:,d} rows".format(end))
+            if len(table) > end:
+                table.resize(end)
+
+            # print the table data as quick check and remove the header
+            table_lines = "\n".join(str(table).split("\n")[1:-2])
+            print("\n" + table_lines + "\n")
+
+    logger.info("done")
