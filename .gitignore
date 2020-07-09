@@ -105,3 +105,8 @@ venv.bak/
 
 # temporary files
 *.cache
+
+# data files
+test/*.csv
+test/*.fits
+test/*.hdf5

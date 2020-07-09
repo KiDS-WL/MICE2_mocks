@@ -2,9 +2,21 @@ import csv
 import os
 import warnings
 from collections import OrderedDict
+from sys import stdout
 
 import numpy as np
 from fitsio import FITS
+
+# compute an automatic buffer size for the system
+_megabyte = 1048576  # bytes
+try:
+    import psutil
+    # between 50 MB < 5% < 500 MB
+    auto_size = int(0.05 * psutil.virtual_memory().total)
+    BUFFERSIZE = max(auto_size, 50 * _megabyte)
+    BUFFERSIZE = min(BUFFERSIZE, 500 * _megabyte)
+except Exception:
+    BUFFERSIZE = 50 * _megabyte
 
 
 class reader(object):
@@ -13,7 +25,7 @@ class reader(object):
     _dtype = None
     _len = 0
     _current_row = 0
-    _buffersize = 104857600  # default of 100 MB
+    _buffersize = BUFFERSIZE
 
     def __len__(self):
         return self._len
@@ -56,6 +68,36 @@ class reader(object):
         return max(1, self._buffersize // bytes_per_row)
 
     def read_chunk(self):
+        return NotImplemented
+
+    def close(self):
+        return NotImplemented
+
+
+class writer(object):
+
+    _file = None
+    _dtype = None
+    _len = 0
+
+    def __len__(self):
+        return self._len
+
+    def __enter__(self, *args, **kwargs):
+        return self
+    
+    def __exit__(self, *args, **kwargs):
+        self.close()
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def filesize(self):
+        return os.path.getsize(self._file.name)
+
+    def write_chunk(self):
         return NotImplemented
 
     def close(self):
@@ -153,6 +195,45 @@ class CSVreader(reader):
         self._file.close()
 
 
+class CSVwriter(writer):
+
+    _header_written = False
+
+    def __init__(self, fpath=None, overwrite=False):
+        if fpath is None:
+            self._file = stdout
+        else:
+            if os.path.exists(fpath):
+                if overwrite:
+                    os.remove(fpath)
+                else:
+                    raise OSError("output file '{:}' exists".format(fpath))
+            self._file = open(fpath, "a")
+        self._writer = csv.writer(self._file)
+
+    def write_chunk(self, table):
+        # store/check the input data type and write the header
+        if not self._header_written:
+            self._dtype = table.dtype
+            # write the header
+            self._writer.writerow(self.dtype.names)
+            self._header_written = True
+        else:
+            if self._dtype != table.dtype:
+                raise TypeError(
+                    "input data type does not match previous records")
+        # write the chunk
+        for i in range(len(table)):
+            self._writer.writerow(table[i])
+        # update the current length
+        self._len += len(table)
+
+    def close(self):
+        stdout.flush()
+        if self._file is not stdout:
+            self._file.close()
+
+
 class FITSreader(reader):
 
     def __init__(self, fpath, ext=1, **kwargs):
@@ -182,9 +263,42 @@ class FITSreader(reader):
         self._file.close()
 
 
+class FITSwriter(writer):
+
+    def __init__(self, fpath, overwrite=False):
+        if os.path.exists(fpath):
+            if overwrite:
+                os.remove(fpath)
+            else:
+                raise OSError("output file '{:}' exists".format(fpath))
+        self._file = FITS(fpath, mode="rw")
+
+    def write_chunk(self, table):
+        if len(table) == 0:
+            return
+        # store/check the input data type
+        if self._len == 0:
+            self._dtype = table.dtype
+        else:
+            if self._dtype != table.dtype:
+                raise TypeError(
+                    "input data type does not match previous records")
+        # write the chunk
+        if self._len == 0:
+            self._file.write(table)
+        else:
+            self._file[1].append(table)
+        self._file.reopen()  # flush data
+        # update the current length
+        self._len += len(table)
+
+    def close(self):
+        self._file.close()
+
+
 # NOTE: register supported formats here
 supported_readers = {"csv": CSVreader, "fits": FITSreader}
-supported_writers = {}
+supported_writers = {"csv": CSVwriter, "fits": FITSwriter}
 extension_alias = {"csv": ("csv",), "fits": ("fit", "fits")}
 
 
@@ -197,32 +311,3 @@ def guess_format(path):
             return format_key
     raise NotImplementedError(
         "unsupported file format with extension: {:}".format(ext))
-
-
-if __name__ == "__main__":
-    
-    basepath = "../../MICE2_256th_uBgVrRciIcYJHKs_shapes_halos_WL"
-
-    with CSVreader(basepath + ".csv") as reader:
-        print(reader)
-        l = 0
-        for chunk in reader:
-            l += len(chunk)
-        print("predicted length:", len(reader))
-        print("true length:     ", l)
-        if l == len(reader):
-            print("margin:          ", "exact")
-        else:
-            print("margin:          ", "{:.1%}".format((len(reader) - l) / l))
-
-    with FITSreader(basepath + ".fits") as reader:
-        print(reader)
-        l = 0
-        for chunk in reader:
-            l += len(chunk)
-        print("predicted length:", len(reader))
-        print("true length:     ", l)
-        if l == len(reader):
-            print("margin:          ", "exact")
-        else:
-            print("margin:          ", "{:.1%}".format((len(reader) - l) / l))

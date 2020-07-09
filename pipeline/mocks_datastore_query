@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+import argparse
+import os
+
+from MICE2_mocks.pipeline import conversion, PipeLogger
+from memmap_table import MemmapTable
+from memmap_table.mathexpression import MathTerm
+
+
+parser = argparse.ArgumentParser(
+    description="Select a (sub-)sample of the pipeline output and save it "
+                "in a different data format")
+
+parser.add_argument(
+    "datastore", help="directory in which the data store is created")
+parser.add_argument(
+    "-q", "--query",
+    help="expression to select a subset of the pipeline output "
+         "(default: select all entries)")
+
+output_group = parser.add_argument_group("output table")
+output_group.add_argument(
+    "-o", "--output",
+    help="path to output data table (default: write on stdout)")
+output_group.add_argument(
+    "--format", choices=sorted(conversion.supported_writers.keys()),
+    help="output table file format (default: inferred from file extension)")
+
+
+if __name__ == "__main__":
+
+    args = parser.parse_args()
+    logger = PipeLogger(__file__)
+    to_stdout = args.output is None
+    if to_stdout:  # write to stdout
+        logger.setTermLevel("error")
+
+    # open the data store
+    logger.info("opening data store: {:}".format(args.datastore))
+    try:
+        table = MemmapTable(args.datastore)
+    except Exception as e:
+        logger.handleException(e)
+
+    with table:
+
+        # automatically determine the format file format
+        if args.output is None:  # write to stdout in csv format
+            args.format = "csv"
+        if args.format is None:
+            try:
+                args.format = conversion.guess_format(args.output)
+            except NotImplementedError as e:
+                logger.handleException(e)
+        message = "writing output as {:}: {:}".format(
+            args.format.upper(), args.output)
+        logger.info(message)
+
+        # create a standardized output writer
+        writer_class = conversion.supported_writers[args.format]
+        try:
+            writer = writer_class(args.output, overwrite=True)
+        except Exception as e:
+            logger.handleException(e)
+
+        with writer:
+
+            # parse the math expression
+            if args.query is not None:
+                # Since the symbol / can be used as column name and division
+                # symbol, we need to temporarily substitute the symbol before
+                # parsing the expression.
+                substitute = "#"
+                try:
+                    for colname in table.colnames:
+                        substitue = colname.replace("/", substitute)
+                        while colname in args.query:
+                            args.query = args.query.replace(colname, substitue)
+                    expression = MathTerm.from_string(args.query)
+                    # recursively undo the substitution
+                    expression._substitute_characters(substitute, "/")
+                    # display the interpreted expression
+                    message = "apply selection: {:}".format(
+                        expression.expression)
+                    logger.info(message)
+                except SyntaxError as e:
+                    message = e.args[0].replace(substitute, "/")
+                    logger.handleException(SyntaxError(message))
+                except Exception as e:
+                    logger.handleException(e)
+            else:
+                expression = None
+
+            # query the table and write to the output fie
+            logger.info("processing input stream ...")
+
+            n_select = 0
+            chunksize = conversion.BUFFERSIZE // table.itemsize
+            for start, end in table.row_iter(chunksize, verbose=False):
+
+                # read the chunk and apply the optional selection
+                chunk = table[start:end]
+                if expression is not None:
+                    try:
+                        mask = expression(chunk)
+                        chunk = chunk[mask]
+                    except Exception as e:
+                        logger.handleException(e)
+
+                # write to target
+                writer.write_chunk(chunk.to_records())
+                n_select += len(chunk)
+                if not to_stdout:
+                    row_message = "selected {:,d} of {:,d} entries".format(
+                        n_select, end)
+                    print(row_message, end="\r")
+
+        logger.info(row_message)

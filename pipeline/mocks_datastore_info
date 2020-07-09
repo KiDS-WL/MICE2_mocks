@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+import argparse
+
+from memmap_table import MemmapTable
+
+
+parser = argparse.ArgumentParser(
+    description="Select a (sub-)sample of the pipeline output and save it "
+                "in a different data format")
+parser.add_argument(
+    "datastore", help="directory in which the data store is created")
+
+
+if __name__ == "__main__":
+
+    args = parser.parse_args()
+
+    with MemmapTable(args.datastore) as table:
+
+        # display the table meta data
+        print("==> META DATA")
+        table_str = str(table).strip(" >")
+        shape, mode, root = table_str.split("\n")[-3:]
+        print("root:     {:}".format(root.split(":")[1].strip()))
+        print("mode:     {:}".format(mode.split(":")[1].strip()))
+        print("shape:    {:}".format(shape.strip()))
+
+        # list all the columns with their data types
+        width_cols = max(15, max(len(colname) for colname in table.colnames))
+        header = "==> COLUMN NAME".ljust(width_cols)
+        print("\n{:}    {:}".format(header, "DATA TYPE"))
+        for column, values in table._columns.items():
+            colname_padded = column.ljust(width_cols)
+            print("{:}    {:}".format(colname_padded, values.dtype))

@@ -6,7 +6,7 @@ import os
 import toml
 
 from MICE2_mocks import pipeline
-from MICE2_mocks.pipeline import conversion
+from MICE2_mocks.pipeline import conversion, PipeLogger
 from memmap_table import MemmapTable
 
 
@@ -61,11 +61,10 @@ parser = argparse.ArgumentParser(
 parser.register("action", "dump", DumpDefault)
 
 parser.add_argument(
-    "output", help="directory in which the data store is created")
+    "datastore", help="directory in which the data store is created")
 parser.add_argument(
     "--purge", action="store_true",
-    help="delete any existing data in output")
-
+    help="delete any existing data in datastore")
 
 input_group = parser.add_argument_group("input simulation table")
 input_group.add_argument(
@@ -94,7 +93,7 @@ help_group.add_argument(
 if __name__ == "__main__":
 
     args = parser.parse_args()
-    logger = pipeline.PipeLogger(__file__, args.output, append=False)
+    logger = pipeline.PipeLogger(__file__, args.datastore, append=False)
 
     # check the columns file
     message = "reading columns file: {:}".format(args.columns)
@@ -130,16 +129,16 @@ if __name__ == "__main__":
     with reader:
 
         # create the memmory mapped data store
-        exists = os.path.exists(args.output)
+        exists = os.path.exists(args.datastore)
         if not args.purge and exists:
             # this is a safety feature since any existing output directory is
             # erased completely
             message = "ouput path exists but overwriting is not permitted: {:}"
-            message = message.format(args.output)
+            message = message.format(args.datastore)
             logger.handleException(OSError(message))
-        logger.info("creating data store: {:}".format(args.output))
+        logger.info("creating data store: {:}".format(args.datastore))
         try:
-            table = MemmapTable(args.output, nrows=len(reader), mode="w+")
+            table = MemmapTable(args.datastore, nrows=len(reader), mode="w+")
         except Exception as e:
             logger.handleException(e)
 
