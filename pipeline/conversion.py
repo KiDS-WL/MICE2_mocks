@@ -64,7 +64,7 @@ class reader(object):
 
 class CSVreader(reader):
 
-    def __init__(self, fpath, *args):
+    def __init__(self, fpath, **kwargs):
         self._file = open(fpath)
         try:
             # read the first 10 kB to analyse the file
@@ -155,7 +155,7 @@ class CSVreader(reader):
 
 class FITSreader(reader):
 
-    def __init__(self, fpath, ext=1, *args):
+    def __init__(self, fpath, ext=1, **kwargs):
         self._file = FITS(fpath)
         # figure out the data format and check the resources
         self._reader = self._file[ext]
@@ -180,6 +180,23 @@ class FITSreader(reader):
 
     def close(self):
         self._file.close()
+
+
+# NOTE: register supported formats here
+supported_readers = {"csv": CSVreader, "fits": FITSreader}
+supported_writers = {}
+extension_alias = {"csv": ("csv",), "fits": ("fit", "fits")}
+
+
+def guess_format(path):
+    path, ext = os.path.splitext(path.strip())
+    ext = ext.lower().lstrip(".")
+    # compare with all supported file types
+    for format_key, aliases in extension_alias.items():
+        if ext in aliases:
+            return format_key
+    raise NotImplementedError(
+        "unsupported file format with extension: {:}".format(ext))
 
 
 if __name__ == "__main__":
