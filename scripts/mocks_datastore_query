@@ -2,11 +2,13 @@
 import argparse
 import os
 import sys
+from time import asctime
 
 from memmap_table.mathexpression import MathTerm
 from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.readwrite import (BUFFERSIZE, guess_format,
                                        supported_writers)
+from mock_processing.utils import ModificationStamp, build_history
 
 
 parser = argparse.ArgumentParser(
@@ -153,6 +155,17 @@ def main():
                 if not to_stdout:
                     sys.stdout.write(row_message.format(n_select, end))
                     sys.stdout.flush()
+
+            # write a summary of the data store history if possible
+            if hasattr(writer, "write_history"):
+                date_width = 24
+                for date, call in build_history(table).items():
+                    writer.write_history(
+                        "{:} : {:}".format(date.ljust(date_width), call))
+                # add the call of this script
+                call = ModificationStamp(sys.argv)._attrs["created by"]
+                writer.write_history(
+                    "{:} : {:}".format(asctime().ljust(date_width), call))
 
         message = "wrote {:,d} matching entries (total: {:,d})"
         logger.info(message.format(n_select, end))

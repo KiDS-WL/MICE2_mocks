@@ -303,6 +303,10 @@ class FITSwriter(writer):
         # update the current length
         self._len += len(table)
 
+    def write_history(self, line):
+        self._file[1].write_history(line)
+        self._file.reopen()  # flush data
+
     def close(self):
         self._file.close()
 
