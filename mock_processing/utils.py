@@ -1,6 +1,8 @@
 import os
 from time import asctime
 
+from memmap_table import MemmapTable
+
 
 def expand_path(path):
     """
@@ -16,6 +18,15 @@ def expand_path(path):
     path = os.path.expandvars(path)
     path = os.path.normpath(path)
     return path
+
+
+def open_datastore(path, logger):
+    # open the data store
+    logger.info("opening data store: {:}".format(path))
+    try:
+        return MemmapTable(path)
+    except Exception as e:
+        logger.handleException(e)
 
 
 class ColumnDictTranslator(object):

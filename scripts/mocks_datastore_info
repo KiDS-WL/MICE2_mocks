@@ -16,6 +16,7 @@ parser.add_argument(
 
 
 def main():
+
     args = parser.parse_args()
     with MemmapTable(args.datastore) as table:
 

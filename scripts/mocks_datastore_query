@@ -2,9 +2,8 @@
 import argparse
 import os
 
-from memmap_table import MemmapTable
 from memmap_table.mathexpression import MathTerm
-from mock_processing import expand_path, PipeLogger
+from mock_processing import expand_path, PipeLogger, open_datastore
 from mock_processing.io import BUFFERSIZE, guess_format, supported_writers
 
 
@@ -33,6 +32,7 @@ output_group.add_argument(
 
 
 def main():
+
     args = parser.parse_args()
     logger = PipeLogger(__file__)
     # determine if output goes to stdout in CSV format (allows redirecting)
@@ -40,15 +40,8 @@ def main():
     if to_stdout:  # only print in case of error
         logger.setTermLevel("error")
 
-    # open the data store
-    logger.info("opening data store: {:}".format(args.datastore))
-    try:
-        table = MemmapTable(args.datastore)
-    except Exception as e:
-        logger.handleException(e)
-
     # read the input table and write the selected entries to the output file
-    with table:
+    with open_datastore(args.datastore, logger) as table:
 
         # parse the math expression
         if args.query is not None:
