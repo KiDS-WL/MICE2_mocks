@@ -1,7 +1,9 @@
 import csv
 import os
+import sys
 import warnings
 from sys import stdout
+from collections import OrderedDict
 
 import numpy as np
 
@@ -28,6 +30,26 @@ def guess_format(path):
     raise NotImplementedError(
         "unsupported file format with extension: {:}".format(ext))
 
+
+class DtypeConverter:
+
+    def __init__(self, dtype):
+        if type(dtype) is str:
+            dtype = np.dtype(str)
+        else:
+            assert(isinstance(dtype, np.dtype))
+        if sys.byteorder == "little":
+            self.dtype = np.dtype("<" + dtype.base.str.strip("><"))
+        elif sys.byteorder == "big":
+            self.dtype = np.dtype(">" + dtype.base.str.strip("><"))
+        else:
+            self.dtype = dtype
+
+    def __call__(self, data):
+        return data.astype(self.dtype, casting="equiv", copy=False)
+
+    def __eq__(self, other):
+        return self.dtype == other.dtype
 
 
 ################################  base classes  ###############################
@@ -102,8 +124,6 @@ class Writer(object):
     def __enter__(self, *args, **kwargs):
         return self
     
-    def __exit__(self, *args, **kwargs):
-        self.close()
 
     @property
     def dtype(self):
@@ -111,7 +131,10 @@ class Writer(object):
 
     @property
     def filesize(self):
-        return os.path.getsize(self._file.name)
+        try:
+            return os.path.getsize(self._file.name)
+        except AttributeError:
+            return os.path.getsize(self._file.filename)
 
     def write_chunk(self):
         return NotImplemented
@@ -119,6 +142,8 @@ class Writer(object):
     def close(self):
         return NotImplemented
 
+
+#########################  CSV from standard library  #########################
 
 class CSVreader(Reader):
 
@@ -211,13 +236,11 @@ class CSVreader(Reader):
         self._file.close()
 
 
-#########################  CSV from standard library  #########################
-
 class CSVwriter(Writer):
 
     _header_written = False
 
-    def __init__(self, fpath=None, overwrite=False):
+    def __init__(self, fpath=None, overwrite=False, **kwargs):
         if fpath is None:
             self._file = stdout
         else:
@@ -273,7 +296,14 @@ try:
             if self._reader.get_exttype() != "BINARY_TBL":
                 message = "Fits extension {:d} is not a binary table"
                 raise TypeError(message.format(ext))
-            self._dtype = self._reader.get_rec_dtype()[0]
+            # setup the endianness correction, since FITS is always big endian
+            self._converters = OrderedDict()
+            dtypes = self._reader.get_rec_dtype()[0]
+            for name, (dtype, offset) in dtypes.fields.items():
+                self._converters[name] = DtypeConverter(dtype)
+            # get the dtype form the converter instances
+            self._dtype = np.dtype([
+                (name, conv.dtype) for name, conv in self._converters.items()])
             # keep track of the current position
             self._len = self._reader.get_nrows()
 
@@ -287,7 +317,13 @@ try:
             start = self._current_row
             end = min(self._len, start + chunksize)
             self._current_row = end
-            return self._reader[start:end]
+            # correct the endianness
+            raw_data = self._reader[start:end]
+            chunk = np.empty(len(raw_data), self._dtype)
+            for name in raw_data.dtype.fields:
+                converter = self._converters[name]
+                chunk[name] = converter(raw_data[name])
+            return chunk
 
         def close(self):
             self._file.close()
@@ -295,7 +331,7 @@ try:
 
     class FITSwriter(Writer):
 
-        def __init__(self, fpath, overwrite=False):
+        def __init__(self, fpath, overwrite=False, **kwargs):
             if os.path.exists(fpath):
                 if overwrite:
                     os.remove(fpath)
@@ -349,13 +385,14 @@ try:
             # discover all data sets
             dsets = []
             self._file.visit(dsets.append)
-            # determine the table data type
+            # determine the table data type, correct endianness if necessary
             dtypes = []
+            self._converters = OrderedDict()
             self._len = None
             for colname in dsets:
                 entry = self._file[colname]
                 if type(entry) is not h5py.Group:
-                    dtypes.append((colname, entry.dtype.str))
+                    self._converters[name] = DtypeConverter(dtype)
                     # check that all data sets have the same length
                     if self._len is None:
                         self._len = len(entry)
@@ -363,7 +400,9 @@ try:
                         message = "length of data set'{:}' does not match common "
                         message += "length {:d}"
                         raise ValueError(message.format(colname, self._len))
-            self._dtype = np.dtype(dtypes)
+            # get the dtype form the converter instances
+            self._dtype = np.dtype([
+                (name, conv.dtype) for name, conv in self._converters.items()])
 
         def read_chunk(self, chunksize=None):
             # check if the end of the file has been reached
@@ -374,10 +413,11 @@ try:
                 chunksize = self._get_buffer_length()
             start = self._current_row
             end = min(self._len, start + chunksize)
-            # read from all data sets
+            # read from all data sets, correct endianness
             chunk = np.empty(end - start, dtype=self.dtype)
             for name in self._dtype.names:
-                chunk[name] = self._file[name][start:end]
+                converter = self._converters[name]
+                chunk[name] = converter(self._file[name][start:end])
             self._current_row = end
             return chunk
 
@@ -387,7 +427,7 @@ try:
 
     class HDF5writer(Writer):
 
-        def __init__(self, fpath=None, overwrite=False):
+        def __init__(self, fpath, overwrite=False, **kwargs):
             if os.path.exists(fpath):
                 if overwrite:
                     os.remove(fpath)
@@ -429,6 +469,100 @@ try:
     extension_alias["hdf5"] = ("h5", "hdf", "hdf5")
     supported_readers["hdf5"] = HDF5reader
     supported_writers["hdf5"] = HDF5writer
+
+except ImportError:
+    pass
+
+
+try:
+    import pyarrow as pa
+    from pyarrow import parquet as pq
+
+
+    class PARQUETreader(Reader):
+
+        _row_group_idx = 0
+
+        def __init__(self, fpath, **kwargs):
+            self._file = pq.ParquetFile(fpath)
+            # determine the table data type
+            schema = self._file.schema_arrow
+            dtypes = []
+            for name, pyarrow_dtype in zip(schema.names, schema.types):
+                dtypes.append((name, pyarrow_dtype.to_pandas_dtype()))
+            self._dtype = np.dtype(dtypes)
+            self._len = self._file.metadata.num_rows
+            self._n_row_groups = self._file.metadata.num_row_groups
+
+        def read_chunk(self, chunksize=None):
+            # check if the end of the file has been reached
+            if self._row_group_idx == self._n_row_groups:
+                raise EOFError("reached the end of the file")
+            # determine the next data slice
+            if chunksize is None:
+                chunksize = self._get_buffer_length()
+            # read the next row group
+            raw_data = self._file.read_row_group(self._row_group_idx)
+            chunk = np.empty(len(raw_data), dtype=self.dtype)
+            for name in self._dtype.names:
+                chunk[name] = raw_data[name]
+            # update the internal position counters
+            self._row_group_idx += 1
+            self._current_row += len(chunk)
+            return chunk
+
+        def __exit__(self, *args, **kwargs):
+            pass  # no close() required/implemented in ParquetFile
+
+
+    class PARQUETwriter(Writer):
+
+        def __init__(self, fpath, overwrite=False, **kwargs):
+            if os.path.exists(fpath):
+                if overwrite:
+                    os.remove(fpath)
+                else:
+                    raise OSError("output file '{:}' exists".format(fpath))
+            # we cannot open the file yet, create a dummy instead
+            self._file = open(fpath, "wb")
+
+        @staticmethod
+        def _schema_from_dtype(dtype):
+            dummy_table = pa.Table.from_pydict({
+                name: np.array([], dt)
+                for name, (dt, offset) in dtype.fields.items()})
+            return dummy_table.schema
+
+        def write_chunk(self, table):
+            if len(table) == 0:
+                return
+            # store/check the input data type
+            if self._len == 0:
+                self._dtype = table.dtype
+                self._schema = self._schema_from_dtype(self._dtype)
+                # create the parquet writer
+                fpath = self._file.name
+                self._file.close()
+                self._file = pq.ParquetWriter(fpath, self._schema)
+            else:
+                if self._dtype != table.dtype:
+                    raise TypeError(
+                        "input data type does not match previous records")
+            # write the chunk
+            array_list = [pa.array(table[name]) for name in table.dtype.names]
+            pyarrow_table = pa.Table.from_arrays(
+                array_list, schema=self._schema)
+            self._file.write_table(pyarrow_table)
+            # update the current length
+            self._len += len(table)
+
+        def close(self):
+            self._file.close()
+
+
+    extension_alias["hdf5"] = ("parquet", "pqt")
+    supported_readers["hdf5"] = PARQUETreader
+    supported_writers["hdf5"] = PARQUETwriter
 
 except ImportError:
     pass

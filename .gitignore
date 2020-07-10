@@ -110,3 +110,5 @@ venv.bak/
 test/*.csv
 test/*.fits
 test/*.hdf5
+test/*.pqt
+
