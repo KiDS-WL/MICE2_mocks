@@ -4,7 +4,6 @@ import warnings
 from sys import stdout
 
 import numpy as np
-from fitsio import FITS
 
 
 # compute an automatic buffer size for the system
@@ -30,7 +29,10 @@ def guess_format(path):
         "unsupported file format with extension: {:}".format(ext))
 
 
-class reader(object):
+
+################################  base classes  ###############################
+
+class Reader(object):
 
     _file = None
     _dtype = None
@@ -72,7 +74,10 @@ class reader(object):
 
     @property
     def filesize(self):
-        return os.path.getsize(self._file.name)
+        try:
+            return os.path.getsize(self._file.name)
+        except AttributeError:
+            return os.path.getsize(self._file.filename)
 
     def _get_buffer_length(self):
         bytes_per_row = self._dtype.itemsize
@@ -85,7 +90,7 @@ class reader(object):
         return NotImplemented
 
 
-class writer(object):
+class Writer(object):
 
     _file = None
     _dtype = None
@@ -115,7 +120,7 @@ class writer(object):
         return NotImplemented
 
 
-class CSVreader(reader):
+class CSVreader(Reader):
 
     def __init__(self, fpath, **kwargs):
         self._file = open(fpath)
@@ -183,7 +188,7 @@ class CSVreader(reader):
     def read_chunk(self, chunksize=None):
         if chunksize is None:
             chunksize = self._get_buffer_length()
-        chunk = np.zeros(chunksize, dtype=self.dtype)
+        chunk = np.empty(chunksize, dtype=self.dtype)
         i = 0
         while i < chunksize:
             try:
@@ -206,7 +211,9 @@ class CSVreader(reader):
         self._file.close()
 
 
-class CSVwriter(writer):
+#########################  CSV from standard library  #########################
+
+class CSVwriter(Writer):
 
     _header_written = False
 
@@ -245,79 +252,183 @@ class CSVwriter(writer):
             self._file.close()
 
 
-class FITSreader(reader):
-
-    def __init__(self, fpath, ext=1, **kwargs):
-        self._file = FITS(fpath)
-        # figure out the data format and check the resources
-        self._reader = self._file[ext]
-        if self._reader.get_exttype() != "BINARY_TBL":
-            message = "Fits extension {:d} is not a binary table"
-            raise TypeError(message.format(ext))
-        self._dtype = self._reader.get_rec_dtype()[0]
-        # keep track of the current position
-        self._len = self._reader.get_nrows()
-
-    def read_chunk(self, chunksize=None):
-        # check if the end of the file has been reached
-        if self._current_row == self._len:
-            raise EOFError("reached the end of the file")
-        # determine the next data slice
-        if chunksize is None:
-            chunksize = self._get_buffer_length()
-        start = self._current_row
-        end = min(self._len, start + chunksize)
-        self._current_row = end
-        return self._reader[start:end]
-
-    def close(self):
-        self._file.close()
+extension_alias = {"csv": ("csv",)}
+supported_readers = {"csv": CSVreader}
+supported_writers = {"csv": CSVwriter}
 
 
-class FITSwriter(writer):
+########################  optionally supported formats  #######################
 
-    def __init__(self, fpath, overwrite=False):
-        if os.path.exists(fpath):
-            if overwrite:
-                os.remove(fpath)
+try:
+    from fitsio import FITS
+
+
+    class FITSreader(Reader):
+
+        def __init__(self, fpath, ext=1, **kwargs):
+            self._file = FITS(fpath)
+            self._file.filename = fpath
+            # figure out the data format and check the resources
+            self._reader = self._file[ext]
+            if self._reader.get_exttype() != "BINARY_TBL":
+                message = "Fits extension {:d} is not a binary table"
+                raise TypeError(message.format(ext))
+            self._dtype = self._reader.get_rec_dtype()[0]
+            # keep track of the current position
+            self._len = self._reader.get_nrows()
+
+        def read_chunk(self, chunksize=None):
+            # check if the end of the file has been reached
+            if self._current_row == self._len:
+                raise EOFError("reached the end of the file")
+            # determine the next data slice
+            if chunksize is None:
+                chunksize = self._get_buffer_length()
+            start = self._current_row
+            end = min(self._len, start + chunksize)
+            self._current_row = end
+            return self._reader[start:end]
+
+        def close(self):
+            self._file.close()
+
+
+    class FITSwriter(Writer):
+
+        def __init__(self, fpath, overwrite=False):
+            if os.path.exists(fpath):
+                if overwrite:
+                    os.remove(fpath)
+                else:
+                    raise OSError("output file '{:}' exists".format(fpath))
+            self._file = FITS(fpath, mode="rw")
+
+        def write_chunk(self, table):
+            if len(table) == 0:
+                return
+            # store/check the input data type
+            if self._len == 0:
+                self._dtype = table.dtype
             else:
-                raise OSError("output file '{:}' exists".format(fpath))
-        self._file = FITS(fpath, mode="rw")
+                if self._dtype != table.dtype:
+                    raise TypeError(
+                        "input data type does not match previous records")
+            # write the chunk
+            if self._len == 0:
+                self._file.write(table)
+            else:
+                self._file[1].append(table)
+            self._file.reopen()  # flush data
+            # update the current length
+            self._len += len(table)
 
-    def write_chunk(self, table):
-        if len(table) == 0:
-            return
-        # store/check the input data type
-        if self._len == 0:
-            self._dtype = table.dtype
-        else:
-            if self._dtype != table.dtype:
-                raise TypeError(
-                    "input data type does not match previous records")
-        # write the chunk
-        if self._len == 0:
-            self._file.write(table)
-        else:
-            self._file[1].append(table)
-        self._file.reopen()  # flush data
-        # update the current length
-        self._len += len(table)
+        def write_history(self, line):
+            self._file[1].write_history(line)
+            self._file.reopen()  # flush data
 
-    def write_history(self, line):
-        self._file[1].write_history(line)
-        self._file.reopen()  # flush data
-
-    def close(self):
-        self._file.close()
+        def close(self):
+            self._file.close()
 
 
-# NOTE: register supported formats here
-extension_alias = {
-    "csv": ("csv",),
-    "fits": ("fit", "fits")}
-supported_readers = {
-    "csv": CSVreader,
-    "fits": FITSreader}
-supported_writers = {
-    "csv": CSVwriter,
-    "fits": FITSwriter}
+    extension_alias["fits"] = ("fit", "fits")
+    supported_readers["fits"] = FITSreader
+    supported_writers["fits"] = FITSwriter
+
+except ImportError:
+    pass
+
+
+try:
+    import h5py
+
+
+    class HDF5reader(Reader):
+
+        def __init__(self, fpath, **kwargs):
+            self._file = h5py.File(fpath, mode="r")
+            # discover all data sets
+            dsets = []
+            self._file.visit(dsets.append)
+            # determine the table data type
+            dtypes = []
+            self._len = None
+            for colname in dsets:
+                entry = self._file[colname]
+                if type(entry) is not h5py.Group:
+                    dtypes.append((colname, entry.dtype.str))
+                    # check that all data sets have the same length
+                    if self._len is None:
+                        self._len = len(entry)
+                    elif len(entry) != self._len:
+                        message = "length of data set'{:}' does not match common "
+                        message += "length {:d}"
+                        raise ValueError(message.format(colname, self._len))
+            self._dtype = np.dtype(dtypes)
+
+        def read_chunk(self, chunksize=None):
+            # check if the end of the file has been reached
+            if self._current_row == self._len:
+                raise EOFError("reached the end of the file")
+            # determine the next data slice
+            if chunksize is None:
+                chunksize = self._get_buffer_length()
+            start = self._current_row
+            end = min(self._len, start + chunksize)
+            # read from all data sets
+            chunk = np.empty(end - start, dtype=self.dtype)
+            for name in self._dtype.names:
+                chunk[name] = self._file[name][start:end]
+            self._current_row = end
+            return chunk
+
+        def close(self):
+            self._file.close()
+
+
+    class HDF5writer(Writer):
+
+        def __init__(self, fpath=None, overwrite=False):
+            if os.path.exists(fpath):
+                if overwrite:
+                    os.remove(fpath)
+                else:
+                    raise OSError("output file '{:}' exists".format(fpath))
+            self._file = h5py.File(fpath, mode="w-")
+
+        def write_chunk(self, table):
+            if len(table) == 0:
+                return
+            # store/check the input data type
+            if self._len == 0:
+                self._dtype = table.dtype
+                # if the file is uninitialized, create the required datasets
+                for name in self._dtype.fields:
+                    self._file.create_dataset(
+                        name, dtype=self._dtype[name].str, shape=(len(table),),
+                        chunks=True, maxshape=(None,), shuffle=True,
+                        compression="lzf", fletcher32=True)
+            else:
+                if self._dtype != table.dtype:
+                    raise TypeError(
+                        "input data type does not match previous records")
+            # write the chunk field by field
+            start = self._len
+            end = start + len(table)
+            for name in table.dtype.names:
+                dset = self._file[name]
+                # grow the data sets
+                dset.resize((end,))
+                dset[start:end] = table[name]
+            # update the current length
+            self._len = end
+
+        def close(self):
+            self._file.close()
+
+
+    extension_alias["hdf5"] = ("h5", "hdf", "hdf5")
+    supported_readers["hdf5"] = HDF5reader
+    supported_writers["hdf5"] = HDF5writer
+
+except ImportError:
+    pass
