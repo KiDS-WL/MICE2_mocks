@@ -2,7 +2,6 @@
 
 if [ -f /home/janluca/dev/MICE2_256th_uBgVrRciIcYJHKs_shapes_halos_WL.fits ]
 then
-    #export PYTHONPATH=$(python -c "import os; print(os.path.abspath('../..'))"):$PYTHONPATH
     ../scripts/mocks_init_pipeline \
         /home/janluca/dev/MICE2_256th_uBgVrRciIcYJHKs_shapes_halos_WL \
         -i /home/janluca/dev/MICE2_256th_uBgVrRciIcYJHKs_shapes_halos_WL.fits \

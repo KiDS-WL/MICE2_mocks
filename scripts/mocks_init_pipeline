@@ -144,7 +144,7 @@ def main():
             logger.info("processing input stream ...")
             start = 0
             row_message = "current row: {:,d}".format(start)
-            print(row_message, end="\r")
+            sys.stdout.write(row_message + "\r")
             # read the data in chunks and copy them to the data store
             for chunk in reader:
                 end = reader.current_row  # index where reading will continue
@@ -160,17 +160,19 @@ def main():
                             "allocated {:,d} extra rows".format(len(chunk)))
                     table[path][start:end] = chunk[colname]
                 row_message = "current row: {:,d}".format(end)
-                print(row_message, end="\r")
+                sys.stdout.write(row_message + "\r")
+                sys.stdout.flush()
                 # update the current row index
                 start = end
-            print(" " * len(row_message))  # clear the "current row ..." line
+            # clear the "current row ..." line
+            sys.stdout.write(" " * len(row_message) + "\n")
 
             # if using the CSV reader: truncate any allocated, unused rows
             if len(table) > end:
                 table.resize(end)
 
             # print a preview of the table as quick check
-            print(str(table) + "\n")
+            sys.stdout.write(str(table) + "\n\n")
 
         # close the table
         timestamp.finalize()
