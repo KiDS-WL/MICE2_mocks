@@ -5,7 +5,8 @@ from os.path import basename, splitext
 class PipeLogger(object):
 
     _formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "%Y-%m-%d %H:%M:%S")
 
     def __init__(self, caller_path, data_path=None, append=True):
         # create logger for script at caller_path
