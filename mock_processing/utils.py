@@ -1,4 +1,5 @@
 import os
+import sys
 from collections import OrderedDict
 from time import asctime, strptime
 
@@ -30,6 +31,30 @@ def open_datastore(path, logger, readonly=True):
         return MemmapTable(path, mode=mode)
     except Exception as e:
         logger.handleException(e)
+
+
+def create_column(table, logger, path, *args, **kwargs):
+    # wrapper to create a new column and log a notification (warning) if the
+    # column does not exist (already exists)
+    if path in table:
+        message = "overwriting output column: {:}"
+        logger.warn(message.format(path))
+    else:
+        message = "creating output column: {:}"
+        logger.debug(message.format(path))
+    column = table.add_column(path, *args, **kwargs)
+    return column
+
+
+def row_iter_progress(table, chunksize):
+    idx_max = len(table)
+    line_message = "progress: {:6.1%}\r"
+    sys.stdout.write(line_message.format(0.0))
+    sys.stdout.flush()
+    for start, end in table.row_iter(chunksize):
+        yield start, end
+        sys.stdout.write(line_message.format(end / idx_max))
+        sys.stdout.flush()
 
 
 def build_history(table):
