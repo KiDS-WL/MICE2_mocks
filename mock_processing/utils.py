@@ -1,7 +1,9 @@
 import os
-from time import asctime
+from collections import OrderedDict
+from time import asctime, strptime
 
 from memmap_table import MemmapTable
+from ._version import __version__
 
 
 def expand_path(path):
@@ -20,13 +22,33 @@ def expand_path(path):
     return path
 
 
-def open_datastore(path, logger):
+def open_datastore(path, logger, readonly=True):
     # open the data store
     logger.info("opening data store: {:}".format(path))
+    mode = "r" if readonly else "r+"
     try:
-        return MemmapTable(path)
+        return MemmapTable(path, mode=mode)
     except Exception as e:
         logger.handleException(e)
+
+
+def build_history(table):
+    # read the creation labels from all columns and keep a unique listing
+    # assuming that no two successful calls occured within one second
+    calls = {}
+    for column in table.colnames:
+        attrs = table[column].attr
+        try:
+            timestamp = strptime(attrs["created at"])
+            calls[timestamp] = attrs["created by"]
+        except KeyError:
+            message = "WARNING: column has no creation time stamp: {:}"
+            print(message.format(column))
+    # return history ordered time and convert time stamps back to strings
+    history = OrderedDict()
+    for key in sorted(calls):
+        history[asctime(key)] = calls[key]
+    return history
 
 
 class ColumnDictTranslator(object):
@@ -61,6 +83,7 @@ class ModificationStamp(object):
         # create a dictionary with all shared entries
         self._attrs = {}
         self._attrs["created by"] = " ".join([call_basename, *call_arguments])
+        self._attrs["version"] = __version__
     
     def register(self, column):
         if not hasattr(column, "attr"):
