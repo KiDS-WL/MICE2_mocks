@@ -159,7 +159,7 @@ def main():
             # write a summary of the data store history if possible
             if hasattr(writer, "write_history"):
                 date_width = 24
-                for date, call in build_history(table).items():
+                for date, call in build_history(table, logger).items():
                     writer.write_history(
                         "{:} : {:}".format(date.ljust(date_width), call))
                 # add the call of this script

@@ -57,7 +57,7 @@ def row_iter_progress(table, chunksize):
         sys.stdout.flush()
 
 
-def build_history(table):
+def build_history(table, logger=None):
     # read the creation labels from all columns and keep a unique listing
     # assuming that no two successful calls occured within one second
     calls = {}
@@ -67,8 +67,11 @@ def build_history(table):
             timestamp = strptime(attrs["created at"])
             calls[timestamp] = attrs["created by"]
         except KeyError:
-            message = "WARNING: column has no creation time stamp: {:}"
-            print(message.format(column))
+            message = "column has no creation time stamp: {:}".format(column)
+            if logger is None:
+                print("WARNING: " + message)
+            else:
+                logger.warn(message)
     # return history ordered time and convert time stamps back to strings
     history = OrderedDict()
     for key in sorted(calls):
