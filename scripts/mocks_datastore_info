@@ -2,7 +2,7 @@
 import argparse
 
 from memmap_table import MemmapTable
-from MICE2_mocks.pipeline import expand_path
+from mock_processing import expand_path
 
 
 parser = argparse.ArgumentParser(

@@ -6,9 +6,9 @@ import sys
 import toml
 
 from memmap_table import MemmapTable
-from MICE2_mocks import pipeline
-from MICE2_mocks.pipeline import (ColumnDictTranslator, PipeLogger, conversion,
-                                  expand_path)
+from mock_processing import expand_path, PipeLogger
+from mock_processing.io import guess_format, supported_readers
+from mock_processing.utils import ColumnDictTranslator
 
 
 class DumpDefault(argparse.Action):
@@ -51,7 +51,7 @@ input_group.add_argument(
     "-i", "--input", required=True, type=expand_path,
     help="path to input simulation table")
 input_group.add_argument(
-    "--format", choices=sorted(conversion.supported_readers.keys()),
+    "--format", choices=sorted(supported_readers.keys()),
     help="input table file format (default: inferred from file extension)")
 input_group.add_argument(
     "-c", "--columns", required=True,
@@ -74,7 +74,7 @@ help_group.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = pipeline.PipeLogger(__file__, args.datastore, append=False)
+    logger = PipeLogger(__file__, args.datastore, append=False)
 
     # check the columns file
     message = "reading columns file: {:}".format(args.columns)
@@ -92,7 +92,7 @@ def main():
     # automatically determine the input file format
     if args.format is None:
         try:
-            args.format = conversion.guess_format(args.input)
+            args.format = guess_format(args.input)
         except NotImplementedError as e:
             logger.handleException(e)
     message = "opening input as {:}: {:}".format(
@@ -100,7 +100,7 @@ def main():
     logger.info(message)
 
     # create a standardized input reader
-    reader_class = conversion.supported_readers[args.format]
+    reader_class = supported_readers[args.format]
     try:
         reader = reader_class(args.input, ext=args.fits_ext)
     except Exception as e:

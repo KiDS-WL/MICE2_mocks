@@ -1,18 +1,6 @@
 import os
 
 
-# compute an automatic buffer size for the system
-_megabyte = 1048576  # bytes
-try:
-    import psutil
-    # between 50 MB < 5% < 500 MB
-    auto_size = int(0.05 * psutil.virtual_memory().total)
-    BUFFERSIZE = max(auto_size, 50 * _megabyte)
-    BUFFERSIZE = min(BUFFERSIZE, 500 * _megabyte)
-except Exception:
-    BUFFERSIZE = 50 * _megabyte
-
-
 def expand_path(path):
     """
     Normalises a path (e.g. from the command line) and substitutes environment

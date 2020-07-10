@@ -4,8 +4,8 @@ import os
 
 from memmap_table import MemmapTable
 from memmap_table.mathexpression import MathTerm
-from MICE2_mocks.pipeline import (BUFFERSIZE, PipeLogger, conversion,
-                                  expand_path)
+from mock_processing import expand_path, PipeLogger
+from mock_processing.io import BUFFERSIZE, guess_format, supported_writers
 
 
 parser = argparse.ArgumentParser(
@@ -25,7 +25,7 @@ output_group.add_argument(
     "-o", "--output", type=expand_path,
     help="path to output data table (default: write on stdout)")
 output_group.add_argument(
-    "--format", choices=sorted(conversion.supported_writers.keys()),
+    "--format", choices=sorted(supported_writers.keys()),
     help="output table file format (default: inferred from file extension)")
 output_group.add_argument(
     "-c", "--columns", nargs="*",
@@ -105,7 +105,7 @@ def main():
             args.format = "csv"
         if args.format is None:
             try:
-                args.format = conversion.guess_format(args.output)
+                args.format = guess_format(args.output)
             except NotImplementedError as e:
                 logger.handleException(e)
         message = "writing output as {:}: {:}".format(
@@ -113,7 +113,7 @@ def main():
         logger.info(message)
 
         # create a standardized output writer
-        writer_class = conversion.supported_writers[args.format]
+        writer_class = supported_writers[args.format]
         try:
             writer = writer_class(args.output, overwrite=True)
         except Exception as e:
@@ -123,7 +123,7 @@ def main():
 
             # determine an automatic buffer/chunk size
             n_select = 0
-            chunksize = conversion.BUFFERSIZE // table.itemsize
+            chunksize = BUFFERSIZE // table.itemsize
             buffersize = chunksize * table.itemsize
             message = "buffer size: {:.2f} MB ({:,d} rows)".format(
                 buffersize / 1024**2, chunksize)

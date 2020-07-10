@@ -6,7 +6,29 @@ from sys import stdout
 import numpy as np
 from fitsio import FITS
 
-from .utils import BUFFERSIZE
+
+# compute an automatic buffer size for the system
+_megabyte = 1048576  # bytes
+try:
+    import psutil
+    # between 50 MB < 5% < 500 MB
+    auto_size = int(0.05 * psutil.virtual_memory().total)
+    BUFFERSIZE = max(auto_size, 50 * _megabyte)
+    BUFFERSIZE = min(BUFFERSIZE, 500 * _megabyte)
+except Exception:
+    BUFFERSIZE = 50 * _megabyte
+
+
+def guess_format(path):
+    path, ext = os.path.splitext(path.strip())
+    ext = ext.lower().lstrip(".")
+    # compare with all supported file types
+    for format_key, aliases in extension_alias.items():
+        if ext in aliases:
+            return format_key
+    raise NotImplementedError(
+        "unsupported file format with extension: {:}".format(ext))
+
 
 class reader(object):
 
@@ -286,17 +308,12 @@ class FITSwriter(writer):
 
 
 # NOTE: register supported formats here
-supported_readers = {"csv": CSVreader, "fits": FITSreader}
-supported_writers = {"csv": CSVwriter, "fits": FITSwriter}
-extension_alias = {"csv": ("csv",), "fits": ("fit", "fits")}
-
-
-def guess_format(path):
-    path, ext = os.path.splitext(path.strip())
-    ext = ext.lower().lstrip(".")
-    # compare with all supported file types
-    for format_key, aliases in extension_alias.items():
-        if ext in aliases:
-            return format_key
-    raise NotImplementedError(
-        "unsupported file format with extension: {:}".format(ext))
+extension_alias = {
+    "csv": ("csv",),
+    "fits": ("fit", "fits")}
+supported_readers = {
+    "csv": CSVreader,
+    "fits": FITSreader}
+supported_writers = {
+    "csv": CSVwriter,
+    "fits": FITSwriter}
