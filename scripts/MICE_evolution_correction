@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+import argparse
+import logging
+import os
+import sys
+
+from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.photometry import (MICE2_evolution_correction,
+                                        load_photometry)
+from mock_processing.utils import ModificationStamp
+
+parser = argparse.ArgumentParser(
+    description='Apply the evolutionary correction to the MICE2 model '
+                'magnitudes.')
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+
+
+CHUNKSIZE = 10000  # find an automated solution
+
+
+def main():
+
+    args = parser.parse_args()
+    logger = PipeLogger(__file__, args.datastore)
+    timestamp = ModificationStamp(sys.argv)
+
+    # apply the evolution correction to the model magnitudes
+    with open_datastore(args.datastore, logger, readonly=False) as table:
+
+        # find redshift column
+        z_path = "position/z/true"
+        if z_path not in table:
+            message = "column of true redshift not found: {:}".format(z_path)
+            logger.handleException(KeyError(message))
+
+        # find all magnitude columns
+        try:
+            model_mags = load_photometry(table, "mags/model")
+        except KeyError as e:
+            logger.handleException(e)
+
+        # create the output columns
+        evo_basepath = "mags/evolved"
+        for key, mag_path in model_mags.items():
+            # create new output columns
+            evo_path = os.path.join(evo_basepath, key)
+            if evo_path in table:
+                message = "overwriting output column: {:}"
+                logger.warn(message.format(evo_path))
+            else:
+                message = "creating output column: {:}"
+                logger.debug(message.format(evo_path))
+            column = table.add_column(
+                evo_path, dtype=table[mag_path].dtype.str, attr={
+                    "description": "evolution corrected model magnitude"},
+                overwrite=True)
+            timestamp.register(column)
+        evo_mags = load_photometry(table, evo_basepath)
+
+        # compute and store the corrected magnitudes
+        logger.info("processing input stream ...")
+        for start, end in table.row_iter(CHUNKSIZE, verbose=True):
+            redshifts = table[z_path][start:end]
+            for key, mag_path in model_mags.items():
+                evo_path = evo_mags[key]
+                mags = table[mag_path][start:end]
+                table[evo_path][start:end] = \
+                    MICE2_evolution_correction(mags, redshifts)
+
+    # close the table
+    timestamp.finalize()
+    logger.info("computation completed for {:,d} entries".format(end))
+
+
+if __name__ == "__main__":
+    main()
