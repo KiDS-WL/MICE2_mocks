@@ -8,7 +8,7 @@ import toml
 from memmap_table import MemmapTable
 from mock_processing import expand_path, PipeLogger
 from mock_processing.io import guess_format, supported_readers
-from mock_processing.utils import ColumnDictTranslator
+from mock_processing.utils import ColumnDictTranslator, ModificationStamp
 
 
 class DumpDefault(argparse.Action):
@@ -75,6 +75,7 @@ def main():
 
     args = parser.parse_args()
     logger = PipeLogger(__file__, args.datastore, append=False)
+    timestamp = ModificationStamp(sys.argv)
 
     # check the columns file
     message = "reading columns file: {:}".format(args.columns)
@@ -131,11 +132,10 @@ def main():
                 try:
                     if dtype is None:
                         dtype = reader.dtype[colname].str
-                    table.add_column(path, dtype, attr={
-                        "source": args.input,
-                        "original name": colname,
-                        "last modified": " ".join([
-                            os.path.basename(sys.argv[0]), *sys.argv[1:]])})
+                    column = table.add_column(path, dtype, attr={
+                        "source file": args.input,
+                        "source name": colname})
+                    timestamp.register(column)
                 except KeyError as e:
                     logger.handleException(e)
             logger.debug("allocated {:,d} table rows".format(len(table)))
@@ -173,6 +173,7 @@ def main():
             print(str(table) + "\n")
 
         # close the table
+        timestamp.finalize()
         logger.info("finalized data store with {:,d} rows".format(end))
 
 

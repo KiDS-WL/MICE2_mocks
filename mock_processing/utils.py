@@ -1,4 +1,5 @@
 import os
+from time import asctime
 
 
 def expand_path(path):
@@ -37,3 +38,32 @@ class ColumnDictTranslator(object):
                 else:
                     dtype_tuple = (value, None)
                 self.column_map[os.path.join(path, key)] = dtype_tuple
+
+
+class ModificationStamp(object):
+
+    def __init__(self, sys_argv):
+        self._columns = []
+        # store the script call that created/modified this column
+        call_basename = os.path.basename(sys_argv[0])
+        call_arguments = sys_argv[1:]
+        # create a dictionary with all shared entries
+        self._attrs = {}
+        self._attrs["created by"] = " ".join([call_basename, *call_arguments])
+    
+    def register(self, column):
+        if not hasattr(column, "attr"):
+            raise TypeError("column must have an attribute 'attr'")
+        self._columns.append(column)
+
+    def finalize(self, timestamp=None):
+        # store the current time if none is provided
+        if timestamp is None:
+            self._attrs["created at"] = asctime()
+        else:
+            self._attrs["created at"] = timestamp
+        # update all columns
+        for column in self._columns:
+            attrs = column.attr  # read
+            attrs.update(self._attrs)
+            column.attr = attrs  # write
