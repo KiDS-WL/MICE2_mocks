@@ -2,33 +2,70 @@
 import argparse
 
 from memmap_table import MemmapTable
+from MICE2_mocks.pipeline import expand_path
 
 
 parser = argparse.ArgumentParser(
     description="Select a (sub-)sample of the pipeline output and save it "
                 "in a different data format")
 parser.add_argument(
-    "datastore", help="directory in which the data store is created")
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
+parser.add_argument(
+    "-a", "--attr", action="store_true", help="show the column attributes")
 
 
-if __name__ == "__main__":
-
+def main():
     args = parser.parse_args()
-
     with MemmapTable(args.datastore) as table:
 
         # display the table meta data
         print("==> META DATA")
         table_str = str(table).strip(" >")
         shape, mode, root = table_str.split("\n")[-3:]
-        print("root:     {:}".format(root.split(":")[1].strip()))
-        print("mode:     {:}".format(mode.split(":")[1].strip()))
-        print("shape:    {:}".format(shape.strip()))
+        root = root.split(":")[1]
+        mode = mode.split(":")[1]
+        print("root:     {:}".format(root.strip()))
+        print("mode:     {:}".format(mode.strip()))
+        print("shape:    {:}".format(shape.strip(" []")))
+        print()
 
-        # list all the columns with their data types
-        width_cols = max(15, max(len(colname) for colname in table.colnames))
-        header = "==> COLUMN NAME".ljust(width_cols)
-        print("\n{:}    {:}".format(header, "DATA TYPE"))
-        for column, values in table._columns.items():
-            colname_padded = column.ljust(width_cols)
-            print("{:}    {:}".format(colname_padded, values.dtype))
+        if args.attr:
+            # for each column print a summary of the attached attributes
+            print("==> ATTRIBUTES")
+            for name in table.colnames:
+                print()
+                # print the column name indented and then a tree-like listing
+                # of the attributes (drawing connecting lines for better
+                # visibitilty)
+                print("    {:}".format(name))
+                attrs = table[name].attr
+                # all attributes from the pipeline should be dictionaries
+                if type(attrs) is dict:
+                    i_last = len(attrs)
+                    width_key = max(len(key) + 2 for key in attrs)
+                    for i, key in enumerate(sorted(attrs), 1):
+                        print_key = key + " :"
+                        line = "    {:}{:} {:}".format(
+                            " └╴ " if i == i_last else " ├╴ ",
+                            print_key.ljust(width_key), str(attrs[key]))
+                        print(line)
+                # fallback
+                else:
+                    print("     └╴ {:}".format(str(attrs)))
+
+        else:
+            # list all the column names and data types
+            header = "==> COLUMN NAME"
+            width_cols = max(len(header), max(
+                len(colname) for colname in table.colnames))
+            print("{:}    {:}".format(header.ljust(width_cols), "TYPE"))
+            for name in table.colnames:
+                colname_padded = name.ljust(width_cols)
+                line = "{:}    {:}".format(
+                    colname_padded, str(table[name].dtype))
+                print(line)
+
+
+if __name__ == "__main__":
+    main()

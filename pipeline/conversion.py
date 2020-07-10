@@ -1,23 +1,12 @@
 import csv
 import os
 import warnings
-from collections import OrderedDict
 from sys import stdout
 
 import numpy as np
 from fitsio import FITS
 
-# compute an automatic buffer size for the system
-_megabyte = 1048576  # bytes
-try:
-    import psutil
-    # between 50 MB < 5% < 500 MB
-    auto_size = int(0.05 * psutil.virtual_memory().total)
-    BUFFERSIZE = max(auto_size, 50 * _megabyte)
-    BUFFERSIZE = min(BUFFERSIZE, 500 * _megabyte)
-except Exception:
-    BUFFERSIZE = 50 * _megabyte
-
+from .utils import BUFFERSIZE
 
 class reader(object):
 

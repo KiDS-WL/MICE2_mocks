@@ -2,9 +2,10 @@
 import argparse
 import os
 
-from MICE2_mocks.pipeline import conversion, PipeLogger
 from memmap_table import MemmapTable
 from memmap_table.mathexpression import MathTerm
+from MICE2_mocks.pipeline import (BUFFERSIZE, PipeLogger, conversion,
+                                  expand_path)
 
 
 parser = argparse.ArgumentParser(
@@ -12,7 +13,8 @@ parser = argparse.ArgumentParser(
                 "in a different data format")
 
 parser.add_argument(
-    "datastore", help="directory in which the data store is created")
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
 parser.add_argument(
     "-q", "--query",
     help="expression to select a subset of the pipeline output "
@@ -20,19 +22,22 @@ parser.add_argument(
 
 output_group = parser.add_argument_group("output table")
 output_group.add_argument(
-    "-o", "--output",
+    "-o", "--output", type=expand_path,
     help="path to output data table (default: write on stdout)")
 output_group.add_argument(
     "--format", choices=sorted(conversion.supported_writers.keys()),
     help="output table file format (default: inferred from file extension)")
+output_group.add_argument(
+    "-c", "--columns", nargs="*",
+    help="only write these columns to the output table (order preserved)")
 
 
-if __name__ == "__main__":
-
+def main():
     args = parser.parse_args()
     logger = PipeLogger(__file__)
+    # determine if output goes to stdout in CSV format (allows redirecting)
     to_stdout = args.output is None
-    if to_stdout:  # write to stdout
+    if to_stdout:  # only print in case of error
         logger.setTermLevel("error")
 
     # open the data store
@@ -42,7 +47,58 @@ if __name__ == "__main__":
     except Exception as e:
         logger.handleException(e)
 
+    # read the input table and write the selected entries to the output file
     with table:
+
+        # parse the math expression
+        if args.query is not None:
+            # Since the symbol / can be used as column name and division
+            # symbol, we need to temporarily substitute the symbol before
+            # parsing the expression.
+            substitute = "#"
+            try:
+                # apply the substitutions to all valid column names apperaing
+                # in the math expression to avoid substitute intended divisions
+                for colname in table.colnames:
+                    substitue = colname.replace("/", substitute)
+                    while colname in args.query:
+                        args.query = args.query.replace(colname, substitue)
+                expression = MathTerm.from_string(args.query)
+                # recursively undo the substitution
+                expression._substitute_characters(substitute, "/")
+                # display the interpreted expression
+                message = "apply selection: {:}".format(expression.expression)
+                logger.info(message)
+            except SyntaxError as e:
+                message = e.args[0].replace(substitute, "/")
+                logger.handleException(SyntaxError(message))
+            except Exception as e:
+                logger.handleException(e)
+        else:
+            expression = None
+
+        # check the requested columns
+        if args.columns is not None:
+            # check for duplicates
+            requested_columns = set()
+            for colname in args.columns:
+                if colname in requested_columns:
+                    message = "duplicate column: {:}".format(colname)
+                    logger.handleException(KeyError(message))
+                requested_columns.add(colname)
+            # find requested columns that do not exist in the table
+            missing_cols = requested_columns - set(table.colnames)
+            if len(missing_cols) > 0:
+                message = "column {:} not found: {:}".format(
+                    "name" if len(missing_cols) == 1 else "names",
+                    ", ".join(sorted(missing_cols)))
+                logger.handleException(KeyError(message))
+
+            n_cols = len(requested_columns)
+            message = "select a subset of {:d} column".format(n_cols)
+            if n_cols > 1:
+                message += "s"
+            logger.info(message)
 
         # automatically determine the format file format
         if args.output is None:  # write to stdout in csv format
@@ -65,54 +121,44 @@ if __name__ == "__main__":
 
         with writer:
 
-            # parse the math expression
-            if args.query is not None:
-                # Since the symbol / can be used as column name and division
-                # symbol, we need to temporarily substitute the symbol before
-                # parsing the expression.
-                substitute = "#"
-                try:
-                    for colname in table.colnames:
-                        substitue = colname.replace("/", substitute)
-                        while colname in args.query:
-                            args.query = args.query.replace(colname, substitue)
-                    expression = MathTerm.from_string(args.query)
-                    # recursively undo the substitution
-                    expression._substitute_characters(substitute, "/")
-                    # display the interpreted expression
-                    message = "apply selection: {:}".format(
-                        expression.expression)
-                    logger.info(message)
-                except SyntaxError as e:
-                    message = e.args[0].replace(substitute, "/")
-                    logger.handleException(SyntaxError(message))
-                except Exception as e:
-                    logger.handleException(e)
-            else:
-                expression = None
+            # determine an automatic buffer/chunk size
+            n_select = 0
+            chunksize = conversion.BUFFERSIZE // table.itemsize
+            buffersize = chunksize * table.itemsize
+            message = "buffer size: {:.2f} MB ({:,d} rows)".format(
+                buffersize / 1024**2, chunksize)
+            logger.debug(message)
 
             # query the table and write to the output fie
             logger.info("processing input stream ...")
-
-            n_select = 0
-            chunksize = conversion.BUFFERSIZE // table.itemsize
             for start, end in table.row_iter(chunksize, verbose=False):
 
-                # read the chunk and apply the optional selection
+                # read the chunk and optionally select a subset of columns
                 chunk = table[start:end]
+                if args.columns is None:
+                    selection = chunk
+                else:
+                    selection = chunk[args.columns]
+
+                # apply the optional selection
                 if expression is not None:
                     try:
-                        mask = expression(chunk)
-                        chunk = chunk[mask]
+                        mask = expression(chunk)  # all columns for selection
+                        selection = selection[mask]
                     except Exception as e:
                         logger.handleException(e)
 
                 # write to target
-                writer.write_chunk(chunk.to_records())
-                n_select += len(chunk)
+                writer.write_chunk(selection.to_records())
+                n_select += len(selection)
                 if not to_stdout:
                     row_message = "selected {:,d} of {:,d} entries".format(
                         n_select, end)
                     print(row_message, end="\r")
 
-        logger.info(row_message)
+        message = "wrote {:,d} matching entries (total: {:,d})"
+        logger.info(message.format(n_select, end))
+
+
+if __name__ == "__main__":
+    main()

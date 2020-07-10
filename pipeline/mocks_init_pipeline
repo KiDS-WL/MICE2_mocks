@@ -1,35 +1,14 @@
 #!/usr/bin/env python3
 import argparse
-import sys
 import os
+import sys
 
 import toml
 
-from MICE2_mocks import pipeline
-from MICE2_mocks.pipeline import conversion, PipeLogger
 from memmap_table import MemmapTable
-
-
-class ColumnDictTranslator(object):
-
-    def __init__(self, col_dict):
-        self._col_dict = col_dict
-        self.column_map = dict()
-        self._traverse_dict(self._col_dict)
-
-    def _traverse_dict(self, subdict, path=""):
-        for key, value in subdict.items():
-            if type(key) is not str:
-                message = "invalid type {:} for set name"
-                raise TypeError(message.format(str(type(value))))
-            if type(value) is dict:
-                self._traverse_dict(value, os.path.join(path, key))
-            else:
-                if type(value) is list:
-                    dtype_tuple = tuple(value)
-                else:
-                    dtype_tuple = (value, None)
-                self.column_map[os.path.join(path, key)] = dtype_tuple
+from MICE2_mocks import pipeline
+from MICE2_mocks.pipeline import (ColumnDictTranslator, PipeLogger, conversion,
+                                  expand_path)
 
 
 class DumpDefault(argparse.Action):
@@ -61,14 +40,16 @@ parser = argparse.ArgumentParser(
 parser.register("action", "dump", DumpDefault)
 
 parser.add_argument(
-    "datastore", help="directory in which the data store is created")
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
 parser.add_argument(
     "--purge", action="store_true",
     help="delete any existing data in datastore")
 
 input_group = parser.add_argument_group("input simulation table")
 input_group.add_argument(
-    "-i", "--input", required=True, help="path to input simulation table")
+    "-i", "--input", required=True, type=expand_path,
+    help="path to input simulation table")
 input_group.add_argument(
     "--format", choices=sorted(conversion.supported_readers.keys()),
     help="input table file format (default: inferred from file extension)")
@@ -90,7 +71,7 @@ help_group.add_argument(
     help="dump a default columns file to stdout and exit")
 
 
-if __name__ == "__main__":
+def main():
 
     args = parser.parse_args()
     logger = pipeline.PipeLogger(__file__, args.datastore, append=False)
@@ -193,3 +174,7 @@ if __name__ == "__main__":
 
         # close the table
         logger.info("finalized data store with {:,d} rows".format(end))
+
+
+if __name__ == "__main__":
+    main()
