@@ -6,8 +6,8 @@ import sys
 import toml
 
 from memmap_table import MemmapTable
-from mock_processing import expand_path, PipeLogger
-from mock_processing.io import guess_format, supported_readers
+from mock_processing import PipeLogger, expand_path
+from mock_processing.readwrite import guess_format, supported_readers
 from mock_processing.utils import ColumnDictTranslator, ModificationStamp
 
 

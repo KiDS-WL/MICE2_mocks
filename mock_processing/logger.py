@@ -1,5 +1,5 @@
 import logging
-from os.path import basename, splitext
+import os
 
 
 class PipeLogger(object):
@@ -10,7 +10,8 @@ class PipeLogger(object):
 
     def __init__(self, caller_path, data_path=None, append=True):
         # create logger for script at caller_path
-        self.logger = logging.getLogger(basename(caller_path))
+        self.logger = logging.getLogger(
+            os.path.basename(caller_path))
         self.logger.setLevel(logging.DEBUG)
         # create terminal handler
         self._term_handler = logging.StreamHandler()
@@ -19,9 +20,15 @@ class PipeLogger(object):
         self.logger.addHandler(self._term_handler)
         # add an optional file handler
         if data_path is not None:
-            logpath = splitext(data_path)[0] + ".log"
-            filemode = "a" if append else "w"
-            if filemode == "w":
+            logpath = os.path.splitext(data_path)[0] + ".log"
+            if append:
+                if not os.path.exists(data_path):
+                    message = "data store not found: {:}".format(data_path)
+                    self.handleException(OSError(message))
+                filemode = "a"
+                self.info("appending to logfile: {:}".format(logpath))
+            else:
+                filemode = "w"
                 self.info("creating new logfile: {:}".format(logpath))
             self._file_handler = logging.FileHandler(logpath, filemode)
             self._file_handler.setLevel(logging.INFO)

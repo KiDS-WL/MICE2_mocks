@@ -3,9 +3,9 @@ import argparse
 import os
 
 from memmap_table.mathexpression import MathTerm
-from mock_processing import expand_path, PipeLogger, open_datastore
-from mock_processing.io import BUFFERSIZE, guess_format, supported_writers
-
+from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.readwrite import (BUFFERSIZE, guess_format,
+                                       supported_writers)
 
 parser = argparse.ArgumentParser(
     description="Select a (sub-)sample of the pipeline output and save it "
