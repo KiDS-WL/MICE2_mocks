@@ -124,6 +124,8 @@ class Writer(object):
     def __enter__(self, *args, **kwargs):
         return self
     
+    def __exit__(self, *args, **kwargs):
+        self.close()
 
     @property
     def dtype(self):
@@ -392,13 +394,13 @@ try:
             for colname in dsets:
                 entry = self._file[colname]
                 if type(entry) is not h5py.Group:
-                    self._converters[name] = DtypeConverter(dtype)
+                    self._converters[colname] = DtypeConverter(entry.dtype)
                     # check that all data sets have the same length
                     if self._len is None:
                         self._len = len(entry)
                     elif len(entry) != self._len:
-                        message = "length of data set'{:}' does not match common "
-                        message += "length {:d}"
+                        message = "length of data set'{:}' does not match "
+                        message += "common length {:d}"
                         raise ValueError(message.format(colname, self._len))
             # get the dtype form the converter instances
             self._dtype = np.dtype([
@@ -560,9 +562,9 @@ try:
             self._file.close()
 
 
-    extension_alias["hdf5"] = ("parquet", "pqt")
-    supported_readers["hdf5"] = PARQUETreader
-    supported_writers["hdf5"] = PARQUETwriter
+    extension_alias["parquet"] = ("parquet", "pqt")
+    supported_readers["parquet"] = PARQUETreader
+    supported_writers["parquet"] = PARQUETwriter
 
 except ImportError:
     pass
