@@ -46,15 +46,22 @@ def create_column(table, logger, path, *args, **kwargs):
     return column
 
 
-def row_iter_progress(table, chunksize):
+def row_iter_progress(table, chunksize=16384, verbose=True):
+    # monitor the progress in steps of 0.1%
     idx_max = len(table)
-    line_message = "progress: {:6.1%}\r"
-    sys.stdout.write(line_message.format(0.0))
-    sys.stdout.flush()
+    current, last = 0, 0
+    if verbose:
+        line_message = "progress: {:6.1%}\r"
+        sys.stdout.write(line_message.format(current))
+        sys.stdout.flush()
     for start, end in table.row_iter(chunksize):
         yield start, end
-        sys.stdout.write(line_message.format(end / idx_max))
-        sys.stdout.flush()
+        # update the progress indicator if it increased by > 0.1%
+        current = int(1000 * end / idx_max)
+        if verbose and current > last:
+            sys.stdout.write(line_message.format(current / 1000.0))
+            sys.stdout.flush()
+            last = current
 
 
 def build_history(table, logger=None):

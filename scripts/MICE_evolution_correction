@@ -18,9 +18,6 @@ parser.add_argument(
     help="directory in which the data store is located")
 
 
-CHUNKSIZE = 10000  # find an automated solution
-
-
 def main():
 
     args = parser.parse_args()
@@ -56,7 +53,7 @@ def main():
 
         # compute and store the corrected magnitudes
         logger.info("processing input stream ...")
-        for start, end in row_iter_progress(table, CHUNKSIZE):
+        for start, end in row_iter_progress(table):
             redshifts = table[z_path][start:end]
             for key, mag_path in model_mags.items():
                 evo_path = evo_mags[key]
