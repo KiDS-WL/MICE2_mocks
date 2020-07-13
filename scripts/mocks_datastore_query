@@ -112,7 +112,7 @@ def main():
         # create a standardized output writer
         writer_class = supported_writers[args.format]
         try:
-            writer = writer_class(args.output, overwrite=True)
+            writer = writer_class(table.dtype, args.output, overwrite=True)
         except Exception as e:
             logger.handleException(e)
 
@@ -157,6 +157,8 @@ def main():
                     sys.stdout.flush()
 
             # write a summary of the data store history if possible
+            """
+            TODO: fix this issue
             if hasattr(writer, "write_history"):
                 date_width = 24
                 for date, call in build_history(table, logger).items():
@@ -166,6 +168,7 @@ def main():
                 call = ModificationStamp(sys.argv)._attrs["created by"]
                 writer.write_history(
                     "{:} : {:}".format(asctime().ljust(date_width), call))
+            """
 
         message = "wrote {:,d} matching entries (total: {:,d})"
         logger.info(message.format(n_select, end))
