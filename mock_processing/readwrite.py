@@ -975,27 +975,37 @@ try:
             Path to the HDF5 file.
         overwrite : bool
             Whether the output file is overwritten if it exists.
+        compression : str
+            Compression filter to use for all data sets, must be either of
+            "none" (disabled), "lzf" (default) or "gzip".
+        hdf5_shuffle : bool
+            Apply the shuffle filter prior to compression.
+        hdf5_checksum : bool
+            Write fletcher32 check sums to data blocks.
         """
 
-        def __init__(self, dtype, fpath, overwrite=False, **kwargs):
+        def __init__(
+                self, dtype, fpath, overwrite=False, compression=None,
+                hdf5_shuffle=True, hdf5_checksum=True, **kwargs):
             self._path = fpath
             self._check_overwrite(fpath, overwrite)
             self._dtype = dtype
             # initialize the file writer and the buffer
             self._buffer = BufferQueue(dtype)
-            self._init_file()
+            self._init_file(compression, hdf5_shuffle, hdf5_checksum)
 
-        def _init_file(self):
+        def _init_file(self, compression, hdf5_shuffle, hdf5_checksum):
             """
             Open the ouput file and create a data set for each column.
             """
             self._file = h5py.File(self._path, mode="w-")
             # initialize the required datasets
+            compression = "lzf" if compression is None else compression
             for name, (dtype, _) in self.dtype.fields.items():
                 self._file.create_dataset(
                     name, dtype=dtype.str, shape=(0,),
-                    chunks=True, maxshape=(None,), shuffle=True,
-                    compression="lzf", fletcher32=True)
+                    chunks=True, maxshape=(None,), shuffle=hdf5_shuffle,
+                    compression=compression, fletcher32=hdf5_checksum)
 
         def _write(self, data):
             """
@@ -1145,9 +1155,15 @@ try:
             Path to the parquet file.
         overwrite : bool
             Whether the output file is overwritten if it exists.
+        compression : str
+            Compression filter to use for all data sets, must be either of
+            "none" (disabled), "snappy" (default), "gzip", "lzo", "brotli",
+            "lz4" or "zstd" (list may differ on systems).
         """
 
-        def __init__(self, dtype, fpath, overwrite=False, **kwargs):
+        def __init__(
+                self, dtype, fpath, overwrite=False,
+                compression=None, **kwargs):
             self._path = fpath
             self._check_overwrite(fpath, overwrite)
             self._dtype = dtype
@@ -1156,7 +1172,7 @@ try:
             # initialize the file writer and the buffer
             self._buffer = BufferQueue(dtype)
             self.buffersize = 512 * _mega_byte  # recommended value
-            self._init_file()
+            self._init_file(compression)
 
         def _schema_from_dtype(self, dtype):
             """
@@ -1172,7 +1188,7 @@ try:
                 for name, (dt, offset) in dtype.fields.items()})
             self._schema = dummy_table.schema
 
-        def _init_file(self):
+        def _init_file(self, compression):
             """
             Open the ouput file and create the table meta data.
             """
@@ -1180,7 +1196,9 @@ try:
             # create the parquet writer
             fpath = self._file.name
             self._file.close()
-            self._file = pq.ParquetWriter(fpath, self._schema)
+            compr_mode = "NONE" if compression is None else compression.upper()
+            self._file = pq.ParquetWriter(
+                fpath, self._schema, compression=compr_mode)
 
         def _write(self, data):
             """

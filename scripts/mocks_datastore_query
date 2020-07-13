@@ -33,7 +33,18 @@ output_group.add_argument(
 output_group.add_argument(
     "-c", "--columns", nargs="*",
     help="only write these columns to the output table (order preserved)")
-
+output_group.add_argument(
+    "--compression", choices=(
+        "none", "snappy", "lzf", "gzip", "lzo", "brotli", "lz4", "zstd"),
+    help="compression methods used for parquet (default: snappy) and HDF5 "
+         "files (default: lzf), only none and gzip is supported by both "
+         "formats")
+output_group.add_argument(
+    "--hdf5-shuffle", action="store_true",
+    help="shuffle the HDF5 file data blocks prior to compression")
+output_group.add_argument(
+    "--hdf5-checksum", action="store_true",
+    help="write fletcher32 check sums to HDF5 file data blocks")
 
 def main():
 
@@ -112,7 +123,12 @@ def main():
         # create a standardized output writer
         writer_class = supported_writers[args.format]
         try:
-            writer = writer_class(table.dtype, args.output, overwrite=True)
+            writer = writer_class(
+                table.dtype, args.output, overwrite=True,
+                # format specific parameters
+                compression=args.compression,
+                hdf5_shuffle=args.hdf5_shuffle,
+                hdf5_checksum=args.hdf5_checksum)
         except Exception as e:
             logger.handleException(e)
 
@@ -120,9 +136,8 @@ def main():
 
             # determine an automatic buffer/chunk size
             chunksize = BUFFERSIZE // table.itemsize
-            buffersize = chunksize * table.itemsize
             message = "buffer size: {:.2f} MB ({:,d} rows)".format(
-                buffersize / 1024**2, chunksize)
+                writer.buffersize / 1024**2, writer.bufferlength)
             logger.debug(message)
 
             # query the table and write to the output fie
