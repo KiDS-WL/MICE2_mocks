@@ -1,4 +1,5 @@
-index = "galaxy_id"
+#halo_index = "halo_id"
+galaxy_index = "galaxy_id"
 
 [position]
 "ra/true" = "ra_gal"
@@ -20,11 +21,13 @@ J = "2mass_j"
 Ks = "2mass_ks"
 
 [bulge]
+#angle = "bulge_angle"
 axis_ratio = "bulge_axis_ratio"
 fraction = "bulge_fraction"
 length = "bulge_length"
 
 [disk]
+#angle = "disk_angle"
 axis_ratio = "disk_axis_ratio"
 length = "disk_length"
 
@@ -34,6 +37,7 @@ gamma2 = "gamma2"
 kappa = "kappa"
 
 [environ]
+is_satellite = ["kind", "bool"]
 log_M_halo = "halo_lm"
 log_M_stellar = "log_stellar_mass"
 n_sattelites = "halo_n_sats"
