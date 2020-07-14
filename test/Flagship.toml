@@ -1,0 +1,39 @@
+index = "galaxy_id"
+
+[position]
+"ra/true" = "ra_gal"
+"ra/obs" = "ra_gal_mag"
+"dec/true" = "dec_gal"
+"dec/obs" = "dec_gal_mag"
+"z/true" = "true_redshift_gal"
+"z/obs" = "observed_redshift_gal"
+
+["mags/model"]
+u = "kids_u"
+g = "kids_g"
+r = "kids_r"
+i = "kids_i"
+Z = "lsst_z"
+Y = "lsst_y"
+H = "2mass_h"
+J = "2mass_j"
+Ks = "2mass_ks"
+
+[bulge]
+axis_ratio = "bulge_axis_ratio"
+fraction = "bulge_fraction"
+length = "bulge_length"
+
+[disk]
+axis_ratio = "disk_axis_ratio"
+length = "disk_length"
+
+[lensing]
+gamma1 = "gamma1"
+gamma2 = "gamma2"
+kappa = "kappa"
+
+[environ]
+log_M_halo = "halo_lm"
+log_M_stellar = "log_stellar_mass"
+n_sattelites = "halo_n_sats"
