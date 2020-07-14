@@ -15,7 +15,7 @@ then
         --evo mags/evolved
 else
     ../scripts/MICE_evolution_correction \
-        /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap \
+        /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
         --mag mags/model \
         --evo mags/evolved
 fi

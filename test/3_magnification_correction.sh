@@ -15,7 +15,7 @@ then
         --lensed mags/lensed
 else
     ../scripts/mocks_magnification \
-        /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap \
+        /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
         --mag mags/evolved \
         --lensed mags/lensed
 fi
