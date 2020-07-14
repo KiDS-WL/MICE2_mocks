@@ -90,9 +90,10 @@ class ParallelTable(object):
     _call_kwargs = None
     _return_map = None
 
-    def __init__(self, table):
+    def __init__(self, table, logger=None):
         # keep the table reference for later use
         self._table = table
+        self._logger = logger
 
     @staticmethod
     def _n_threads(n_threads=None):
@@ -296,7 +297,13 @@ class ParallelTable(object):
             repeat(self._call_args), repeat(self._call_kwargs),
             repeat(self._return_map)))
         # create the worker pool
-        #_ROW_PROGRESS = mp.Value('i', 0)
+        if self._logger is not None:
+            if threads > 1:
+                message = "processing input stream using {:d} threads ..."
+                message = message.format(threads)
+            else:
+                message = "processing input stream ..."
+            self._logger.info(message)
         with mp.Pool(threads) as pool:
             sys.stdout.write("progress: {:6.1%}\r".format(0.0))
             sys.stdout.flush()
@@ -349,21 +356,3 @@ def _thread_worker(wrapper_args):
         else:
             for result, values in zip(results_expanded, return_values):
                 result[start:end] = values
-
-
-if __name__ == "__main__":
-
-    from mock_processing.photometry import magnification_correction
-
-    with MemmapTable("/net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_deep", mode="r+") as ds:
-        if "test_col" not in ds:
-            col = ds.add_column("test_col", dtype="f4")
-
-        p = ParallelTable(ds)
-        p.set_worker(magnification_correction)
-        p.add_argument_column("lensing/kappa")
-        p.add_argument_column("mags/evolved/r")
-        p.add_result_column("test_col")
-        print(p.signature)
-        p.execute()
-        print()
