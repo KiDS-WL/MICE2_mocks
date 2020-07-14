@@ -108,6 +108,9 @@ def main():
             ext=args.fits_ext)
     except Exception as e:
         logger.handleException(e)
+    message = "buffer size: {:.2f} MB ({:,d} rows)".format(
+        reader.buffersize / 1024**2, reader.bufferlength)
+    logger.debug(message)
 
     # read the data file and write it to the memmory mapped data store
     with reader:
@@ -177,8 +180,9 @@ def main():
             sys.stdout.write(str(table) + "\n\n")
 
         # close the table
-        timestamp.finalize()
         logger.info("finalized data store with {:,d} rows".format(end))
+        logger.info("updating headers and closing data store")
+        timestamp.finalize()
 
 
 if __name__ == "__main__":

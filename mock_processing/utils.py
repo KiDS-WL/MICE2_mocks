@@ -79,6 +79,8 @@ def build_history(table, logger=None):
                 print("WARNING: " + message)
             else:
                 logger.warn(message)
+        except TypeError:
+            continue  # no attribute exists
     # return history ordered time and convert time stamps back to strings
     history = OrderedDict()
     for key in sorted(calls):
