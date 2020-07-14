@@ -21,16 +21,16 @@ def load_photometry(table, photometry_path, filter_selection=None):
     return photometry_columns
 
 
-def magnification_correction(mag, kappa):
+def magnification_correction(kappa, mag):
     """
     Magnification calculated from the convergence, following Fosalba+15 eq. 21.
 
     Parameters
     ----------
-    mag : array_like
-        (Evolution corrected) model magnitudes.
     kappa : array_like
         Convergence field at the galaxy positions.
+    mag : array_like
+        (Evolution corrected) model magnitudes.
 
     Returns
     -------
@@ -40,6 +40,29 @@ def magnification_correction(mag, kappa):
     d_mu = 2.0 * kappa
     mag_magnified = mag - 2.5 * np.log10(1 + d_mu)
     return mag_magnified
+
+
+def magnification_correction_wrapped(kappa, *mags):
+    """
+    Wrapper for magnification_correction() to compute the magnification
+    correction for a set of magnitudes simultaneously.
+
+    Parameters
+    ----------
+    kappa : array_like
+        Convergence field at the galaxy positions.
+    *mags : array_like
+        Series of (evolution corrected) model magnitudes.
+
+    Returns
+    -------
+    mags_magnified : tuple of array_like
+        Series of magnification corrected model magnitudes (matching input
+        order).
+    """
+    mags_magnified = tuple(
+        magnification_correction(kappa, mag) for mag in mags)
+    return mags_magnified
 
 
 def f_R_e(R, R_e_Disk, R_e_Bulge, f_B, percentile=0.5):

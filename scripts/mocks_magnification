@@ -4,8 +4,9 @@ import os
 import sys
 
 from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import (load_photometry,
-                                        magnification_correction)
+                                        magnification_correction_wrapped)
 from mock_processing.utils import (ModificationStamp, create_column,
                                    row_iter_progress)
 
@@ -23,6 +24,9 @@ parser.add_argument(
     "--lensed",
     help="sub-directory within data store where the magnification corrected "
          "magnitudes are stored")
+parser.add_argument(
+    "--threads", type=int, default=4,
+    help="number of threads to use (default: %(default)s)")
 
 
 def main():
@@ -34,11 +38,15 @@ def main():
     # apply the magnification correction to the model magnitudes
     with open_datastore(args.datastore, logger, readonly=False) as table:
 
+        pool = ParallelTable(table, logger)
+        pool.set_worker(magnification_correction_wrapped)
+
         # find convergence column
         kappa_path = "lensing/kappa"
         if kappa_path not in table:
             message = "convergence column not found: {:}".format(kappa_path)
             logger.handleException(KeyError(message))
+        pool.add_argument_column(kappa_path)
 
         # find all magnitude columns
         try:
@@ -58,20 +66,19 @@ def main():
                         lensed_path)},
                 overwrite=True)
             timestamp.register(column)
+            # add columns to call signature
+            pool.add_argument_column(mag_path)
+            pool.add_result_column(lensed_path)
         lensed_mags = load_photometry(table, args.lensed)
 
         # compute and store the corrected magnitudes
-        logger.info("processing input stream ...")
-        for start, end in row_iter_progress(table):
-            kappa = table[kappa_path][start:end]
-            for key, mag_path in input_mags.items():
-                mags = table[mag_path][start:end]
-                table[lensed_mags[key]][start:end] = \
-                    magnification_correction(mags, kappa)
+        pool.execute(args.threads)
 
-    # close the table
-    timestamp.finalize()
-    logger.info("computation completed for {:,d} entries".format(end))
+        # close the table
+        logger.info(
+            "computation completed for {:,d} entries".format(len(table)))
+        logger.info("updating headers and closing data store")
+        timestamp.finalize()
 
 
 if __name__ == "__main__":
