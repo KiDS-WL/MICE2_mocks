@@ -72,11 +72,10 @@ def main():
         # compute and store the corrected magnitudes in parallel
         pool.execute(args.threads)
 
-        # close the table
-        logger.info(
-            "computation completed for {:,d} entries".format(len(table)))
         logger.info("updating headers and closing data store")
         timestamp.finalize()
+    # close the table and flush data
+    logger.info("computation completed for {:,d} entries".format(len(table)))
 
 
 if __name__ == "__main__":

@@ -179,10 +179,10 @@ def main():
             # print a preview of the table as quick check
             sys.stdout.write(str(table) + "\n\n")
 
-        # close the table
+            logger.info("updating headers and closing data store")
+            timestamp.finalize()
+        # close the table and flush data
         logger.info("finalized data store with {:,d} rows".format(end))
-        logger.info("updating headers and closing data store")
-        timestamp.finalize()
 
 
 if __name__ == "__main__":
