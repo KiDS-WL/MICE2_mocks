@@ -69,6 +69,18 @@ class ParallelIterator(object):
         return self.end - self.start
 
     def __iter__(self):
+        """
+        Iterate a given range [start, end] in chunks of fixed step size. The
+        progress in reported and updated an screen synchronized between all
+        concurrent threads.
+
+        Yields:
+        -------
+        start : int
+            First index of the current chunk.
+        end : int
+            Index past the last index of the current chunk.
+        """
         line_message = "progress: {:6.1%}\r"
         # provide an index reach for the next chunk to process
         for start in range(self.start, self.end, self.step):
@@ -83,6 +95,18 @@ class ParallelIterator(object):
 
 
 class ParallelTable(object):
+    """
+    Wrapper to apply a function to the columns of a MemmapTable with concurrent
+    threads. For each thread the table rows are divided into equal sized chunks
+    to avoid current I/O operations on the same memory.
+
+    Parameters:
+    -----------
+    table : memmap_table.MemmapTable
+        Data table object to process.
+    logger : python logger instance
+        Enables optional event logging.
+    """
 
     _chunksize = 16384  # default in current MemmapTable implementation
     _worker_function = None
@@ -282,21 +306,31 @@ class ParallelTable(object):
         return sign
 
     def execute(self, n_threads=None):
+        """
+        Apply the worker function on the input table using a given number of
+        threads and writing the results to the output columns.
+
+        Parameters:
+        -----------
+        n_threads : int
+            Number of parallel threads to use (all by default).
+        """
+        threads = self._n_threads(n_threads)
+        # initialize the global row progress counter
         global _ROW_PROGRESS
         _ROW_PROGRESS = mp.Value('i', 0)
-        threads = self._n_threads(n_threads)
         # assign row subsets to the threads
         n_rows = len(self._table)
         index_ranges = self._thread_iterator(
             # there cannot be more threads than table rows
             n_rows if threads > n_rows else threads)
         threads = len(index_ranges)
-        # collect the call arguments
+        # collect the call arguments for the worker
         worker_args = list(zip(
             index_ranges, repeat(self._worker_function),
             repeat(self._call_args), repeat(self._call_kwargs),
             repeat(self._return_map)))
-        # create the worker pool
+        # notify begin of processing
         if self._logger is not None:
             if threads > 1:
                 message = "processing input stream using {:d} threads ..."
@@ -304,17 +338,33 @@ class ParallelTable(object):
             else:
                 message = "processing input stream ..."
             self._logger.info(message)
+        # create the worker pool
         with mp.Pool(threads) as pool:
             sys.stdout.write("progress: {:6.1%}\r".format(0.0))
             sys.stdout.flush()
             pool.map(_thread_worker, worker_args)
-        # reset
+        # reset row counter for future use
         _ROW_PROGRESS = None
 
 
 def _thread_worker(wrapper_args):
-    iterator, function, args, kwargs, results = wrapper_args
+    """
+    Wrapper around the worker function that is running in each thread spawned
+    by ParallelTable. Based on the signature registered in ParallelTable, data
+    is loaded from the table columns, processed and written to the appropriate
+    output column(s).
 
+    Parameters:
+    -----------
+    wrapper_args : list
+        ParallelIterator : manages the chunkwise loading of data
+        callable : the worker function
+        list : the positional function arguments
+        dict : the function keyword arguments
+        list : the column(s) where the function return values are stored
+    """
+    # unpack all input arguments
+    iterator, function, args, kwargs, results = wrapper_args
     # open the data sets from the table are needed
     # process the positional arguments
     args_expanded = []
