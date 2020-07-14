@@ -4,7 +4,8 @@ import os
 import sys
 
 from mock_processing import PipeLogger, expand_path, open_datastore
-from mock_processing.MICE2 import evolution_correction
+from mock_processing.MICE2 import evolution_correction_wrapped
+from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import load_photometry
 from mock_processing.utils import (ModificationStamp, create_column,
                                    row_iter_progress)
@@ -33,11 +34,15 @@ def main():
     # apply the evolution correction to the model magnitudes
     with open_datastore(args.datastore, logger, readonly=False) as table:
 
+        pool = ParallelTable(table)
+        pool.set_worker(evolution_correction_wrapped)
+
         # find redshift column
         z_path = "position/z/true"
         if z_path not in table:
             message = "true redshift column not found: {:}".format(z_path)
             logger.handleException(KeyError(message))
+        pool.add_argument_column(z_path)
 
         # find all magnitude columns
         try:
@@ -56,20 +61,19 @@ def main():
                     "{:} with evolution correction applied".format(mag_path)},
                 overwrite=True)
             timestamp.register(column)
+            # add columns to call signature
+            pool.add_argument_column(mag_path)
+            pool.add_result_column(evo_path)
         evo_mags = load_photometry(table, args.evo)
 
-        # compute and store the corrected magnitudes
+        # compute and store the corrected magnitudes in parallel
         logger.info("processing input stream ...")
-        for start, end in row_iter_progress(table):
-            redshifts = table[z_path][start:end]
-            for key, mag_path in model_mags.items():
-                mags = table[mag_path][start:end]
-                table[evo_mags[key]][start:end] = \
-                    evolution_correction(mags, redshifts)
+        pool.execute()
 
-    # close the table
-    timestamp.finalize()
-    logger.info("computation completed for {:,d} entries".format(end))
+        # close the table
+        timestamp.finalize()
+        logger.info(
+            "computation completed for {:,d} entries".format(len(table)))
 
 
 if __name__ == "__main__":
