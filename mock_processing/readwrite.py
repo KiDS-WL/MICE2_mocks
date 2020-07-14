@@ -711,8 +711,8 @@ try:
             dtypes = self._reader.get_rec_dtype()[0]  # data types from header
             # use the converter class to get the types with correct byte order
             self._dtype = np.dtype([
-                (name, ConvertByteOrder(dtype).dtype)
-                for name, (dtype, offset) in dtypes.fields.items()])
+                (name, ConvertByteOrder(dtypes[name]).dtype)
+                for name in dtypes.names])
 
         def read_chunk(self) -> np.array:
             """
@@ -1001,9 +1001,9 @@ try:
             self._file = h5py.File(self._path, mode="w-")
             # initialize the required datasets
             compression = "lzf" if compression is None else compression
-            for name, (dtype, _) in self.dtype.fields.items():
+            for name in self.dtype.names:
                 self._file.create_dataset(
-                    name, dtype=dtype.str, shape=(0,),
+                    name, dtype=self.dtype[name].str, shape=(0,),
                     chunks=True, maxshape=(None,), shuffle=hdf5_shuffle,
                     compression=compression, fletcher32=hdf5_checksum)
 
@@ -1184,8 +1184,7 @@ try:
                 Describes the data column names and data types.
             """
             dummy_table = pa.Table.from_pydict({
-                name: np.array([], dt)
-                for name, (dt, offset) in dtype.fields.items()})
+                name: np.array([], dtype[name]) for name in dtype.names})
             self._schema = dummy_table.schema
 
         def _init_file(self, compression):
