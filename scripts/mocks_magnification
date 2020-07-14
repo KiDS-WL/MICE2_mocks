@@ -1,17 +1,18 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import argparse
 import os
 import sys
 
 from mock_processing import PipeLogger, expand_path, open_datastore
-from mock_processing.MICE2 import evolution_correction
-from mock_processing.photometry import load_photometry
+from mock_processing.photometry import (load_photometry,
+                                        magnification_correction)
 from mock_processing.utils import (ModificationStamp, create_column,
                                    row_iter_progress)
 
+
 parser = argparse.ArgumentParser(
-    description='Apply the evolutionary correction to the MICE2 model '
-                'magnitudes.')
+    description='Compute magnitudes corrected for gravitational lensing '
+                'magnification in the limit of weak lensing.')
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is located")
@@ -19,8 +20,8 @@ parser.add_argument(
     "--mag",
     help="sub-directory within data store which contains the input magnitudes")
 parser.add_argument(
-    "--evo",
-    help="sub-directory within data store where the evolution corrected "
+    "--lensed",
+    help="sub-directory within data store where the magnification corrected "
          "magnitudes are stored")
 
 
@@ -30,42 +31,43 @@ def main():
     logger = PipeLogger(__file__, args.datastore)
     timestamp = ModificationStamp(sys.argv)
 
-    # apply the evolution correction to the model magnitudes
+    # apply the magnification correction to the model magnitudes
     with open_datastore(args.datastore, logger, readonly=False) as table:
 
-        # find redshift column
-        z_path = "position/z/true"
-        if z_path not in table:
-            message = "true redshift column not found: {:}".format(z_path)
+        # find convergence column
+        kappa_path = "lensing/kappa"
+        if kappa_path not in table:
+            message = "convergence column not found: {:}".format(kappa_path)
             logger.handleException(KeyError(message))
 
         # find all magnitude columns
         try:
-            model_mags = load_photometry(table, args.mag)
+            input_mags = load_photometry(table, args.mag)
         except KeyError as e:
             logger.handleException(e)
 
         # create the output columns
-        for key, mag_path in model_mags.items():
+        for key, mag_path in input_mags.items():
             # create new output columns
-            evo_path = os.path.join(args.evo, key)
+            lensed_path = os.path.join(args.lensed, key)
             column = create_column(
-                table, logger, evo_path, dtype=table[mag_path].dtype.str,
+                table, logger, lensed_path, dtype=table[mag_path].dtype.str,
                 attr={
                     "description":
-                    "{:} with evolution correction applied".format(mag_path)},
+                    "{:} with magnification correction applied".format(
+                        lensed_path)},
                 overwrite=True)
             timestamp.register(column)
-        evo_mags = load_photometry(table, args.evo)
+        lensed_mags = load_photometry(table, args.lensed)
 
         # compute and store the corrected magnitudes
         logger.info("processing input stream ...")
         for start, end in row_iter_progress(table):
-            redshifts = table[z_path][start:end]
-            for key, mag_path in model_mags.items():
+            kappa = table[kappa_path][start:end]
+            for key, mag_path in input_mags.items():
                 mags = table[mag_path][start:end]
-                table[evo_mags[key]][start:end] = \
-                    evolution_correction(mags, redshifts)
+                table[lensed_mags[key]][start:end] = \
+                    magnification_correction(mags, kappa)
 
     # close the table
     timestamp.finalize()

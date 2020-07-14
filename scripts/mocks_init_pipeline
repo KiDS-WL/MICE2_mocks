@@ -104,7 +104,7 @@ def main():
     reader_class = supported_readers[args.format]
     try:
         reader = reader_class(
-            args.input, datasets=set(col_map_dict.values),
+            args.input, datasets=set(col_map_dict.values()),
             ext=args.fits_ext)
     except Exception as e:
         logger.handleException(e)
