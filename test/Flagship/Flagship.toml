@@ -20,16 +20,14 @@ H = "2mass_h"
 J = "2mass_j"
 Ks = "2mass_ks"
 
-[bulge]
-angle = "bulge_angle"
-axis_ratio = "bulge_axis_ratio"
-fraction = "bulge_fraction"
-length = "bulge_length"
-
-[disk]
-angle = "disk_angle"
-axis_ratio = "disk_axis_ratio"
-length = "disk_length"
+[shape]
+"bulge/angle" = "bulge_angle"
+"bulge/axis_ratio" = "bulge_axis_ratio"
+"bulge/fraction" = "bulge_fraction"
+"bulge/size" = "bulge_length"
+"disk/angle" = "disk_angle"
+"disk/axis_ratio" = "disk_axis_ratio"
+"disk/size" = "disk_length"
 
 [lensing]
 gamma1 = "gamma1"

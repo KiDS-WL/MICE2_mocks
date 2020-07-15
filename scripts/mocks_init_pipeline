@@ -171,8 +171,6 @@ def main():
                 sys.stdout.flush()
                 # update the current row index
                 start = end
-            # clear the "current row ..." line
-            sys.stdout.write(" " * len(row_message) + "\n")
 
             # if using the CSV reader: truncate any allocated, unused rows
             if len(table) > end:
@@ -180,8 +178,11 @@ def main():
 
             # print a preview of the table as quick check
             try:
-                sys.stdout.write(str(table) + "\n\n")
-            except:
+                preview = str(table)
+                # clear the "current row ..." line
+                sys.stdout.write(" " * len(row_message) + "\n")
+                sys.stdout.write(preview + "\n\n")
+            except Exception:
                 logger.warn("table preview failed")
 
             logger.info("updating headers and closing data store")
