@@ -49,10 +49,11 @@ output_group.add_argument(
     "--hdf5-checksum", action="store_true",
     help="write fletcher32 check sums to HDF5 file data blocks")
 
+
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__)
+    logger = PipeLogger(__file__, args.datastore)
     # determine if output goes to stdout in CSV format (allows redirecting)
     to_stdout = args.output is None
     if to_stdout:  # only print in case of error
