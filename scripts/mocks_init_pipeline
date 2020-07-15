@@ -161,8 +161,8 @@ def main():
                     if end > len(table):
                         # resize the table
                         table.resize(len(table) + len(chunk))
-                        logger.debug(
-                            "allocated {:,d} extra rows".format(len(chunk)))
+                        logger.debug("allocated {:,d} additional rows".format(
+                            len(chunk)))
                     table[path][start:end] = chunk[colname]
                 row_message = "current row: {:,d}".format(end)
                 sys.stdout.write(row_message + "\r")
@@ -181,8 +181,14 @@ def main():
 
             logger.info("updating headers and closing data store")
             timestamp.finalize()
+            filesize = table.nbytes
         # close the table and flush data
-        logger.info("finalized data store with {:,d} rows".format(end))
+        units = ["TB", "GB", "MB", "kB", "Bytes"]
+        while filesize > 1000.0 and len(units) > 1:
+            filesize /= 1024.0
+            units.pop()
+        message = "finalized data store with {:.2f} {:} ({:,d} rows)"
+        logger.info(message.format(filesize, units[-1], end))
 
 
 if __name__ == "__main__":
