@@ -3,12 +3,10 @@ import argparse
 import os
 import sys
 
-import toml
-
 from memmap_table import MemmapTable
 from mock_processing import PipeLogger, expand_path
 from mock_processing.readwrite import guess_format, supported_readers
-from mock_processing.utils import (ColumnDictTranslator, ModificationStamp,
+from mock_processing.utils import (ModificationStamp, ParseColumnMap,
                                    bytesize_with_prefix)
 
 
@@ -79,16 +77,15 @@ def main():
     timestamp = ModificationStamp(sys.argv)
 
     # check the columns file
-    message = "reading columns file: {:}".format(args.columns)
+    message = "reading column mapping file: {:}".format(args.columns)
     logger.info(message)
     try:
-        with open(args.columns) as f:
-            col_map_dict = ColumnDictTranslator(toml.load(f)).column_map
+        col_map_dict = ParseColumnMap(args.columns).get
     except OSError as e:
-        message = "columns file not found: {:}".format(args.columns)
+        message = "column mapping file not found: {:}".format(args.columns)
         logger.handleException(e, message)
     except Exception as e:
-        message = "malformed columns file"
+        message = "malformed column mapping file"
         logger.handleException(e, message)
 
     # automatically determine the input file format

@@ -3,6 +3,8 @@ import sys
 from collections import OrderedDict
 from time import asctime, strptime
 
+import toml
+
 from memmap_table import MemmapTable
 from ._version import __version__
 
@@ -11,6 +13,16 @@ def expand_path(path):
     """
     Normalises a path (e.g. from the command line) and substitutes environment
     variables and the user (e.g. ~/ or ~user/).
+
+    Parameters:
+    -----------
+    path : str
+        Input raw path.
+
+    Returns:
+    --------
+    path : str
+        Normalized path with substitutions applied.
     """
     # check for tilde
     if path.startswith("~" + os.sep):
@@ -24,18 +36,54 @@ def expand_path(path):
 
 
 def open_datastore(path, logger, readonly=True):
+    """
+    Wrapper to open an existing MemmapTable on disk.
+
+    Parameters:
+    -----------
+    path : str
+        Path to MemmapTable storage (must be a directory).
+    logger : python logger instance
+        Logger instance that logs events.
+    readonly : bool
+        Whether the storage is opened as read-only.
+
+    Returns:
+    --------
+    table : memmap_table.MemmapTable
+        Opened data storage interface.
+    """
     # open the data store
     logger.info("opening data store: {:}".format(path))
     mode = "r" if readonly else "r+"
     try:
-        return MemmapTable(path, mode=mode)
+        table = MemmapTable(path, mode=mode)
     except Exception as e:
         logger.handleException(e)
+    return table
 
 
 def create_column(table, logger, path, *args, **kwargs):
-    # wrapper to create a new column and log a notification (warning) if the
-    # column does not exist (already exists)
+    """
+    Wrapper to create a new column in an existing MemmapTable.
+
+    Parameters:
+    -----------
+    table : memmap_table.MemmapTable
+        Opened data storage interface with write permissions.
+    logger : python logger instance
+        Logger instance that logs events.
+    path : str
+        Column name (path relative to the table root).
+
+    Further arguments are passed to MemmapTable.add_column() and specify the
+    data type, attributes and overwrite permissions.
+
+    Returns:
+    --------
+    column : memmap_table.Column
+        Newly created table column instance.
+    """
     if path in table:
         message = "overwriting output column: {:}"
         logger.warn(message.format(path))
@@ -46,27 +94,24 @@ def create_column(table, logger, path, *args, **kwargs):
     return column
 
 
-def row_iter_progress(table, chunksize=16384, verbose=True):
-    # monitor the progress in steps of 0.1%
-    idx_max = len(table)
-    current, last = 0, 0
-    if verbose:
-        line_message = "progress: {:6.1%}\r"
-        sys.stdout.write(line_message.format(current))
-        sys.stdout.flush()
-    for start, end in table.row_iter(chunksize):
-        yield start, end
-        # update the progress indicator if it increased by > 0.1%
-        current = int(1000 * end / idx_max)
-        if verbose and current > last:
-            sys.stdout.write(line_message.format(current / 1000.0))
-            sys.stdout.flush()
-            last = current
-
-
 def build_history(table, logger=None):
-    # read the creation labels from all columns and keep a unique listing
-    # assuming that no two successful calls occured within one second
+    """
+    Read the creation labels from all columns attributes of the data store and
+    keep a unique listing of the called scripts. The time resolution is
+    1 second.
+
+    Parameters:
+    -----------
+    table : memmap_table.MemmapTable
+        Data storage interface processed with this pipeline.
+    logger : python logger instance
+        Logger instance that logs events (optional).
+
+    Returns:
+    --------
+    history : OrderedDict
+        Mapping of timestamp -> script comands, ordered by time.
+    """
     calls = {}
     for column in table.colnames:
         attrs = table[column].attr
@@ -89,6 +134,22 @@ def build_history(table, logger=None):
 
 
 def bytesize_with_prefix(nbytes, precision=2):
+    """
+    Convert a data size in bytes to a printable string with metric prefix (e.g.
+    314,215,650 Bytes = 299.66 MB).
+
+    Parameters:
+    -----------
+    nbytes : int
+        Number of bytes to convert
+    precision : int
+        Number of significant digits to included in converted string.
+    
+    Returns:
+    --------
+    string : str
+        Byte size in with metric prefix.
+    """
     # future proof prefix list
     units = ["YB", "ZB", "EB", "PB", "TB", "GB", "MB", "kB", "Bytes"]
     # divide size by 1024 and increase the prefix until the number is < 1000 
@@ -101,14 +162,45 @@ def bytesize_with_prefix(nbytes, precision=2):
     return string
 
 
-class ColumnDictTranslator(object):
+class ParseColumnMap(object):
+    """
+    Parse a column mapping file used to convert the column names of the input
+    files into paths within the data store.
 
-    def __init__(self, col_dict):
-        self._col_dict = col_dict
-        self.column_map = dict()
-        self._traverse_dict(self._col_dict)
+    Parameters:
+    -----------
+    path : str
+        Column map file path
+    """
+
+    def __init__(self, path):
+        # unpack the potentially nested dictionary by converting nested keys
+        # into file system paths
+        self._column_map = dict()
+        # parse the TOML file and parse it as dictionary
+        with open(path) as f:
+            self._traverse_dict(toml.load(f))
+
+    @property
+    def get(self):
+        """
+        Get the column mapping data store path -> input file column.
+        """
+        return self._column_map
 
     def _traverse_dict(self, subdict, path=""):
+        """
+        Iterate the directory and insert the values in the column map by
+        concatenating nested keywords like file system paths.
+
+        Parameters:
+        -----------
+        subdict : dict
+            Dictionary that maps the input file column names.
+        path : str
+            path under which the dictionary items are registered in the global
+            column map.
+        """
         for key, value in subdict.items():
             if type(key) is not str:
                 message = "invalid type {:} for set name"
@@ -120,10 +212,20 @@ class ColumnDictTranslator(object):
                     dtype_tuple = tuple(value)
                 else:
                     dtype_tuple = (value, None)
-                self.column_map[os.path.join(path, key)] = dtype_tuple
+                self._column_map[os.path.join(path, key)] = dtype_tuple
 
 
 class ModificationStamp(object):
+    """
+    Write attributes which indicate by which pipeline scipt (including command
+    line arguments and pipline version) and when column have been modified
+    last in the data store.
+
+    Parameters:
+    -----------
+    sys_argv : sys.argv
+        Commandline arguments including script name.
+    """
 
     def __init__(self, sys_argv):
         self._columns = []
@@ -136,11 +238,28 @@ class ModificationStamp(object):
         self._attrs["version"] = __version__
     
     def register(self, column):
+        """
+        Register a column for which the attributes should be updated.
+
+        Parameters:
+        -----------
+        column : memmap_table.Column
+            Column instance from the data store to update.
+        """
         if not hasattr(column, "attr"):
             raise TypeError("column must have an attribute 'attr'")
         self._columns.append(column)
 
     def finalize(self, timestamp=None):
+        """
+        Take the current local time and format and write the attributes to the
+        registered columns.
+
+        Parameters:
+        -----------
+        timestamp : str
+            Text encoded time stamp.
+        """
         # store the current time if none is provided
         if timestamp is None:
             self._attrs["created at"] = asctime()
