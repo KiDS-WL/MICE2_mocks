@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def evolution_correction(redshift,mag):
+def evolution_correction(redshift, mag):
     """
     Evolution correction as described in the official MICE2 manual
     https://www.dropbox.com/s/0ffa8e7463n8h1q/README_MICECAT_v2.0_for_new_CosmoHub.pdf?dl=0

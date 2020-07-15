@@ -318,7 +318,7 @@ class ParallelTable(object):
         threads = self._n_threads(n_threads)
         # initialize the global row progress counter
         global _ROW_PROGRESS
-        _ROW_PROGRESS = mp.Value('i', 0)
+        _ROW_PROGRESS = mp.Value('l', 0)
         # assign row subsets to the threads
         n_rows = len(self._table)
         index_ranges = self._thread_iterator(

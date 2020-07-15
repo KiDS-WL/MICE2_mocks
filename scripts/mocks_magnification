@@ -7,13 +7,12 @@ from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import (load_photometry,
                                         magnification_correction_wrapped)
-from mock_processing.utils import (ModificationStamp, create_column,
-                                   row_iter_progress)
+from mock_processing.utils import ModificationStamp, create_column
 
 
 parser = argparse.ArgumentParser(
-    description='Compute magnitudes corrected for gravitational lensing '
-                'magnification in the limit of weak lensing.')
+    description="Compute magnitudes corrected for gravitational lensing "
+                "magnification in the limit of weak lensing.")
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is located")
@@ -69,7 +68,6 @@ def main():
             # add columns to call signature
             pool.add_argument_column(mag_path)
             pool.add_result_column(lensed_path)
-        lensed_mags = load_photometry(table, args.lensed)
 
         # compute and store the corrected magnitudes
         pool.execute(args.threads)

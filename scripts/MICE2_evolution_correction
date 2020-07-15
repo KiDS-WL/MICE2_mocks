@@ -7,12 +7,12 @@ from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.MICE2 import evolution_correction_wrapped
 from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import load_photometry
-from mock_processing.utils import (ModificationStamp, create_column,
-                                   row_iter_progress)
+from mock_processing.utils import ModificationStamp, create_column
+
 
 parser = argparse.ArgumentParser(
-    description='Apply the evolutionary correction to the MICE2 model '
-                'magnitudes.')
+    description="Apply the evolutionary correction to the MICE2 model "
+                "magnitudes.")
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is located")
@@ -67,7 +67,6 @@ def main():
             # add columns to call signature
             pool.add_argument_column(mag_path)
             pool.add_result_column(evo_path)
-        evo_mags = load_photometry(table, args.evo)
 
         # compute and store the corrected magnitudes in parallel
         pool.execute(args.threads)
