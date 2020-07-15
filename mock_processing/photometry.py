@@ -195,7 +195,7 @@ def find_percentile(
 
     Returns
     -------
-    solution.root : float
+    r_effective : float
         The radius within which the percentile of flux is emitted.
     """
     assert(0.0 <= f_B <= 1.0)
@@ -204,4 +204,36 @@ def find_percentile(
     solution = root_scalar(
         f_R_e, fprime=f_R_e_derivative, x0=x0, method=method, maxiter=100,
         args=(R_e_Disk, R_e_Bulge, f_B, percentile))
-    return solution.root
+    r_effective = solution.root
+    return r_effective
+
+
+def find_percentile_wrapped(
+        percentile, R_e_Disk, R_e_Bulge, f_B, method="newton"):
+    """
+    Wrapper for find_percentile() to compute the effective radius for a set of
+    galaxy.
+
+    Parameters
+    ----------
+    percentile : float
+        The percentile of emitted flux from within the radius of interest.
+    R_e_Disk : array_like
+        Effective angular size of the disk component.
+    R_e_Bulge : array_like
+        Effective angular size of the bulge component.
+    f_B : array_like
+        Bulge fraction, (flux bulge / total flux).
+    method : sting
+        Root-finding method to use (from scipy.optimize.root_scalar).
+
+    Returns
+    -------
+    r_effective : array_like
+        The radius within which the percentile of flux is emitted.
+    """
+    r_effective = np.empty_like(R_e_Disk)
+    for i in range(len(r_effective)):
+        r_effective[i] = find_percentile(
+            percentile, R_e_Disk[i], R_e_Bulge[i], f_B[i], method)
+    return r_effective

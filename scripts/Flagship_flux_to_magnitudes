@@ -32,7 +32,7 @@ def main():
     logger = PipeLogger(__file__, args.datastore)
     timestamp = ModificationStamp(sys.argv)
 
-    # apply the evolution correction to the model magnitudes
+    # convert model fluxes to model magnitudes
     with open_datastore(args.datastore, logger, readonly=False) as table:
 
         pool = ParallelTable(table, logger)

@@ -1,0 +1,83 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+
+from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.parallel import ParallelTable
+from mock_processing.photometry import find_percentile_wrapped
+from mock_processing.utils import ModificationStamp, create_column
+
+
+parser = argparse.ArgumentParser(
+    description="Compute the projected effective galaxy radius from galaxy "
+                "bulge (Sersic n=4) and disk (Sersic n=1) components.")
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+parser.add_argument(
+    "--flux-frac", type=float, default=0.5,
+    help="fraction of the total flux emitted from within computed radius "
+         "(default: %(default)s)")
+parser.add_argument(
+    "--threads", type=int,
+    help="number of threads to use (default: all)")
+
+
+def main():
+
+    args = parser.parse_args()
+    logger = PipeLogger(__file__, args.datastore)
+    timestamp = ModificationStamp(sys.argv)
+
+    # apply the magnification correction to the model magnitudes
+    with open_datastore(args.datastore, logger, readonly=False) as table:
+
+        pool = ParallelTable(table, logger)
+        pool.set_worker(find_percentile_wrapped)
+
+        pool.add_argument_constant(args.flux_frac)
+
+        # find the disk component columns
+        d_size_path = "shape/disk/size"
+        if d_size_path not in table:
+            message = "disk size column not found: {:}".format(d_size_path)
+            logger.handleException(KeyError(message))
+        pool.add_argument_column(d_size_path)
+
+        # find the bulge component columns
+        b_size_path = "shape/bulge/size"
+        if b_size_path not in table:
+            message = "bulge size column not found: {:}".format(b_size_path)
+            logger.handleException(KeyError(message))
+        pool.add_argument_column(b_size_path)
+        b_fraction_path = "shape/bulge/fraction"
+        if b_fraction_path not in table:
+            message = "bulge fraction column not found: {:}".format(
+                b_fraction_path)
+            logger.handleException(KeyError(message))
+        pool.add_argument_column(b_fraction_path)
+
+        # create the output column
+        r_e_path = "shape/R_effective"
+        column = create_column(
+            table, logger, r_e_path, dtype="f4",
+            attr={
+                "description":
+                "effective radius (emitting {:.1%} of the flux".format(
+                    args.flux_frac)},
+            overwrite=True)
+        timestamp.register(column)
+        pool.add_result_column(r_e_path)
+
+        # compute and store the corrected magnitudes
+        pool.execute(args.threads)
+
+        logger.info("updating headers and closing data store")
+        timestamp.finalize()
+    # close the table and flush data
+    logger.info("computation completed for {:,d} entries".format(len(table)))
+
+
+if __name__ == "__main__":
+    main()
