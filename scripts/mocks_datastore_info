@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import argparse
+import os
 
 from memmap_table import MemmapTable
 from mock_processing import expand_path
-from mock_processing.utils import build_history
+from mock_processing.utils import build_history, bytesize_with_prefix
 
 
 parser = argparse.ArgumentParser(
@@ -12,13 +13,15 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is created")
-modes = parser.add_mutually_exclusive_group()
-modes.add_argument(
-    "-a", "--attr", action="store_true", help="show the column attributes")
-modes.add_argument(
+parser.add_argument(
     "-c", "--columns", action="store_true", help="show the column data types")
-modes.add_argument(
+parser.add_argument(
+    "-a", "--attr", action="store_true", help="show the column attributes")
+parser.add_argument(
     "-p", "--history", action="store_true", help="show the pipeline history")
+parser.add_argument(
+    "-l", "--logs", action="store_true",
+    help="show the attached pipeline logs")
 
 
 def main():
@@ -29,12 +32,24 @@ def main():
         # display the table meta data
         print("==> META DATA")
         table_str = str(table).strip(" >")
-        shape, mode, root = table_str.split("\n")[-3:]
+        shape, _, root = table_str.split("\n")[-3:]
         root = root.split(":")[1]
-        mode = mode.split(":")[1]
+        size = bytesize_with_prefix(table.nbytes)
         print("root:     {:}".format(root.strip()))
-        print("mode:     {:}".format(mode.strip()))
+        print("size:     {:}".format(size))
         print("shape:    {:}".format(shape.strip(" []")))
+
+        if args.columns:
+            # list all the column names and data types
+            header = "==> COLUMN NAME"
+            width_cols = max(len(header), max(
+                len(colname) for colname in table.colnames))
+            print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
+            for name in table.colnames:
+                colname_padded = name.ljust(width_cols)
+                line = "{:}    {:}".format(
+                    colname_padded, str(table[name].dtype))
+                print(line)
 
         if args.attr:
             # for each column print a summary of the attached attributes
@@ -60,24 +75,22 @@ def main():
                 else:
                     print("     └╴ {:}".format(str(attrs)))
 
-        elif args.columns:
-            # list all the column names and data types
-            header = "==> COLUMN NAME"
-            width_cols = max(len(header), max(
-                len(colname) for colname in table.colnames))
-            print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
-            for name in table.colnames:
-                colname_padded = name.ljust(width_cols)
-                line = "{:}    {:}".format(
-                    colname_padded, str(table[name].dtype))
-                print(line)
-
-        elif args.history:
+        if args.history:
             # list all pipeline script calls ordered by time
             print("\n==> HISTORY")
             date_width = 24
             for date, call in build_history(table).items():
                 print("{:} : {:}".format(date.ljust(date_width), call))
+
+        if args.logs:
+            # show the log file
+            print("\n==> LOGS")
+            logpath = table.root + ".log"
+            if not os.path.exists(logpath):
+                raise OSError("log file not found: {:}".format(logpath))
+            with open(logpath) as f:
+                for line in f.readlines():
+                    print(line.strip())
 
 
 if __name__ == "__main__":

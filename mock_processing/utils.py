@@ -88,6 +88,19 @@ def build_history(table, logger=None):
     return history
 
 
+def bytesize_with_prefix(nbytes, precision=2):
+    # future proof prefix list
+    units = ["YB", "ZB", "EB", "PB", "TB", "GB", "MB", "kB", "Bytes"]
+    # divide size by 1024 and increase the prefix until the number is < 1000 
+    value = float(nbytes)
+    unit = units.pop()
+    while value > 1000.0 and len(units) > 0:
+        value /= 1024.0
+        unit = units.pop()
+    string = "{:.{p}f} {:}".format(value, unit, p=precision)
+    return string
+
+
 class ColumnDictTranslator(object):
 
     def __init__(self, col_dict):

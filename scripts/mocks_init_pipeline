@@ -8,7 +8,8 @@ import toml
 from memmap_table import MemmapTable
 from mock_processing import PipeLogger, expand_path
 from mock_processing.readwrite import guess_format, supported_readers
-from mock_processing.utils import ColumnDictTranslator, ModificationStamp
+from mock_processing.utils import (ColumnDictTranslator, ModificationStamp,
+                                   bytesize_with_prefix)
 
 
 class DumpDefault(argparse.Action):
@@ -181,14 +182,10 @@ def main():
 
             logger.info("updating headers and closing data store")
             timestamp.finalize()
-            filesize = table.nbytes
+            filesize = bytesize_with_prefix(table.nbytes)
         # close the table and flush data
-        units = ["TB", "GB", "MB", "kB", "Bytes"]
-        while filesize > 1000.0 and len(units) > 1:
-            filesize /= 1024.0
-            units.pop()
-        message = "finalized data store with {:.2f} {:} ({:,d} rows)"
-        logger.info(message.format(filesize, units[-1], end))
+        message = "finalized data store with {:} ({:,d} rows)"
+        logger.info(message.format(filesize, end))
 
 
 if __name__ == "__main__":
