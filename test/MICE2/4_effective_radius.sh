@@ -8,5 +8,5 @@ else
 fi
 
 ../../scripts/mocks_effective_radius \
-    /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_deep \
-    --threads 60
+    /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
+    --threads 32

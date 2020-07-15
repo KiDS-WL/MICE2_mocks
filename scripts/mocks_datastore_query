@@ -2,7 +2,10 @@
 import argparse
 import os
 import sys
+import warnings
 from time import asctime
+
+import numpy as np
 
 from memmap_table.mathexpression import MathTerm
 from mock_processing import PipeLogger, expand_path, open_datastore
@@ -101,12 +104,16 @@ def main():
                     "name" if len(missing_cols) == 1 else "names",
                     ", ".join(sorted(missing_cols)))
                 logger.handleException(KeyError(message))
-
+            # establish the requried data type
             n_cols = len(requested_columns)
             message = "select a subset of {:d} column".format(n_cols)
             if n_cols > 1:
                 message += "s"
             logger.info(message)
+            dtype = np.dtype([
+                (colname, table.dtype[colname]) for colname in args.columns])
+        else:
+            dtype = table.dtype
 
         # automatically determine the format file format
         if args.output is None:  # write to stdout in csv format
@@ -124,7 +131,7 @@ def main():
         writer_class = supported_writers[args.format]
         try:
             writer = writer_class(
-                table.dtype, args.output, overwrite=True,
+                dtype, args.output, overwrite=True,
                 # format specific parameters
                 compression=args.compression,
                 hdf5_shuffle=args.hdf5_shuffle,
@@ -159,7 +166,9 @@ def main():
                 # apply the optional selection
                 if expression is not None:
                     try:
-                        mask = expression(chunk)  # all columns for selection
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            mask = expression(chunk)
                         selection = selection[mask]
                     except Exception as e:
                         logger.handleException(e)
