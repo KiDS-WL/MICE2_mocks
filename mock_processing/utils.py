@@ -85,10 +85,10 @@ def create_column(table, logger, path, *args, **kwargs):
         Newly created table column instance.
     """
     if path in table:
-        message = "overwriting output column: {:}"
+        message = "overwriting column: {:}"
         logger.warn(message.format(path))
     else:
-        message = "creating output column: {:}"
+        message = "creating column: {:}"
         logger.debug(message.format(path))
     column = table.add_column(path, *args, **kwargs)
     return column

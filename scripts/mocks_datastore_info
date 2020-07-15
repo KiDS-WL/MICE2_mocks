@@ -31,13 +31,11 @@ def main():
 
         # display the table meta data
         print("==> META DATA")
-        table_str = str(table).strip(" >")
-        shape, _, root = table_str.split("\n")[-3:]
-        root = root.split(":")[1]
         size = bytesize_with_prefix(table.nbytes)
-        print("root:     {:}".format(root.strip()))
+        n_cols, n_rows = table.shape
+        print("root:     {:}".format(table.root))
         print("size:     {:}".format(size))
-        print("shape:    {:}".format(shape.strip(" []")))
+        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
 
         if args.columns:
             # list all the column names and data types

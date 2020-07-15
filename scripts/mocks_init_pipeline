@@ -7,7 +7,7 @@ from memmap_table import MemmapTable
 from mock_processing import PipeLogger, expand_path
 from mock_processing.readwrite import guess_format, supported_readers
 from mock_processing.utils import (ModificationStamp, ParseColumnMap,
-                                   bytesize_with_prefix)
+                                   bytesize_with_prefix, create_column)
 
 
 class DumpDefault(argparse.Action):
@@ -135,9 +135,13 @@ def main():
                 try:
                     if dtype is None:
                         dtype = reader.dtype[colname].str
-                    column = table.add_column(path, dtype, attr={
-                        "source file": args.input,
-                        "source name": colname})
+                    #column = table.add_column(path, dtype, attr={
+                    #    "source file": args.input,
+                    #    "source name": colname})
+                    column = create_column(
+                        table, logger, path, dtype=dtype, attr={
+                            "source file": args.input,
+                            "source name": colname})
                     timestamp.register(column)
                 except KeyError as e:
                     logger.handleException(e)
@@ -175,7 +179,10 @@ def main():
                 table.resize(end)
 
             # print a preview of the table as quick check
-            sys.stdout.write(str(table) + "\n\n")
+            try:
+                sys.stdout.write(str(table) + "\n\n")
+            except:
+                logger.warn("table preview failed")
 
             logger.info("updating headers and closing data store")
             timestamp.finalize()
