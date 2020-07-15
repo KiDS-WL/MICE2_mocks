@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import sys
+
+from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.Flagship import compute_unique_index
+from mock_processing.parallel import ParallelTable
+from mock_processing.photometry import load_photometry
+from mock_processing.utils import ModificationStamp, create_column
+
+
+parser = argparse.ArgumentParser(
+    description="Compute a unique galaxy index from the halo and halo-galaxy "
+                "indices in Flagship.")
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+parser.add_argument(
+    "--idx-halo",
+    help="column with halo indices")
+parser.add_argument(
+    "--idx-gal",
+    help="column with galaxy indices, counted within the host halo")
+parser.add_argument(
+    "--idx", default="index"
+    help="column where the combined unique galaxy index is stored "
+         "(default: %(default)s)")
+parser.add_argument(
+    "--threads", type=int, default=4,
+    help="number of threads to use (default: %(default)s)")
+
+
+def main():
+
+    args = parser.parse_args()
+    logger = PipeLogger(__file__, args.datastore)
+    timestamp = ModificationStamp(sys.argv)
+
+    # apply the evolution correction to the model magnitudes
+    with open_datastore(args.datastore, logger, readonly=False) as table:
+
+        pool = ParallelTable(table, logger)
+        pool.set_worker(compute_unique_index)
+
+        # find halo index column
+        if args.idx_halo not in table:
+            message = "convergence column not found: {:}".format(args.idx_halo)
+            logger.handleException(KeyError(message))
+        pool.add_argument_column(args.idx_halo)
+
+        # find halo-galaxy index column
+        if args.idx_gal not in table:
+            message = "convergence column not found: {:}".format(args.idx_gal)
+            logger.handleException(KeyError(message))
+        pool.add_argument_column(args.idx_gal)
+
+        # create the output column
+        column = create_column(
+            table, logger, args.idx, dtype="i8", attr={
+                "description": "unique galaxy index"}, overwrite=True)
+        timestamp.register(column)
+        pool.add_result_column(args.idx)
+
+        # compute and store the corrected magnitudes in parallel
+        pool.execute(args.threads)
+
+        logger.info("updating headers and closing data store")
+        timestamp.finalize()
+    # close the table and flush data
+    logger.info("computation completed for {:,d} entries".format(len(table)))
+
+
+if __name__ == "__main__":
+    main()
