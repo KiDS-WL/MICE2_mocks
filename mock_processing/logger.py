@@ -3,6 +3,23 @@ import os
 
 
 class PipeLogger(object):
+    """
+    Wrapper for logging.Logger with predefined message format. Logs are by
+    default written to stdout (level: debug) but can additionally be copied to
+    a log file (level: info). Implements a few extensions to the default
+    logging.Logger().
+
+    Parameters:
+    -----------
+    caller_path : str
+        Path to the python script in which the logger initialized.
+    data_path : str
+        File path of the pipeline data store to construct the path of the log
+        file, i.e. /path/to/data yields a log file name /path/to/data.log. If
+        no path is provided, no logfile is written.
+    append : str
+        Whether to append events to an existing log file or overwriting it.
+    """
 
     _formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -41,6 +58,17 @@ class PipeLogger(object):
         return getattr(self.logger, attr)
     
     def handleException(self, exception, message=None):
+        """
+        Take an exception, log a critical event with the exceptions message and
+        finaly raise the exception as normal.
+
+        Parameters:
+        -----------
+        exception : Exception
+            Exception to log and raise.
+        message : str
+            Replace the description message of the exception by this text.
+        """
         if message is None:
             # get the error message from the exception
             message = ""
@@ -52,11 +80,31 @@ class PipeLogger(object):
         raise exception
 
     def setTermLevel(self, levelstr):
+        """
+        Set the logging level for the terminal (usually stdout), see
+        logging.Logger.setLevel().
+
+        Parameters:
+        -----------
+        levelstr : str
+            Filter all events with a lower priority than this one (can be
+            either of: error, warning, info, debug).
+        """
         if levelstr not in ("error", "warning", "info", "debug"):
             raise ValueError("invalid level: {:}".format(levelstr))
         self._term_handler.setLevel(getattr(logging, levelstr.upper()))
 
     def setFileLevel(self, levelstr):
+        """
+        Set the logging level for the log file (usually on disk), see
+        logging.Logger.setLevel().
+
+        Parameters:
+        -----------
+        levelstr : str
+            Filter all events with a lower priority than this one (can be
+            either of: error, warning, info, debug).
+        """
         if levelstr not in ("error", "warning", "info", "debug"):
             raise ValueError("invalid level: {:}".format(levelstr))
         if self._file_handler is not None:
