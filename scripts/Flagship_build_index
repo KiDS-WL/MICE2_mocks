@@ -23,7 +23,7 @@ parser.add_argument(
     "--idx-gal",
     help="column with galaxy indices, counted within the host halo")
 parser.add_argument(
-    "--idx", default="index"
+    "--idx", default="index",
     help="column where the combined unique galaxy index is stored "
          "(default: %(default)s)")
 parser.add_argument(

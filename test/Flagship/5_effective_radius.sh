@@ -8,5 +8,5 @@ else
 fi
 
 ../../scripts/mocks_effective_radius \
-    /net/home/fohlen12/jlvdb/DATA/Flagship_test_memmap \
+    /net/home/fohlen12/jlvdb/DATA/Flagship_KiDS \
     --threads 60
