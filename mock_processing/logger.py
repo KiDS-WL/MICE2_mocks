@@ -32,7 +32,7 @@ class PipeLogger(object):
         self.logger.setLevel(logging.DEBUG)
         # create terminal handler
         self._term_handler = logging.StreamHandler()
-        self._term_handler.setLevel(logging.DEBUG)
+        self._term_handler.setLevel(logging.INFO)
         self._term_handler.setFormatter(self._formatter)
         self.logger.addHandler(self._term_handler)
         # add an optional file handler
@@ -48,7 +48,7 @@ class PipeLogger(object):
                 filemode = "w"
                 self.info("creating new logfile: {:}".format(logpath))
             self._file_handler = logging.FileHandler(logpath, filemode)
-            self._file_handler.setLevel(logging.INFO)
+            self._file_handler.setLevel(logging.DEBUG)
             self._file_handler.setFormatter(self._formatter)
             self.logger.addHandler(self._file_handler)
         else:
