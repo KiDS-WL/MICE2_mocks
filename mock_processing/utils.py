@@ -4,6 +4,7 @@ from collections import OrderedDict
 from time import asctime, strptime
 
 import toml
+from tqdm import tqdm
 
 from memmap_table import MemmapTable
 from ._version import __version__
@@ -213,6 +214,24 @@ class ParseColumnMap(object):
                 else:
                     dtype_tuple = (value, None)
                 self._column_map[os.path.join(path, key)] = dtype_tuple
+
+
+class ProgressBar(tqdm):
+    """
+    tqdm progress bar with standardized configuration and optimized prediction
+    smoothing scale.
+
+    Parameters:
+    n_rows : int
+        The total number of rows to expect. If None, only the number of
+        processed rows and the current rate are displayed.
+    """
+
+    def __init__(self, n_rows=None):
+        super().__init__(
+            total=n_rows, leave=False, unit_scale=True, unit=" rows",
+            dynamic_ncols=True)
+        self.smoothing = 0.05
 
 
 class ModificationStamp(object):

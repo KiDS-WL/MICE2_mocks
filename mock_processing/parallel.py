@@ -6,9 +6,7 @@ from itertools import repeat
 from memmap_table.column import MemmapColumn
 from memmap_table.table import MemmapTable
 
-
-# initialize a global counter that keeps track of the number of rows processed
-_ROW_PROGRESS = None
+from .utils import ProgressBar
 
 
 class TableColumn(object):
@@ -41,8 +39,7 @@ class TableColumn(object):
 
 class ParallelIterator(object):
     """
-    Iterator over a chunk of a data table for parallel processing. Progress is
-    synchronized between threads and reported
+    Iterator over a chunk of a data table for parallel processing.
 
     Parameters:
     -----------
@@ -52,15 +49,12 @@ class ParallelIterator(object):
         Row index where the next thread takes over
     step : int
         Load and process chunks of length step.
-    total : int
-        Total number of rows in the table.
     """
 
-    def __init__(self, start, end, step, total):
+    def __init__(self, start, end, step):
         self.start = start
         self.end = end
         self.step = step
-        self.total = total
 
     def __len__(self):
         """
@@ -86,12 +80,6 @@ class ParallelIterator(object):
         for start in range(self.start, self.end, self.step):
             end = min(self.end, start + self.step)
             yield start, end
-            # update the global progress counter and refresh the command line
-            with _ROW_PROGRESS.get_lock():
-                _ROW_PROGRESS.value += end - start
-                sys.stdout.write(
-                    line_message.format(_ROW_PROGRESS.value / self.total))
-                sys.stdout.flush()
 
 
 class ParallelTable(object):
@@ -167,8 +155,7 @@ class ParallelTable(object):
         idx = stepsize
         while int(idx) <= len(self._table):
             iterator = ParallelIterator(
-                int(idx - stepsize), int(idx),
-                self.chunksize, len(self._table))
+                int(idx - stepsize), int(idx), self.chunksize)
             idx_range.append(iterator)
             idx += stepsize
         # correct rounding errors
@@ -316,35 +303,65 @@ class ParallelTable(object):
             Number of parallel threads to use (all by default).
         """
         threads = self._n_threads(n_threads)
-        # initialize the global row progress counter
-        global _ROW_PROGRESS
-        _ROW_PROGRESS = mp.Value('l', 0)
         # assign row subsets to the threads
         n_rows = len(self._table)
         index_ranges = self._thread_iterator(
             # there cannot be more threads than table rows
             n_rows if threads > n_rows else threads)
         threads = len(index_ranges)
-        # collect the call arguments for the worker
-        worker_args = list(zip(
-            index_ranges, repeat(self._worker_function),
-            repeat(self._call_args), repeat(self._call_kwargs),
-            repeat(self._return_map)))
-        # notify begin of processing
-        if self._logger is not None:
-            if threads > 1:
-                message = "processing input stream using {:d} threads ..."
-                message = message.format(threads)
-            else:
-                message = "processing input stream ..."
-            self._logger.info(message)
-        # create the worker pool
-        with mp.Pool(threads) as pool:
-            sys.stdout.write("progress: {:6.1%}\r".format(0.0))
-            sys.stdout.flush()
-            pool.map(_thread_worker, worker_args)
-        # reset row counter for future use
-        _ROW_PROGRESS = None
+        # Initialize the monitoring thread that manages a progress bar,
+        # managing the progress over all threads. The row progress is
+        # communicated through a queue.
+        mp_manager = mp.Manager()
+        progress_queue = mp_manager.Queue()
+        progress_monitor = mp.Process(
+            target=_monitor_worker, args=(progress_queue, n_rows))
+        progress_monitor.start()
+        try:
+            # collect the call arguments for the worker
+            worker_args = list(zip(
+                index_ranges, repeat(self._worker_function),
+                repeat(self._call_args), repeat(self._call_kwargs),
+                repeat(self._return_map), repeat(progress_queue)))
+            # notify begin of processing
+            if self._logger is not None:
+                if threads > 1:
+                    message = "processing input stream using {:d} threads ..."
+                    message = message.format(threads)
+                else:
+                    message = "processing input stream ..."
+                self._logger.info(message)
+            # create the worker pool
+            with mp.Pool(threads) as pool:
+                pool.map(_thread_worker, worker_args)
+            # send the sentinel object that stops the monitor process from
+            # reading from the queue 
+            progress_queue.put(None)
+        finally:
+            progress_monitor.join()
+
+
+def _monitor_worker(progress_queue, table_rows):
+    """
+    Worker function of the progress monitoring thread. Initializes a progress
+    bar which reports the progress percentage, processing rate and an estimated
+    time remaining. Each worker progress sends the number of rows processed to
+    a queue from which this monitor reads to update the progress bar. Once the
+    processing is completed, the master thread sends None to the queue which
+    triggers shutting down the progress monitor.
+
+    Parameters:
+    -----------
+    progress_queue : multiprocessing.Queue
+        Queue from which the number of complete rows are read.
+    table_rows : int
+        Number of total rows to be processed.
+    """
+    pbar = ProgressBar(table_rows)
+    # read from the queue until we append None in the main process
+    for n_rows in iter(progress_queue.get, None):
+        pbar.update(n_rows)
+    pbar.close()
 
 
 def _thread_worker(wrapper_args):
@@ -364,7 +381,7 @@ def _thread_worker(wrapper_args):
         list : the column(s) where the function return values are stored
     """
     # unpack all input arguments
-    iterator, function, args, kwargs, results = wrapper_args
+    iterator, function, args, kwargs, results, progress_queue = wrapper_args
     # open the data sets from the table are needed
     # process the positional arguments
     args_expanded = []
@@ -406,3 +423,5 @@ def _thread_worker(wrapper_args):
         else:
             for result, values in zip(results_expanded, return_values):
                 result[start:end] = values
+        # send number of rows processed successfully to the monitoring thread
+        progress_queue.put(end - start)

@@ -7,7 +7,8 @@ from memmap_table import MemmapTable
 from mock_processing import PipeLogger, expand_path
 from mock_processing.readwrite import guess_format, supported_readers
 from mock_processing.utils import (ModificationStamp, ParseColumnMap,
-                                   bytesize_with_prefix, create_column)
+                                   ProgressBar, bytesize_with_prefix,
+                                   create_column)
 
 
 class DumpDefault(argparse.Action):
@@ -149,10 +150,15 @@ def main():
 
             # copy the data
             logger.info("processing input stream ...")
-            start = 0
-            row_message = "current row: {:,d}".format(start)
-            sys.stdout.write(row_message + "\r")
+            pbar_kwargs = {
+                "leave": False, "unit_scale": True, "unit": "row",
+                "dynamic_ncols": True}
+            if hasattr(reader, "_guess_length"):
+                pbar = ProgressBar()
+            else:
+                pbar = ProgressBar(n_rows=len(reader))
             # read the data in chunks and copy them to the data store
+            start = 0
             for chunk in reader:
                 end = reader.current_row  # index where reading will continue
                 # map column by column onto the output table
@@ -166,11 +172,10 @@ def main():
                         logger.debug("allocated {:,d} additional rows".format(
                             len(chunk)))
                     table[path][start:end] = chunk[colname]
-                row_message = "current row: {:,d}".format(end)
-                sys.stdout.write(row_message + "\r")
-                sys.stdout.flush()
                 # update the current row index
+                pbar.update(end - start)
                 start = end
+            pbar.close()
 
             # if using the CSV reader: truncate any allocated, unused rows
             if len(table) > end:
@@ -179,9 +184,7 @@ def main():
             # print a preview of the table as quick check
             try:
                 preview = str(table)
-                # clear the "current row ..." line
-                sys.stdout.write(" " * len(row_message) + "\n")
-                sys.stdout.write(preview + "\n\n")
+                sys.stdout.write("\n" + preview + "\n\n")
             except Exception:
                 logger.warn("table preview failed")
 
