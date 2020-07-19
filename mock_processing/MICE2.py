@@ -38,5 +38,6 @@ def evolution_correction_wrapped(redshift, *mags):
     mags_evo : tuple of array_like
         Series of evolution corrected model magnitudes (matching input order).
     """
-    mags_evo = tuple(evolution_correction(redshift, mag) for mag in mags)
+    d_mag = -0.8 * (np.arctan(1.5 * redshift) - 0.1489)
+    mags_evo = tuple(mag + d_mag for mag in mags)
     return mags_evo

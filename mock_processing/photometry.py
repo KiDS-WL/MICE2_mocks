@@ -85,8 +85,9 @@ def magnification_correction_wrapped(kappa, *mags):
         Series of magnification corrected model magnitudes (matching input
         order).
     """
-    mags_magnified = tuple(
-        magnification_correction(kappa, mag) for mag in mags)
+    d_mu = 2.0 * kappa
+    d_mag = -2.5 * np.log10(1 + d_mu)
+    mags_magnified = tuple(mag + d_mag for mag in mags)
     return mags_magnified
 
 
@@ -232,10 +233,10 @@ def find_percentile_wrapped(
     r_effective : array_like
         The radius within which the percentile of flux is emitted.
     """
-    r_effective = np.empty_like(R_e_Disk)
-    for i in range(len(r_effective)):
-        r_effective[i] = find_percentile(
-            percentile, R_e_Disk[i], R_e_Bulge[i], f_B[i], method)
+    find_percentile_vectorized = np.vectorize(
+        find_percentile, R_e_Disk.dtype.kind)
+    r_effective = find_percentile_vectorized(
+        percentile, R_e_Disk, R_e_Bulge, f_B, method)
     return r_effective
 
 
