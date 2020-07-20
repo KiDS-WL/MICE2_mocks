@@ -64,6 +64,31 @@ def open_datastore(path, logger, readonly=True):
     return table
 
 
+def require_column(table, logger, path, col_desc=None):
+    """
+    Convenience functions to check whether a column exists in a given table. If
+    not, a KeyError is raised and logged.
+
+    Parameters:
+    -----------
+    table : memmap_table.MemmapTable
+        Opened data storage interface.
+    logger : python logger instance
+        Logger instance that logs events.
+    path : str
+        Column name (path relative to the table root).
+    col_desc : str
+        Descriptive name of the column used to format the error message.
+    """
+    if path not in table:
+        if col_desc is None:
+            col_desc = ""
+        else:
+            col_desc = col_desc + " "
+        message = "{:}column not found: {:}".format(col_desc, path)
+        logger.handleException(KeyError(message))
+
+
 def create_column(table, logger, path, *args, **kwargs):
     """
     Wrapper to create a new column in an existing MemmapTable.
@@ -222,6 +247,7 @@ class ProgressBar(tqdm):
     smoothing scale.
 
     Parameters:
+    -----------
     n_rows : int
         The total number of rows to expect. If None, only the number of
         processed rows and the current rate are displayed.
