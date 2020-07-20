@@ -46,8 +46,8 @@ def main():
 
         # create the output columns
         for key, flux_path in model_fluxes.items():
-            # create new output columns
             mag_path = os.path.join(args.mag, key)
+            # create new output columns
             column = create_column(
                 table, logger, mag_path, dtype=table[flux_path].dtype.str,
                 attr={

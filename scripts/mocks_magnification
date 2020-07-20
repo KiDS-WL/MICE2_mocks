@@ -7,7 +7,8 @@ from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import (load_photometry,
                                         magnification_correction_wrapped)
-from mock_processing.utils import ModificationStamp, create_column
+from mock_processing.utils import (ModificationStamp, create_column,
+                                   require_column)
 
 
 parser = argparse.ArgumentParser(
@@ -42,9 +43,7 @@ def main():
 
         # find convergence column
         kappa_path = "lensing/kappa"
-        if kappa_path not in table:
-            message = "convergence column not found: {:}".format(kappa_path)
-            logger.handleException(KeyError(message))
+        require_column(table, logger, kappa_path, "convergence")
         pool.add_argument_column(kappa_path)
 
         # find all magnitude columns
@@ -55,8 +54,8 @@ def main():
 
         # create the output columns
         for key, mag_path in input_mags.items():
-            # create new output columns
             lensed_path = os.path.join(args.lensed, key)
+            # create new output columns
             column = create_column(
                 table, logger, lensed_path, dtype=table[mag_path].dtype.str,
                 attr={

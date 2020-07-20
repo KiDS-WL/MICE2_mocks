@@ -7,7 +7,8 @@ from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.Flagship import compute_unique_index
 from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import load_photometry
-from mock_processing.utils import ModificationStamp, create_column
+from mock_processing.utils import (ModificationStamp, create_column,
+                                   require_column)
 
 
 parser = argparse.ArgumentParser(
@@ -43,23 +44,20 @@ def main():
         pool = ParallelTable(table, logger)
         pool.set_worker(compute_unique_index)
 
-        # find halo index column
-        if args.idx_halo not in table:
-            message = "convergence column not found: {:}".format(args.idx_halo)
-            logger.handleException(KeyError(message))
-        pool.add_argument_column(args.idx_halo)
-
-        # find halo-galaxy index column
-        if args.idx_gal not in table:
-            message = "convergence column not found: {:}".format(args.idx_gal)
-            logger.handleException(KeyError(message))
-        pool.add_argument_column(args.idx_gal)
+        # find halo index and halo-galaxy index columns
+        input_columns = (
+            ("halo index", args.idx_halo),
+            ("galaxy index", args.idx_gal))
+        for col_desc, path in input_columns:
+            require_column(table, logger, path, col_desc)
+            pool.add_argument_column(path)
 
         # create the output column
         column = create_column(
             table, logger, args.idx, dtype="i8", attr={
                 "description": "unique galaxy index"}, overwrite=True)
         timestamp.register(column)
+        # add column to call signature
         pool.add_result_column(args.idx)
 
         # compute and store the corrected magnitudes in parallel

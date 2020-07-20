@@ -7,7 +7,8 @@ from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.MICE2 import evolution_correction_wrapped
 from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import load_photometry
-from mock_processing.utils import ModificationStamp, create_column
+from mock_processing.utils import (ModificationStamp, create_column,
+                                   require_column)
 
 
 parser = argparse.ArgumentParser(
@@ -42,9 +43,7 @@ def main():
 
         # find redshift column
         z_path = "position/z/true"
-        if z_path not in table:
-            message = "true redshift column not found: {:}".format(z_path)
-            logger.handleException(KeyError(message))
+        require_column(table, logger, z_path, "true redshift")
         pool.add_argument_column(z_path)
 
         # find all magnitude columns
@@ -55,8 +54,8 @@ def main():
 
         # create the output columns
         for key, mag_path in model_mags.items():
-            # create new output columns
             evo_path = os.path.join(args.evo, key)
+            # create new output columns
             column = create_column(
                 table, logger, evo_path, dtype=table[mag_path].dtype.str,
                 attr={

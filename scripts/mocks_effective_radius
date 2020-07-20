@@ -6,7 +6,8 @@ import sys
 from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import find_percentile_wrapped
-from mock_processing.utils import ModificationStamp, create_column
+from mock_processing.utils import (ModificationStamp, create_column,
+                                   require_column)
 
 
 parser = argparse.ArgumentParser(
@@ -38,28 +39,17 @@ def main():
 
         pool.add_argument_constant(args.flux_frac)
 
-        # find the disk component columns
-        d_size_path = "shape/disk/size"
-        if d_size_path not in table:
-            message = "disk size column not found: {:}".format(d_size_path)
-            logger.handleException(KeyError(message))
-        pool.add_argument_column(d_size_path)
+        # find disk and bulge component columns
+        input_columns = (
+            ("disk size", "shape/disk/size"),
+            ("bulge size", "shape/bulge/size"),
+            ("bulge fraction", "shape/bulge/fraction"))
+        for col_desc, path in input_columns:
+            require_column(table, logger, path, col_desc)
+            pool.add_argument_column(path)
 
-        # find the bulge component columns
-        b_size_path = "shape/bulge/size"
-        if b_size_path not in table:
-            message = "bulge size column not found: {:}".format(b_size_path)
-            logger.handleException(KeyError(message))
-        pool.add_argument_column(b_size_path)
-        b_fraction_path = "shape/bulge/fraction"
-        if b_fraction_path not in table:
-            message = "bulge fraction column not found: {:}".format(
-                b_fraction_path)
-            logger.handleException(KeyError(message))
-        pool.add_argument_column(b_fraction_path)
-
-        # create the output column
         r_e_path = "shape/R_effective"
+        # create the output column
         column = create_column(
             table, logger, r_e_path, dtype="f4",
             attr={
@@ -68,6 +58,7 @@ def main():
                     args.flux_frac)},
             overwrite=True)
         timestamp.register(column)
+        # add column to call signature
         pool.add_result_column(r_e_path)
 
         # compute and store the corrected magnitudes
