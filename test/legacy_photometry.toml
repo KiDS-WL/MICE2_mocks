@@ -1,0 +1,32 @@
+limit_sigma = 1.5
+SN_detect = 1.0
+SN_floor = 0.2
+
+[limits]
+u = 25.5
+g = 26.3
+r = 26.2
+i = 24.9
+Z = 24.85
+Y = 24.1
+J = 24.2
+H = 23.3
+Ks = 23.2
+
+[PSF]
+u = 1.0
+g = 0.9
+r = 0.7
+i = 1.0
+Z = 1.0
+Y = 1.0
+J = 0.9
+H = 1.0
+Ks = 0.9
+
+[GAaP]
+aper_min = 0.7
+aper_max = 2.0
+
+[SExtractor]
+phot_autoparams = 2.5

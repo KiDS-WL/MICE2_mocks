@@ -54,7 +54,7 @@ def main():
             table, logger, r_e_path, dtype="f4",
             attr={
                 "description":
-                "effective radius (emitting {:.1%} of the flux".format(
+                "effective radius (emitting {:.1%} of the flux)".format(
                     args.flux_frac)},
             overwrite=True)
         timestamp.register(column)
