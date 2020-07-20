@@ -181,9 +181,8 @@ class ParallelTable(object):
     def set_worker(self, function):
         """
         Set a worker function that is applied in threads to chunks of the. The
-        signature must be provided, i.e. the arguments must be assigned column
-        names or constant parameters and the return values must map back to
-        column names as well.
+        signature must be provided through the add_* methods. Setting the
+        worker deletes resets the signature.
 
         Parameters:
         -----------
@@ -193,6 +192,10 @@ class ParallelTable(object):
         if not callable(function):
             raise TypeError("worker function is not callable")
         self._worker_function = function
+        # reset the signature mappings
+        self._call_args = None
+        self._call_kwargs = None
+        self._return_map = None
 
     def _add_argument(self, arg, keyword):
         """
