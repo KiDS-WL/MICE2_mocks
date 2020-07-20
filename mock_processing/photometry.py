@@ -240,14 +240,28 @@ def find_percentile_wrapped(
     return r_effective
 
 
-def SExtractor_apertures(
-        r_effective, ba_ratio, psf_sigma, mag_auto_scale=2.5):
+def FWHM_to_sigma(FWHM):
+    # sigma = FWHM / (2.0 * sqrt(2.0 * log(2.0)))
+    return FWHM / 2.3548200450309493
+
+
+def apertures_SExtractor(
+        r_effective, ba_ratio, psf_sigma, mag_auto_scale=2.5, legacy=False):
     # compute the intrinsic galaxy major and minor axes and area
-    galaxy_major = r_effective * mag_auto_scale
+    if legacy:  # mag auto like behaviour was implemented incorrectly before
+        galaxy_major = r_effective * mag_auto_scale
+    else:
+        galaxy_major = r_effective
     galaxy_minor = galaxy_major * ba_ratio
     # "convolution" with the PSF
-    aperture_major = np.sqrt(galaxy_major**2 + psf_sigma**2)
-    aperture_minor = np.sqrt(galaxy_minor**2 + psf_sigma**2)
+    if legacy:
+        aperture_major = np.sqrt(galaxy_major**2 + psf_sigma**2)
+        aperture_minor = np.sqrt(galaxy_minor**2 + psf_sigma**2)
+    else:  # mag auto: scaling the Petrosian radius by 2.5 (default)
+        aperture_major = mag_auto_scale * np.sqrt(
+            galaxy_major**2 + psf_sigma**2)
+        aperture_minor = mag_auto_scale * np.sqrt(
+            galaxy_minor**2 + psf_sigma**2)
     aperture_ba = aperture_minor / aperture_major
     # compute the aperture area
     aperture_area = np.pi * aperture_major * aperture_minor
@@ -257,7 +271,7 @@ def SExtractor_apertures(
     return aperture_major, aperture_minor, snr_correction
 
 
-def SExtractor_apertures(
+def apertures_GAaP(
         r_effective, ba_ratio, psf_sigma, aper_min, aper_max):
     # compute the intrinsic galaxy major and minor axes and area
     galaxy_major = r_effective
@@ -265,7 +279,7 @@ def SExtractor_apertures(
     # "convolution" with the PSF
     aperture_major = np.sqrt(galaxy_major**2 + psf_sigma**2)
     aperture_minor = np.sqrt(galaxy_minor**2 + psf_sigma**2)
-    # GAaP aperture size limits
+    # GAaP aperture must be betweem aper_min and aper_max
     gaap_major = np.minimum(
         np.sqrt(aperture_major**2 + aper_min**2), aper_max)
     gaap_minor = np.minimum(
@@ -279,45 +293,38 @@ def SExtractor_apertures(
     return gaap_major, gaap_minor, snr_correction
 
 
-def _photometry_realisation_depreciated(
-        mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction=1.0):
-    sigma_to_mag = 2.5 * np.log10(sigma)
-    # compute the S/N of the model magnitudes
-    snr = 10 ** (-0.4 * (mags - mag_lim - sigma_to_mag))  # simplifiy!
-    snr *= snr_correction
-    snr = np.maximum(snr, snr_floor)
-    mag_err = 2.5 / np.log(10.0) / snr
-    # compute the magnitde realisation and S/N
-    real = np.random.normal(mag, mag_err, size=len(mag))
-    snr = 10 ** (-0.4 * (real - mag_lim - sigma_to_mag))  # simplifiy!
-    snr *= snr_correction
-    snr = np.maximum(snr, snr_floor)
+def photometry_realisation(
+        mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction=1.0,
+        legacy=False):
+    if legacy:
+        # compute the S/N of the model magnitudes
+        snr = 10 ** (-0.4 * (mags - mag_lim)) * sigma
+        mag_err = 2.5 / np.log(10.0) / snr
+    else:
+        # compute model fluxes and the S/N
+        flux = 10 ** (-0.4 * mag)
+        flux_err = 10 ** (-0.4 * mag_lim)
+        snr = flux / flux_err * sigma
+    snr *= snr_correction  # aperture correction
+    snr = np.maximum(snr, snr_floor)  # clip SN
+    if legacy:
+        # compute the magnitde realisation and S/N
+        real = np.random.normal(mag, mag_err, size=len(mag))
+        snr = 10 ** (-0.4 * (real - mag_lim)) * sigma
+    else:
+        # compute the flux realisation and S/N
+        flux = np.random.normal(  # approximation for Poisson error
+            flux, flux_err, size=len(flux))
+        # TODO: is this needed? flux = np.maximum(flux, 1e-3 * flux_err)
+        # convert fluxes to magnitudes
+        real = -2.5 * np.log10(flux)
+        snr = flux / flux_err * sigma
+    snr *= snr_correction  # aperture correction
+    snr = np.maximum(snr, snr_floor)  # clip SN
+    # compute the magnitude error of the realisation
     real_err = 2.5 / np.log(10.0) / snr
     # set magnitudes of undetected objects and mag < 5.0 to 99.0
     not_detected = (snr < snr_detect) | (snr < 5.0)
     real[not_detected] = 99.0
-    real_err[not_detected] = mag_lim - sigma_to_mag
+    real_err[not_detected] = mag_lim - 2.5 * np.log10(sigma)
     return real, real_err
-
-
-def photometry_realisation(
-        mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction=1.0):
-    # compute model fluxes and the S/N
-    flux = 10 ** (-0.4 * mags)
-    flux_err = 10 ** (-0.4 * mag_lim)  # universal
-    snr = flux / flux_err * sigma
-    snr *= snr_correction  # aperture correction
-    # compute the magnitde realisation and S/N
-    flux = np.random.normal(  # approximation for Poisson error
-        flux, flux_err, size=len(flux))
-    flux = np.maximum(flux, 1e-3 * flux_err)
-    snr = flux / flux_err * sigma
-    snr *= snr_correction  # aperture correction
-    snr = np.maximum(snr, snr_floor)  # clip SN
-    # compute the magnitude realisation
-    mag = -2.5 * np.log10(flux)
-    mag_err = 2.5 / np.log(10.0) / snr  # universal
-    # set magnitudes of undetected objects and mag < 5.0 to 99.0
-    not_detected = (snr < snr_detect) | (snr < 5.0)
-    mag[not_detected] = 99.0
-    mag_err[not_detected] = mag_lim - 2.5 * np.log10(sigma)

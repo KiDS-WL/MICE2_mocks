@@ -11,13 +11,6 @@ from h5table.memmap import BinaryTable
 from MICE2_mocks import pipeline
 
 
-def root_function(args):
-    """
-    Wrapper for multiprocessing
-    """
-    return find_percentile(*args)
-
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
