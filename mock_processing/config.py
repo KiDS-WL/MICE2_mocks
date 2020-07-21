@@ -81,10 +81,24 @@ class DumpColumnMap(argparse.Action):
         parser.exit()
 
 
+def load_column_map(path, logger):
+    message = "reading column mapping file: {:}".format(path)
+    logger.info(message)
+    try:
+        col_map_dict = ParseColumnMap(path).get
+    except OSError as e:
+        message = "column mapping file not found: {:}".format(path)
+        logger.handleException(e, message)
+    except Exception as e:
+        message = "malformed column mapping file"
+        logger.handleException(e, message)
+    return col_map_dict
+
+
 class ParsePhotometryConfig(object):
 
     _general_params = {
-        "SN_detect", "SN_floor", "limit_sigma", "limits", "PSF"}
+        "SN_detect", "SN_floor", "limit_sigma", "legacy", "limits", "PSF"}
     # NOTE: register paramters for new algorithms here
     _algorithm_params = {
         "SExtractor": {"phot_autoparams"},
@@ -149,3 +163,17 @@ class DumpPhotometryConfig(argparse.Action):
             for line in f.readlines():
                 sys.stdout.write(line)
         parser.exit()
+
+
+def load_photometry_config(path, logger):
+    message = "reading photometry configuration file: {:}".format(path)
+    logger.info(message)
+    try:
+        config = ParsePhotometryConfig(path)
+    except OSError as e:
+        message = "column mapping file not found: {:}".format(path)
+        logger.handleException(e, message)
+    except Exception as e:
+        message = "malformed column mapping file"
+        logger.handleException(e, message)
+    return config

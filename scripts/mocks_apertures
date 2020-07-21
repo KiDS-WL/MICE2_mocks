@@ -1,0 +1,116 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+
+from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.parallel import ParallelTable
+from mock_processing.photometry import (load_photometry,
+                                        apertures_GAaP_wrapped,
+                                        apertures_SExtractor_wrapped)
+from mock_processing.config import DumpPhotometryConfig, load_photometry_config
+from mock_processing.utils import (ModificationStamp, create_column,
+                                   require_column)
+
+
+parser = argparse.ArgumentParser(
+    description="Create a photometric apertures based on the intrisic galaxy "
+                "and PSF sizes.",
+    add_help=False)
+parser.register("action", "dump", DumpPhotometryConfig)
+
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+
+parser.add_argument(
+    "-m", "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
+    help="photometry algorthim to apply (default: %(default)s)")
+parser.add_argument(
+    "-c", "--config", type=expand_path, required=True,
+    help="parameter file in TOML format that defines the properties of the "
+         "photometry realisation and the method parameters (use --dump to "
+         "obtain a default parameter file)")
+parser.add_argument(
+    "--threads", type=int, default=4,
+    help="number of threads to use (default: %(default)s)")
+
+help_group = parser.add_argument_group("help and documentation")
+help_group.add_argument(
+    "-h", "--help", action="help",
+    help="show this help message and exit")
+help_group.add_argument(
+    "--dump", nargs=0, action="dump",
+    help="dump a default columns file to stdout and exit")
+
+
+def main():
+
+    args = parser.parse_args()
+    logger = PipeLogger(__file__, args.datastore)
+    timestamp = ModificationStamp(sys.argv)
+
+    # check the configuration file
+    config = load_photometry_config(args.config, logger)
+
+    # apply the magnification correction to the model magnitudes
+    with open_datastore(args.datastore, logger, readonly=False) as table:
+
+        pool = ParallelTable(table, logger)
+        
+        # initialize the aperture computation
+        if args.method == "SExtractor":
+            pool.set_worker(apertures_SExtractor_wrapped)
+        else:
+            pool.set_worker(apertures_GAaP_wrapped)
+
+        # find effective radius and b/a ratio columns
+        input_columns = (
+            ("effective radius", "shape/R_effective"),
+            ("b/a ratio", "shape/axis_ratio"))
+        for col_desc, path in input_columns:
+            require_column(table, logger, path, col_desc)
+            pool.add_argument_column(path)
+
+        # set the remaining arguments
+        pool.add_argument_constant(tuple(
+            config.PSF[key] for key in config.filter_names))
+        # method specific arguments
+        if args.method == "SExtractor":
+            pool.add_argument_constant(
+                config.SExtractor["phot_autoparams"])
+            pool.add_argument_constant(config.legacy, keyword="legacy")
+        else:
+            pool.add_argument_constant(config.GAaP["aper_min"])
+            pool.add_argument_constant(config.GAaP["aper_max"])
+
+        output_columns = (  # for each filter three output columns are required
+            ("apertures/{:}/major_axis/{:}",
+                "{:} aperture major axis (PSF size: {:.2f}\")"),
+            ("apertures/{:}/minor_axis/{:}",
+                "{:} aperture minor axis (PSF size: {:.2f}\")"),
+            ("apertures/{:}/snr_correction/{:}",
+                "{:} aperture S/N correction (PSF size: {:.2f}\")"))
+        # make the output columns for each filter
+        for key in config.filter_names:
+            for out_path, desc in output_columns:
+                column = create_column(
+                    table, logger, out_path.format(args.method, key),
+                    dtype="f4", overwrite=True, attr={
+                        "description":
+                        desc.format(args.method, config.PSF[key])})
+                timestamp.register(column)
+                # collect all new columns as output targets
+                pool.add_result_column(out_path.format(args.method, key))
+
+        # compute and store the apertures
+        pool.execute(args.threads)
+
+        logger.info("updating headers and closing data store")
+        timestamp.finalize()
+    # close the table and flush data
+    logger.info("computation completed for {:,d} entries".format(len(table)))
+
+
+if __name__ == "__main__":
+    main()

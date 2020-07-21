@@ -5,7 +5,7 @@ import sys
 
 from memmap_table import MemmapTable
 from mock_processing import PipeLogger, expand_path
-from mock_processing.config import DumpColumnMap, ParseColumnMap
+from mock_processing.config import DumpColumnMap, load_column_map
 from mock_processing.readwrite import guess_format, supported_readers
 from mock_processing.utils import (ModificationStamp, ProgressBar,
                                    bytesize_with_prefix, create_column)
@@ -55,16 +55,7 @@ def main():
     timestamp = ModificationStamp(sys.argv)
 
     # check the columns file
-    message = "reading column mapping file: {:}".format(args.columns)
-    logger.info(message)
-    try:
-        col_map_dict = ParseColumnMap(args.columns).get
-    except OSError as e:
-        message = "column mapping file not found: {:}".format(args.columns)
-        logger.handleException(e, message)
-    except Exception as e:
-        message = "malformed column mapping file"
-        logger.handleException(e, message)
+    col_map_dict = load_column_map(args.columns, logger)
 
     # automatically determine the input file format
     if args.format is None:

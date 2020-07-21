@@ -280,6 +280,18 @@ def apertures_SExtractor(
     return aperture_major, aperture_minor, snr_correction
 
 
+def apertures_SExtractor_wrapped(
+        r_effective, ba_ratio, psf_sigmas, mag_auto_scale, legacy=False):
+    results = []
+    # iterate through the psf sizes of all filters
+    for psf_sigma in psf_sigmas:
+        result = apertures_SExtractor(
+            r_effective, ba_ratio, psf_sigma, mag_auto_scale, legacy)
+        # collect the results
+        results.extend(result)
+    return results
+
+
 def apertures_GAaP(
         r_effective, ba_ratio, psf_sigma, aper_min, aper_max):
     # compute the intrinsic galaxy major and minor axes and area
@@ -302,8 +314,20 @@ def apertures_GAaP(
     return gaap_major, gaap_minor, snr_correction
 
 
+def apertures_GAaP_wrapped(
+        r_effective, ba_ratio, psf_sigmas, aper_min, aper_max):
+    results = []
+    # iterate through the psf sizes of all filters
+    for psf_sigma in psf_sigmas:
+        result = apertures_GAaP(
+        r_effective, ba_ratio, psf_sigmas, aper_min, aper_max)
+        # collect the results
+        results.extend(result)
+    return results
+
+
 def photometry_realisation(
-        mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction=1.0,
+        mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction,
         legacy=False):
     if legacy:  # computation in magnitudes
         # compute the S/N of the model magnitudes
@@ -315,7 +339,7 @@ def photometry_realisation(
         flux_err = 10 ** (-0.4 * mag_lim)
         snr = flux / flux_err * sigma
     snr *= snr_correction  # aperture correction
-    snr = np.maximum(snr, snr_floor)  # clip SN
+    snr = np.maximum(snr, snr_floor)  # clip S/N
     if legacy:  # magnitudes draw incorrectly with Gaussian errors
         # compute the magnitde realisation and S/N
         real = np.random.normal(mag, mag_err, size=len(mag))
@@ -329,7 +353,7 @@ def photometry_realisation(
         real = -2.5 * np.log10(flux)
         snr = flux / flux_err * sigma
     snr *= snr_correction  # aperture correction
-    snr = np.maximum(snr, snr_floor)  # clip SN
+    snr = np.maximum(snr, snr_floor)  # clip S/N
     # compute the magnitude error of the realisation
     real_err = 2.5 / np.log(10.0) / snr
     # set magnitudes of undetected objects and mag < 5.0 to 99.0
@@ -337,3 +361,18 @@ def photometry_realisation(
     real[not_detected] = 99.0
     real_err[not_detected] = mag_lim - 2.5 * np.log10(sigma)
     return real, real_err
+
+
+def photometry_realisation_wrapped(
+        sigma, snr_floor, snr_detect, *mag_mag_lim_snr_correction,
+        legacy=False):
+    results = []
+    # iterate through the listing of magnitude columns, magnitude limits and
+    # S/N correction factors for all filters
+    for idx in range(0, len(mag_mag_lim_snr_correction), 3):
+        mag, mag_lim, snr_correction = mag_mag_lim_snr_correction[idx:idx+3]
+        result = photometry_realisation(
+            mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction, legacy)
+        # collect the results
+        results.extend(result)
+    return results
