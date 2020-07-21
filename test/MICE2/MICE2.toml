@@ -24,12 +24,11 @@ Rc = "lephare_rc_true"
 Ic = "lephare_ic_true"
 
 [shape]
+"axis_ratio" = "bulge_axis_ratio"
 "bulge/angle" = "bulge_angle"
-"bulge/axis_ratio" = "bulge_axis_ratio"
 "bulge/fraction" = "bulge_fraction"
 "bulge/size" = "bulge_length"
 "disk/angle" = "disk_angle"
-"disk/axis_ratio" = "disk_axis_ratio"
 "disk/size" = "disk_length"
 
 [lensing]
