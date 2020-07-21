@@ -38,9 +38,8 @@ def load_photometry(table, photometry_path, filter_selection=None):
         root, key = os.path.split(column)
         if root == photometry_path:
             # check if the matching filter is excluded
-            raise NotImplementedError("mag errors cannot be selected properly")
             if filter_selection is not None:
-                if key not in filter_selection:
+                if key.strip("_err") not in filter_selection:
                     continue
             # check that this filter does not exist yet, which could happen if
             # a path is selected that contains multiple photometries
@@ -329,7 +328,6 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
     if config.legacy:  # computation in magnitudes
         # compute the S/N of the model magnitudes
         snr = 10 ** (-0.4 * (mag - mag_lim)) * config.limit_sigma
-        mag_err = 2.5 / np.log(10.0) / snr
     else:  # computation in fluxes
         # compute model fluxes and the S/N
         flux = 10 ** (-0.4 * mag)
@@ -338,6 +336,7 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
     snr *= snr_correction  # aperture correction
     snr = np.maximum(snr, config.SN_floor)  # clip S/N
     if config.legacy:  # magnitudes draw incorrectly with Gaussian errors
+        mag_err = 2.5 / np.log(10.0) / snr
         # compute the magnitde realisation and S/N
         real = np.random.normal(mag, mag_err, size=len(mag))
         snr = 10 ** (-0.4 * (real - mag_lim)) * config.limit_sigma
@@ -345,16 +344,16 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
         # compute the flux realisation and S/N
         flux = np.random.normal(  # approximation for Poisson error
             flux, flux_err, size=len(flux))
-        # TODO: is this needed? flux = np.maximum(flux, 1e-3 * flux_err)
+        flux = np.maximum(flux, 1e-3 * flux_err)  # prevent flux <= 0.0
+        snr = flux / flux_err * config.limit_sigma
         # convert fluxes to magnitudes
         real = -2.5 * np.log10(flux)
-        snr = flux / flux_err * config.limit_sigma
     snr *= snr_correction  # aperture correction
     snr = np.maximum(snr, config.SN_floor)  # clip S/N
     # compute the magnitude error of the realisation
     real_err = 2.5 / np.log(10.0) / snr
     # set magnitudes of undetected objects and mag < 5.0 to 99.0
-    not_detected = (snr < config.SN_detect) | (snr < 5.0)
+    not_detected = (snr < config.SN_detect) | (real < 5.0)
     real[not_detected] = config.no_detect_value
     real_err[not_detected] = mag_lim - 2.5 * np.log10(config.limit_sigma)
     return real, real_err
