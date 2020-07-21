@@ -254,16 +254,17 @@ def FWHM_to_sigma(FWHM):
     return FWHM / 2.3548200450309493
 
 
-def apertures_SExtractor(
-        r_effective, ba_ratio, psf_sigma, mag_auto_scale, legacy=False):
+def apertures_SExtractor(config, filter_key, r_effective, ba_ratio):
     # compute the intrinsic galaxy major and minor axes and area
-    if legacy:  # mag auto like behaviour was implemented incorrectly before
+    psf_sigma = config.PSF[filter_key]
+    mag_auto_scale = config.SExtractor["phot_autoparams"]
+    if config.legacy:
         galaxy_major = r_effective * mag_auto_scale
     else:
         galaxy_major = r_effective
     galaxy_minor = galaxy_major * ba_ratio
     # "convolution" with the PSF
-    if legacy:
+    if config.legacy:
         aperture_major = np.sqrt(galaxy_major**2 + psf_sigma**2)
         aperture_minor = np.sqrt(galaxy_minor**2 + psf_sigma**2)
     else:  # mag auto: scaling the Petrosian radius by 2.5 (default)
@@ -280,20 +281,10 @@ def apertures_SExtractor(
     return aperture_major, aperture_minor, snr_correction
 
 
-def apertures_SExtractor_wrapped(
-        r_effective, ba_ratio, psf_sigmas, mag_auto_scale, legacy=False):
-    results = []
-    # iterate through the psf sizes of all filters
-    for psf_sigma in psf_sigmas:
-        result = apertures_SExtractor(
-            r_effective, ba_ratio, psf_sigma, mag_auto_scale, legacy)
-        # collect the results
-        results.extend(result)
-    return results
-
-
-def apertures_GAaP(
-        r_effective, ba_ratio, psf_sigma, aper_min, aper_max):
+def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
+    psf_sigma = config.PSF[filter_key]
+    aper_min = config.GAaP["aper_min"]
+    aper_max = config.GAaP["aper_max"]
     # compute the intrinsic galaxy major and minor axes and area
     galaxy_major = r_effective
     galaxy_minor = galaxy_major * ba_ratio
@@ -314,36 +305,41 @@ def apertures_GAaP(
     return gaap_major, gaap_minor, snr_correction
 
 
-def apertures_GAaP_wrapped(
-        r_effective, ba_ratio, psf_sigmas, aper_min, aper_max):
+def apertures_wrapped(method, config, r_effective, ba_ratio):
+    # select the photometry method
+    if method == "GAaP":
+        aperture_func = apertures_GAaP
+    elif method == "SExtractor":
+        aperture_func = apertures_SExtractor
+    else:
+        raise ValueError("invalid photometry method: {:}".format(method))
     results = []
     # iterate through the psf sizes of all filters
-    for psf_sigma in psf_sigmas:
-        result = apertures_GAaP(
-        r_effective, ba_ratio, psf_sigmas, aper_min, aper_max)
+    for filter_key in config.filter_names:
+        result = aperture_func(
+            config, filter_key, r_effective, ba_ratio)
         # collect the results
         results.extend(result)
     return results
 
 
-def photometry_realisation(
-        mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction,
-        legacy=False):
-    if legacy:  # computation in magnitudes
+def photometry_realisation(config, filter_key, mag, snr_correction):
+    mag_lim = config.limits[filter_key]
+    if config.legacy:  # computation in magnitudes
         # compute the S/N of the model magnitudes
-        snr = 10 ** (-0.4 * (mag - mag_lim)) * sigma
+        snr = 10 ** (-0.4 * (mag - mag_lim)) * config.limit_sigma
         mag_err = 2.5 / np.log(10.0) / snr
     else:  # computation in fluxes
         # compute model fluxes and the S/N
         flux = 10 ** (-0.4 * mag)
         flux_err = 10 ** (-0.4 * mag_lim)
-        snr = flux / flux_err * sigma
+        snr = flux / flux_err * config.limit_sigma
     snr *= snr_correction  # aperture correction
-    snr = np.maximum(snr, snr_floor)  # clip S/N
-    if legacy:  # magnitudes draw incorrectly with Gaussian errors
+    snr = np.maximum(snr, config.SN_floor)  # clip S/N
+    if config.legacy:  # magnitudes draw incorrectly with Gaussian errors
         # compute the magnitde realisation and S/N
         real = np.random.normal(mag, mag_err, size=len(mag))
-        snr = 10 ** (-0.4 * (real - mag_lim)) * sigma
+        snr = 10 ** (-0.4 * (real - mag_lim)) * config.limit_sigma
     else:  # magnitudes constructed from fluxes with Gaussian errors
         # compute the flux realisation and S/N
         flux = np.random.normal(  # approximation for Poisson error
@@ -351,28 +347,28 @@ def photometry_realisation(
         # TODO: is this needed? flux = np.maximum(flux, 1e-3 * flux_err)
         # convert fluxes to magnitudes
         real = -2.5 * np.log10(flux)
-        snr = flux / flux_err * sigma
+        snr = flux / flux_err * config.limit_sigma
     snr *= snr_correction  # aperture correction
-    snr = np.maximum(snr, snr_floor)  # clip S/N
+    snr = np.maximum(snr, config.SN_floor)  # clip S/N
     # compute the magnitude error of the realisation
     real_err = 2.5 / np.log(10.0) / snr
     # set magnitudes of undetected objects and mag < 5.0 to 99.0
-    not_detected = (snr < snr_detect) | (snr < 5.0)
+    not_detected = (snr < config.SN_detect) | (snr < 5.0)
     real[not_detected] = 99.0
-    real_err[not_detected] = mag_lim - 2.5 * np.log10(sigma)
+    real_err[not_detected] = mag_lim - 2.5 * np.log10(config.limit_sigma)
     return real, real_err
 
 
-def photometry_realisation_wrapped(
-        sigma, snr_floor, snr_detect, *mag_mag_lim_snr_correction,
-        legacy=False):
-    results = []
+def photometry_realisation_wrapped(config, *mag_mag_lim_snr_correction):
     # iterate through the listing of magnitude columns, magnitude limits and
     # S/N correction factors for all filters
-    for idx in range(0, len(mag_mag_lim_snr_correction), 3):
-        mag, mag_lim, snr_correction = mag_mag_lim_snr_correction[idx:idx+3]
+    results = []
+    for idx, filter_key in enumerate(config.filter_names):
+        # unpack the arguments
+        mag, mag_lim, snr_correction = \
+            mag_mag_lim_snr_correction[3*idx:3*(idx+1)]
         result = photometry_realisation(
-            mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction, legacy)
+            config, filter_key, mag, snr_correction)
         # collect the results
         results.extend(result)
     return results

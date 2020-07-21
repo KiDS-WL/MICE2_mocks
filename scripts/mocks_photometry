@@ -87,11 +87,7 @@ def main():
         
         # initialize the photometry generation
         pool.set_worker(photometry_realisation_wrapped)
-
-        # set the static arguments
-        pool.add_argument_constant(config.limit_sigma)
-        pool.add_argument_constant(config.SN_floor)
-        pool.add_argument_constant(config.SN_detect)
+        pool.add_argument_constant(config)
 
         # collect the filter-specific arguments
         for key in config.filter_names:
@@ -111,7 +107,6 @@ def main():
                     table, logger, mag_path,
                     "{:}-band S/N correction".format(key))
                 pool.add_argument_column(snr_path)
-        pool.add_argument_constant(config.legacy, keyword="legacy")
 
         output_columns = (  # for each filter three output columns are required
             ("{:}/{:}",
