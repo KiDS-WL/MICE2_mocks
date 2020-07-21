@@ -48,7 +48,7 @@ def main():
 
         # find all magnitude columns
         try:
-            model_mags = load_photometry(table, args.mag)
+            model_mags, _ = load_photometry(table, args.mag)
         except KeyError as e:
             logger.handleException(e)
 

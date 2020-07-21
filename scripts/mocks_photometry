@@ -1,0 +1,198 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+
+from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.parallel import ParallelTable
+from mock_processing.photometry import (load_photometry,
+                                        apertures_GAaP, apertures_SExtractor,
+                                        photometry_realisation)
+from mock_processing.config import DumpPhotometryConfig, ParsePhotometryConfig
+from mock_processing.utils import (ModificationStamp, create_column,
+                                   require_column)
+
+
+parser = argparse.ArgumentParser(
+    description="Create a photometry realisation given observational "
+                "statistics like mean limiting magnitude and PSF size for a "
+                "given photometric method.",
+    add_help=False)
+parser.register("action", "dump", DumpPhotometryConfig)
+
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+parser.add_argument(
+    "--mag",
+    help="sub-directory within data store which contains the input magnitudes")
+parser.add_argument(
+    "--real",
+    help="sub-directory within data store where the photometry realisations "
+         "are stored")
+parser.add_argument(
+    "-m", "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
+    help="photometry algorthim to apply (default: %(default)s)")
+parser.add_argument(
+    "-c", "--config", type=expand_path, required=True,
+    help="parameter file in TOML format that defines the properties of the "
+         "photometry realisation and the method parameters (use --dump to "
+         "obtain a default parameter file)")
+parser.add_argument(
+    "--legacy", action="store_true",
+    help="run in legacy mode, i.e. using the implementation of "
+         "van den Busch et al. (2020)")
+parser.add_argument(
+    "--seed", default="sapling",
+    help="string to seed the random generator (default: %(default)s)")
+parser.add_argument(
+    "--threads", type=int, default=8,
+    help="number of threads to use (default: %(default)s)")
+
+help_group = parser.add_argument_group("help and documentation")
+help_group.add_argument(
+    "-h", "--help", action="help",
+    help="show this help message and exit")
+help_group.add_argument(
+    "--dump", nargs=0, action="dump",
+    help="dump a default columns file to stdout and exit")
+
+
+def main():
+
+    args = parser.parse_args()
+    logger = PipeLogger(__file__, args.datastore)
+    timestamp = ModificationStamp(sys.argv)
+
+    # apply the magnification correction to the model magnitudes
+    with open_datastore(args.datastore, logger, readonly=False) as table:
+
+        # check the configuration file
+        message = "reading photometry configuration file: {:}".format(
+            args.config)
+        logger.info(message)
+        try:
+            config = ParsePhotometryConfig(args.config)
+        except OSError as e:
+            message = "column mapping file not found: {:}".format(args.config)
+            logger.handleException(e, message)
+        except Exception as e:
+            message = "malformed column mapping file"
+            logger.handleException(e, message)
+
+        # find all magnitude columns
+        try:
+            input_mags, _ = load_photometry(table, args.mag)
+        except KeyError as e:
+            logger.handleException(e)
+
+        pool = ParallelTable(table, logger)
+
+        # select the required magnitude columns
+        available = set(input_mags.keys())
+        missing = set(config.filter_names) - available
+        if len(missing) > 0:
+            message = "requested filters not found: {:}".format(
+                ", ".join(missing))
+            logger.handleException(KeyError(message))
+        n_filters = len(config.filter_names)
+        
+        # compute the apertures
+        for n, key in enumerate(config.filter_names, 1):
+
+            # (re-)initialize the aperture computation
+            if args.method == "SExtractor":
+                pool.set_worker(apertures_SExtractor)
+            else:
+                pool.set_worker(apertures_GAaP)
+
+            # find effective radius and b/a ratio columns
+            input_columns = (
+                ("effective radius", "shape/R_effective"),
+                ("b/a ratio", "shape/axis_ratio"))
+            for col_desc, path in input_columns:
+                require_column(table, logger, path, col_desc)
+                pool.add_argument_column(path)
+
+            # set the remaining arguments
+            if args.method == "SExtractor":
+                # add the constant parameters
+                pool.add_argument_constant(config.PSF[key])
+                pool.add_argument_constant(
+                    config.SExtractor["phot_autoparams"])
+                pool.add_argument_constant(args.legacy)
+            else:
+                # add the constant parameters
+                pool.add_argument_constant(config.PSF[key])
+                pool.add_argument_constant(config.GAaP["aper_min"])
+                pool.add_argument_constant(config.GAaP["aper_max"])
+
+            # make the output columns
+            output_columns = [
+                ("apertures/{:}/major_axis/{:}".format(args.method, key),
+                 "{:} aperture major axis (PSF size: {:.2f}\")"),
+                ("apertures/{:}/minor_axis/{:}".format(args.method, key),
+                 "{:} aperture minor axis (PSF size: {:.2f}\")"),
+                ("apertures/{:}/snr_correction/{:}".format(args.method, key),
+                 "{:} aperture S/N correction (PSF size: {:.2f}\")")]
+            for out_path, desc in output_columns:
+                column = create_column(
+                    table, logger, out_path, dtype="f4", overwrite=True,
+                    attr={
+                        "description":
+                        desc.format(args.method, config.PSF[key])})
+                timestamp.register(column)
+                pool.add_result_column(out_path)
+
+            # compute and store the corrected magnitudes
+            pool.execute(
+                args.threads, "{:}-band ({:d}/{:d})".format(key, n, n_filters))
+
+        # compute the photometry realisations
+        for n, key in enumerate(config.filter_names, 1):
+
+            # (re-)initialize the aperture computation
+            pool.set_worker(photometry_realisation)
+
+            # find input magnitude column
+            mag_path = input_mags[key]
+            require_column(table, logger, mag_path, "{:}-band".format(key))
+            pool.add_argument_column(mag_path)
+
+            # set the remaining arguments
+            pool.add_argument_constant(config.limits[key])
+            pool.add_argument_constant(config.limit_sigma)
+            pool.add_argument_constant(config.SN_floor)
+            pool.add_argument_constant(config.SN_detect)
+            pool.add_argument_column(
+                "apertures/{:}/snr_correction/{:}".format(args.method, key))
+            pool.add_argument_constant(args.legacy)
+
+            # make the output columns
+            output_columns = [
+                ("{:}/{:}".format(args.real, key),
+                 "{:} photometry realisation (from {:}, limit: {:.2f} mag)"),
+                ("{:}/{:}_err".format(args.real, key),
+                 "{:} photometric error (from {:}, limit: {:.2f} mag)")]
+            for out_path, desc in output_columns:
+                column = create_column(
+                    table, logger, out_path, dtype=table[mag_path].dtype.str,
+                    overwrite=True, attr={
+                        "description": desc.format(
+                            args.method, mag_path, config.limits[key])})
+                timestamp.register(column)
+                pool.add_result_column(out_path)
+
+            # compute and store the corrected magnitudes
+            pool.execute(
+                args.threads, seed=args.seed,
+                prefix="{:}-band ({:d}/{:d})".format(key, n, n_filters))
+
+        logger.info("updating headers and closing data store")
+        timestamp.finalize()
+    # close the table and flush data
+    logger.info("computation completed for {:,d} entries".format(len(table)))
+
+
+if __name__ == "__main__":
+    main()

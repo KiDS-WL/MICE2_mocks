@@ -1,5 +1,7 @@
 import os
 
+import toml
+
 import numpy as np
 from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
@@ -23,10 +25,14 @@ def load_photometry(table, photometry_path, filter_selection=None):
     Returns:
     --------
     photometry_columns : dict
-        Dictionary of columns with photometric data, labeled with the filter
-        name.
+        Dictionary of column names with photometric data, labeled with the
+        filter name.
+    error_columns : dict
+        Dictionary of column names with photometric errors, labeled with the
+        filter name.
     """
     photometry_columns = {}
+    error_columns = {}
     for column in table.colnames:
         # match the root name of each column against the photometry path
         root, key = os.path.split(column)
@@ -40,10 +46,13 @@ def load_photometry(table, photometry_path, filter_selection=None):
             if key in photometry_columns:
                 message = "found multiple matches for filter: {:}".format(key)
                 raise ValueError(message)
-            photometry_columns[key] = column
+            if key.endswith("_err"):
+                error_columns[key] = column
+            else:
+                photometry_columns[key] = column
     if len(photometry_columns) == 0:
         raise KeyError("photometry not found: {:}".format(photometry_path))
-    return photometry_columns
+    return photometry_columns, error_columns
 
 
 def magnification_correction(kappa, mag):
@@ -246,7 +255,7 @@ def FWHM_to_sigma(FWHM):
 
 
 def apertures_SExtractor(
-        r_effective, ba_ratio, psf_sigma, mag_auto_scale=2.5, legacy=False):
+        r_effective, ba_ratio, psf_sigma, mag_auto_scale, legacy=False):
     # compute the intrinsic galaxy major and minor axes and area
     if legacy:  # mag auto like behaviour was implemented incorrectly before
         galaxy_major = r_effective * mag_auto_scale
@@ -296,22 +305,22 @@ def apertures_GAaP(
 def photometry_realisation(
         mag, mag_lim, sigma, snr_floor, snr_detect, snr_correction=1.0,
         legacy=False):
-    if legacy:
+    if legacy:  # computation in magnitudes
         # compute the S/N of the model magnitudes
-        snr = 10 ** (-0.4 * (mags - mag_lim)) * sigma
+        snr = 10 ** (-0.4 * (mag - mag_lim)) * sigma
         mag_err = 2.5 / np.log(10.0) / snr
-    else:
+    else:  # computation in fluxes
         # compute model fluxes and the S/N
         flux = 10 ** (-0.4 * mag)
         flux_err = 10 ** (-0.4 * mag_lim)
         snr = flux / flux_err * sigma
     snr *= snr_correction  # aperture correction
     snr = np.maximum(snr, snr_floor)  # clip SN
-    if legacy:
+    if legacy:  # magnitudes draw incorrectly with Gaussian errors
         # compute the magnitde realisation and S/N
         real = np.random.normal(mag, mag_err, size=len(mag))
         snr = 10 ** (-0.4 * (real - mag_lim)) * sigma
-    else:
+    else:  # magnitudes constructed from fluxes with Gaussian errors
         # compute the flux realisation and S/N
         flux = np.random.normal(  # approximation for Poisson error
             flux, flux_err, size=len(flux))
