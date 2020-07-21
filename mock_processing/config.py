@@ -115,6 +115,13 @@ class ParsePhotometryConfig(object):
             "aper_max"}}
 
     def __init__(self, config_path):
+        default_path = os.path.join(_DEFAULT_CONFIG_PATH, "photometry.toml")
+        # load default to get missing values in user input
+        self._parse_config(default_path)
+        self._parse_config(config_path)
+        self.filter_names = sorted(self.PSF.keys())
+
+    def _parse_config(self, config_path):
         with open(config_path) as f:
             config = toml.load(f)
         # determine all allowed top-level parameter names
@@ -141,7 +148,6 @@ class ParsePhotometryConfig(object):
             message = "some filter(s) do not provide pairs of magnitude limit "
             message += "and PSF size"
             raise KeyError(message)
-        self.filter_names = sorted(self.PSF.keys())
 
     def _parse_algorithm(self, name, params):
         for key, value in params.items():

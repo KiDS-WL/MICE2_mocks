@@ -1,5 +1,6 @@
 legacy = false
 limit_sigma = 1.0
+no_detect_value = 99.0
 SN_detect = 1.0
 SN_floor = 0.2
 
