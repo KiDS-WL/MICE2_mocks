@@ -38,6 +38,7 @@ def load_photometry(table, photometry_path, filter_selection=None):
         root, key = os.path.split(column)
         if root == photometry_path:
             # check if the matching filter is excluded
+            raise NotImplementedError("mag errors cannot be selected properly")
             if filter_selection is not None:
                 if key not in filter_selection:
                     continue
@@ -354,7 +355,7 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
     real_err = 2.5 / np.log(10.0) / snr
     # set magnitudes of undetected objects and mag < 5.0 to 99.0
     not_detected = (snr < config.SN_detect) | (snr < 5.0)
-    real[not_detected] = 99.0
+    real[not_detected] = config.no_detect_value
     real_err[not_detected] = mag_lim - 2.5 * np.log10(config.limit_sigma)
     return real, real_err
 

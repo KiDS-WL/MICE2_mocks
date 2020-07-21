@@ -98,11 +98,21 @@ def load_column_map(path, logger):
 class ParsePhotometryConfig(object):
 
     _general_params = {
-        "SN_detect", "SN_floor", "limit_sigma", "legacy", "limits", "PSF"}
+        "legacy",
+        "limit_sigma",
+        "no_detect_value",
+        "SN_detect",
+        "SN_floor",
+        # these are filter specific (dictionary) values:
+        "limits",
+        "PSF"}
     # NOTE: register paramters for new algorithms here
     _algorithm_params = {
-        "SExtractor": {"phot_autoparams"},
-        "GAaP": {"aper_min", "aper_max"}}
+        "SExtractor": {
+            "phot_autoparams"},
+        "GAaP": {
+            "aper_min",
+            "aper_max"}}
 
     def __init__(self, config_path):
         with open(config_path) as f:
