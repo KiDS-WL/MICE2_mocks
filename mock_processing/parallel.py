@@ -2,6 +2,9 @@ import multiprocessing as mp
 import os
 import sys
 from itertools import repeat
+from hashlib import md5
+
+import numpy as np
 
 from memmap_table.column import MemmapColumn
 from memmap_table.table import MemmapTable
@@ -295,7 +298,7 @@ class ParallelTable(object):
         sign = "{:}({:}) -> {:}".format(function.__name__, args, result)
         return sign
 
-    def execute(self, n_threads=None):
+    def execute(self, n_threads=None, prefix=None, seed=None):
         """
         Apply the worker function on the input table using a given number of
         threads and writing the results to the output columns.
@@ -304,6 +307,12 @@ class ParallelTable(object):
         -----------
         n_threads : int
             Number of parallel threads to use (all by default).
+        prefix : str
+            Prefix for the progressbar (optional).
+        seed : str
+            String to seed the random generator (optional). Each thread appends
+            it's index to assure that the random state in each thread is
+            differnt.
         """
         threads = self._n_threads(n_threads)
         # assign row subsets to the threads
@@ -318,14 +327,18 @@ class ParallelTable(object):
         mp_manager = mp.Manager()
         progress_queue = mp_manager.Queue()
         progress_monitor = mp.Process(
-            target=_monitor_worker, args=(progress_queue, n_rows))
+            target=_monitor_worker, args=(progress_queue, n_rows, prefix))
         progress_monitor.start()
         try:
             # collect the call arguments for the worker
+            if seed is None:
+                seeds = [None] * threads
+            else:
+                seeds = ["{}{:d}".format(seed, i) for i in range(threads)]
             worker_args = list(zip(
                 index_ranges, repeat(self._worker_function),
                 repeat(self._call_args), repeat(self._call_kwargs),
-                repeat(self._return_map), repeat(progress_queue)))
+                repeat(self._return_map), repeat(progress_queue), seeds))
             # notify begin of processing
             if self._logger is not None:
                 if threads > 1:
@@ -344,7 +357,7 @@ class ParallelTable(object):
             progress_monitor.join()
 
 
-def _monitor_worker(progress_queue, table_rows):
+def _monitor_worker(progress_queue, table_rows, prefix):
     """
     Worker function of the progress monitoring thread. Initializes a progress
     bar which reports the progress percentage, processing rate and an estimated
@@ -359,15 +372,17 @@ def _monitor_worker(progress_queue, table_rows):
         Queue from which the number of complete rows are read.
     table_rows : int
         Number of total rows to be processed.
+    prefix : str
+        Prefix for the progressbar (optional).
     """
-    pbar = ProgressBar(table_rows)
+    pbar = ProgressBar(table_rows, prefix)
     # read from the queue until we append None in the main process
     for n_rows in iter(progress_queue.get, None):
         pbar.update(n_rows)
     pbar.close()
 
 
-def _thread_worker(wrapper_args):
+def _thread_worker(wrap_args):
     """
     Wrapper around the worker function that is running in each thread spawned
     by ParallelTable. Based on the signature registered in ParallelTable, data
@@ -376,15 +391,21 @@ def _thread_worker(wrapper_args):
 
     Parameters:
     -----------
-    wrapper_args : list
+    wrap_args : list
         ParallelIterator : manages the chunkwise loading of data
         callable : the worker function
         list : the positional function arguments
         dict : the function keyword arguments
         list : the column(s) where the function return values are stored
+        seed : seed used to initialize the random state
     """
     # unpack all input arguments
-    iterator, function, args, kwargs, results, progress_queue = wrapper_args
+    iterator, function, args, kwargs, results, progress_queue, seed = wrap_args
+    # seed the random state if needed
+    if seed is not None:
+        hasher = md5(bytes(seed, "utf-8"))
+        hashval = bytes(hasher.hexdigest(), "utf-8")
+        np.random.seed(np.frombuffer(hashval, dtype=np.uint32))
     # open the data sets from the table are needed
     # process the positional arguments
     args_expanded = []

@@ -3,7 +3,6 @@ import sys
 from collections import OrderedDict
 from time import asctime, strptime
 
-import toml
 from tqdm import tqdm
 
 from memmap_table import MemmapTable
@@ -23,7 +22,7 @@ def expand_path(path):
     Returns:
     --------
     path : str
-        Normalized path with substitutions applied.
+        Normalized absolute path with substitutions applied.
     """
     # check for tilde
     if path.startswith("~" + os.sep):
@@ -33,6 +32,7 @@ def expand_path(path):
         path = os.path.join(home_root, path[1:])
     path = os.path.expandvars(path)
     path = os.path.normpath(path)
+    path = os.path.abspath(path)
     return path
 
 
@@ -188,59 +188,6 @@ def bytesize_with_prefix(nbytes, precision=2):
     return string
 
 
-class ParseColumnMap(object):
-    """
-    Parse a column mapping file used to convert the column names of the input
-    files into paths within the data store.
-
-    Parameters:
-    -----------
-    path : str
-        Column map file path
-    """
-
-    def __init__(self, path):
-        # unpack the potentially nested dictionary by converting nested keys
-        # into file system paths
-        self._column_map = dict()
-        # parse the TOML file and parse it as dictionary
-        with open(path) as f:
-            self._traverse_dict(toml.load(f))
-
-    @property
-    def get(self):
-        """
-        Get the column mapping data store path -> input file column.
-        """
-        return self._column_map
-
-    def _traverse_dict(self, subdict, path=""):
-        """
-        Iterate the directory and insert the values in the column map by
-        concatenating nested keywords like file system paths.
-
-        Parameters:
-        -----------
-        subdict : dict
-            Dictionary that maps the input file column names.
-        path : str
-            path under which the dictionary items are registered in the global
-            column map.
-        """
-        for key, value in subdict.items():
-            if type(key) is not str:
-                message = "invalid type {:} for set name"
-                raise TypeError(message.format(str(type(value))))
-            if type(value) is dict:
-                self._traverse_dict(value, os.path.join(path, key))
-            else:
-                if type(value) is list:
-                    dtype_tuple = tuple(value)
-                else:
-                    dtype_tuple = (value, None)
-                self._column_map[os.path.join(path, key)] = dtype_tuple
-
-
 class ProgressBar(tqdm):
     """
     tqdm progress bar with standardized configuration and optimized prediction
@@ -251,12 +198,14 @@ class ProgressBar(tqdm):
     n_rows : int
         The total number of rows to expect. If None, only the number of
         processed rows and the current rate are displayed.
+    prefix : str
+        Prefix for the progressbar (optional).
     """
 
-    def __init__(self, n_rows=None):
+    def __init__(self, n_rows=None, prefix=None):
         super().__init__(
             total=n_rows, leave=False, unit_scale=True, unit=" rows",
-            dynamic_ncols=True)
+            dynamic_ncols=True, desc=prefix)
         self.smoothing = 0.05
 
 

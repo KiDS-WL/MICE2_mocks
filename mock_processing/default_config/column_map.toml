@@ -1,0 +1,53 @@
+# This file is required for mocks_init_pipeline and establishes a mapping
+# between column or data set names of the input file and the pipeline data
+# store:
+#     path/in/data/store = "input column name"
+# Data types may be specified using the following syntax:
+#     path/in/data/store = ["input column name", "type code"]
+# where "type code" is a valid python numpy data type identifier (e.g. "bool"
+# for boolean values, "i8" for 64 bit integeres or "f4" for 32-bit floating
+# point values).
+
+index = ""              # recommended name for a unique galaxy index
+
+[position]
+# true galaxy position
+"ra/true" = ""
+"dec/true" = ""
+"z/true" = ""           # required for MICE2 evolution correction
+# observed galaxy position (including redshift space distortions and lensing)
+"ra/obs" = ""
+"dec/obs" = ""
+"z/obs" = ""
+
+["mags/model"]          # This section name is only recommended, if fluxes are
+                        # provided it could be flux/model.
+# photometric filters are identified by keywords (here g, r, i) which are used
+# throughout the pipeline as unique identification.
+r = ""                  # add as many as there are filter required for the
+                        # sample selection functions
+
+[shape]
+"axis_ratio" = ""       # b/a axis ratio, required for aperture computation
+"bulge/fraction" = ""   # bulge to total luminosity ratio, required for two-
+                        # component effective radius
+"bulge/size" = ""       # projected bulge major axis size in arcsec, required
+                        # for two-component effective radius
+"disk/size" = ""        # projected disk major axis size in arcsec, required
+                        # for two-component effective radius
+
+[lensing]
+gamma1 = ""
+gamma2 = ""
+kappa = ""  # convergence, required to apply flux magnification
+
+[environ]
+is_central = ["", "bool"]
+                        # boolean flag indicating whether a galaxy is the
+                        # centeral galaxy of a given halo, required by SDSS QSO
+                        # spec-z selection
+log_M_halo = ""         # logarithmic halo mass, required by SDSS QSO spec-z
+                        # selection
+log_M_stellar = ""      # logarithmic stellar mass, required by SDSS QSO spec-z
+                        # selection
+n_sattelites = ""
