@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 
+if [ "$1" == "test" ]
+then
+    suffix="_test"
+else
+    suffix=""
+fi
+
 ../../scripts/mocks_init_pipeline \
-    /net/home/fohlen12/jlvdb/DATA/Flagship_KiDS \
-    -i /net/home/fohlen12/jlvdb/DATA/Flagship_downloads/Flagship_subset.fits \
+    /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
+    -i /net/home/fohlen13/jlvdb/DATA/Flagship_downloads/Flagship_v1-8-4_deep_ugrizYJHKs_shapes_halos_WL${suffix}.fits \
     -c Flagship.toml \
     --purge
