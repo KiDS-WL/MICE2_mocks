@@ -11,7 +11,8 @@ from memmap_table.mathexpression import MathTerm
 from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.readwrite import (BUFFERSIZE, guess_format,
                                        supported_writers)
-from mock_processing.utils import ModificationStamp, ProgressBar, build_history
+from mock_processing.utils import (ModificationStamp, ProgressBar,
+                                   build_history, bytesize_with_prefix)
 
 
 parser = argparse.ArgumentParser(
@@ -64,6 +65,7 @@ def main():
 
         # parse the math expression
         if args.query is not None:
+            selection_columns = set()
             # Since the symbol / can be used as column name and division
             # symbol, we need to temporarily substitute the symbol before
             # parsing the expression.
@@ -75,6 +77,7 @@ def main():
                     substitue = colname.replace("/", substitute)
                     while colname in args.query:
                         args.query = args.query.replace(colname, substitue)
+                        selection_columns.add(colname)
                 expression = MathTerm.from_string(args.query)
                 # recursively undo the substitution
                 expression._substitute_characters(substitute, "/")
@@ -86,8 +89,11 @@ def main():
                 logger.handleException(SyntaxError(message))
             except Exception as e:
                 logger.handleException(e)
+            # create a sub-table with the data needed for the selection
+            selection_table = table[sorted(selection_columns)]
         else:
             expression = None
+            selection_columns = None
 
         # check the requested columns
         if args.columns is not None:
@@ -113,8 +119,11 @@ def main():
             logger.info(message)
             dtype = np.dtype([
                 (colname, table.dtype[colname]) for colname in args.columns])
+            # create a table view with only the requested columns
+            request_table = table[args.columns]
         else:
             dtype = table.dtype
+            request_table = table
 
         # automatically determine the format file format
         if args.output is None:  # write to stdout in csv format
@@ -144,8 +153,8 @@ def main():
 
             # determine an automatic buffer/chunk size
             chunksize = BUFFERSIZE // table.itemsize
-            message = "buffer size: {:.2f} MB ({:,d} rows)".format(
-                writer.buffersize / 1024**2, writer.bufferlength)
+            message = "buffer size: {:} ({:,d} rows)".format(
+                bytesize_with_prefix(writer.buffersize), writer.bufferlength)
             logger.debug(message)
 
             # query the table and write to the output fie
@@ -155,22 +164,19 @@ def main():
             n_select = 0
             for start, end in table.row_iter(chunksize):
 
-                # read the chunk and optionally select a subset of columns
-                chunk = table[start:end]
-                if args.columns is None:
-                    selection = chunk
-                else:
-                    selection = chunk[args.columns]
-
-                # apply the optional selection
+                # apply optional selection, read only minimal amount of data
                 if expression is not None:
+                    chunk = selection_table[start:end]
                     try:
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore")
                             mask = expression(chunk)
-                        selection = selection[mask]
                     except Exception as e:
                         logger.handleException(e)
+                    selection = request_table[start:end][mask]
+                # read all entries in the range without applying the selection
+                else:
+                    selection = request_table[start:end]
 
                 # write to target
                 writer.write_chunk(selection.to_records())
