@@ -31,23 +31,28 @@ def load_photometry(table, photometry_path, filter_selection=None):
         Dictionary of column names with photometric errors, labeled with the
         filter name.
     """
+    if filter_selection is None:
+        filter_selection = []
     photometry_columns = {}
     error_columns = {}
     for column in table.colnames:
         # match the root name of each column against the photometry path
-        root, key = os.path.split(column)
+        root, key_str = os.path.split(column)
+        if key_str.endswith("_err"):
+            key = key_str[:-4]
+        else:
+            key = key_str
         if root == photometry_path:
             # check if the matching filter is excluded
-            if filter_selection is not None:
-                if key.strip("_err") not in filter_selection:
-                    continue
+            if key in filter_selection:
+                continue
             # check that this filter does not exist yet, which could happen if
             # a path is selected that contains multiple photometries
-            if key in photometry_columns:
+            if key_str.endswith("_err"):
+                error_columns[key] = column
+            elif key in photometry_columns:
                 message = "found multiple matches for filter: {:}".format(key)
                 raise ValueError(message)
-            if key.endswith("_err"):
-                error_columns[key] = column
             else:
                 photometry_columns[key] = column
     if len(photometry_columns) == 0:
@@ -282,7 +287,7 @@ def apertures_SExtractor(config, filter_key, r_effective, ba_ratio):
 
 
 def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
-    psf_sigma = config.PSF[filter_key]
+    psf_sigma = FWHM_to_sigma(config.PSF[filter_key])
     aper_min = config.GAaP["aper_min"]
     aper_max = config.GAaP["aper_max"]
     # compute the intrinsic galaxy major and minor axes and area
