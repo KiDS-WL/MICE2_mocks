@@ -101,14 +101,15 @@ class ParallelTable(object):
 
     _chunksize = 16384  # default in current MemmapTable implementation
     _worker_function = None
-    _call_args = None
-    _call_kwargs = None
-    _return_map = None
+    _parse_thread_id = False
 
     def __init__(self, table, logger=None):
         # keep the table reference for later use
         self._table = table
         self._logger = logger
+        self._call_args = []
+        self._call_kwargs = {}
+        self._return_map = []
 
     @staticmethod
     def _n_threads(n_threads=None):
@@ -185,7 +186,7 @@ class ParallelTable(object):
         """
         Set a worker function that is applied in threads to chunks of the. The
         signature must be provided through the add_* methods. Setting the
-        worker deletes resets the signature.
+        worker resets the signature.
 
         Parameters:
         -----------
@@ -196,9 +197,9 @@ class ParallelTable(object):
             raise TypeError("worker function is not callable")
         self._worker_function = function
         # reset the signature mappings
-        self._call_args = None
-        self._call_kwargs = None
-        self._return_map = None
+        self._call_args = []
+        self._call_kwargs = {}
+        self._return_map = []
 
     def _add_argument(self, arg, keyword):
         """
@@ -211,11 +212,6 @@ class ParallelTable(object):
         keyword : str or None
             If keyword is a string, add the argument value as keyword argument.
         """
-        # initialize the argument collection
-        if self._call_args is None:
-            self._call_args = []
-        if self._call_kwargs is None:
-            self._call_kwargs = {}
         # assign as positional or keyword argument
         if keyword is None:
             self._call_args.append(arg)
@@ -257,6 +253,23 @@ class ParallelTable(object):
         """
         self._add_argument(value, keyword)
 
+    @property
+    def parse_thread_id(self):
+        """
+        Whether the thread ID is parsed as keyword argument "threadID" to the
+        worker function.
+        """
+        return self._parse_thread_id
+
+    @parse_thread_id.setter
+    def parse_thread_id(self, boolean):
+        """
+        Set True or False to control, whether the thread ID is parsed as
+        keyword argument "threadID" to the worker function.
+        """
+        assert(type(boolean) is bool)
+        self._parse_thread_id = boolean
+
     def add_result_column(self, colname):
         """
         Add an output table column that receives results from the worker
@@ -268,8 +281,6 @@ class ParallelTable(object):
         colname : str
             Name of the column which provides the values for this argument.
         """
-        if self._return_map is None:
-            self._return_map = []
         # check the input data type and whether the table contains all output
         # columns
         if type(colname) is not str:
@@ -293,7 +304,10 @@ class ParallelTable(object):
             for val, key in self._call_kwargs.items())
         args = ", ".join(args)
         # collect the return values
-        result = ", ".join(str(res) for res in self._return_map)
+        if len(self._return_map) == 0:
+            result = "None"
+        else:
+            result = ", ".join(str(res) for res in self._return_map)
         # build the signature string
         sign = "{:}({:}) -> {:}".format(function.__name__, args, result)
         return sign
@@ -330,6 +344,11 @@ class ParallelTable(object):
             target=_monitor_worker, args=(progress_queue, n_rows, prefix))
         progress_monitor.start()
         try:
+            # at the threadID keyword if requested
+            if self._parse_thread_id:
+                threadIDs = range(threads)
+            else:
+                threadIDs = [None] * threads
             # collect the call arguments for the worker
             if seed is None:
                 seeds = [None] * threads
@@ -338,7 +357,8 @@ class ParallelTable(object):
             worker_args = list(zip(
                 index_ranges, repeat(self._worker_function),
                 repeat(self._call_args), repeat(self._call_kwargs),
-                repeat(self._return_map), repeat(progress_queue), seeds))
+                repeat(self._return_map), repeat(progress_queue), seeds,
+                threadIDs))
             # notify begin of processing
             if self._logger is not None:
                 if threads > 1:
@@ -398,9 +418,12 @@ def _thread_worker(wrap_args):
         dict : the function keyword arguments
         list : the column(s) where the function return values are stored
         seed : seed used to initialize the random state
+        threadID : thread identifier, if not None parsed as threadID keyword
+                   to callable
     """
     # unpack all input arguments
-    iterator, function, args, kwargs, results, progress_queue, seed = wrap_args
+    (iterator, function, args, kwargs, results,
+     progress_queue, seed, threadID) = wrap_args
     # seed the random state if needed
     if seed is not None:
         hasher = md5(bytes(seed, "utf-8"))
@@ -424,11 +447,14 @@ def _thread_worker(wrap_args):
             kwargs_expanded[key] = column
         else:
             kwargs_expanded[key] = arg
+    if threadID is not None:
+        kwargs_expanded["threadID"] = threadID
     # process the results
     results_expanded = []
-    for result in results:
-        column = MemmapColumn(result.path, mode="r+")
-        results_expanded.append(column)
+    if results is not None:
+        for result in results:
+            column = MemmapColumn(result.path, mode="r+")
+            results_expanded.append(column)
 
     # apply the worker function
     for start, end in iterator:
@@ -444,7 +470,7 @@ def _thread_worker(wrap_args):
         # map back and write results
         if len(results_expanded) == 1:
             results_expanded[0][start:end] = return_values
-        else:
+        elif len(results_expanded) > 1:
             for result, values in zip(results_expanded, return_values):
                 result[start:end] = values
         # send number of rows processed successfully to the monitoring thread
