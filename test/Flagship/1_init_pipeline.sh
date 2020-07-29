@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test"
+    suffix="_test_every7"
 else
     suffix=""
 fi
