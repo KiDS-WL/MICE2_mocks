@@ -1,0 +1,318 @@
+import os
+import shutil
+import subprocess
+import sys
+from collections import OrderedDict
+from tempfile import TemporaryDirectory
+from time import sleep
+
+
+import numpy as np
+from .utils import expand_path
+
+
+class BpzManager(object):
+
+    def __init__(self, config, logger=None):
+        self._config = config
+        # create a temporary directory
+        self._tempdir = TemporaryDirectory(
+            prefix=os.path.join(self.config.BPZtemp, "BPZ_"))
+        # construct paths to data directories
+        self._ab_path = os.path.join(self.tempdir, "AB")
+        self._filter_path = os.path.join(self.tempdir, "FILTER")
+        self._input_path = os.path.join(self.tempdir, "INPUT")
+        self._output_path = os.path.join(self.tempdir, "OUTPUT")
+        # create in- and output file templates
+        self._columns_file = os.path.join(
+            self.tempdir, "input.columns")
+        self._input_template = os.path.join(
+            self._input_path, "thread{:}.dat")
+        self._output_template = os.path.join(
+            self._output_path, "thread{:}.dat")
+        # the BPZ output data columns of interest
+        self._output_dtype = np.dtype([
+            ("ID", "i8"), ("Z_B", "f4"), ("Z_B_MIN", "f4"), ("Z_B_MAX", "f4"),
+            ("T_B", "f4"), ("ODDS", "f4"), ("Z_ML", "f4"), ("T_ML", "f4"),
+            ("CHI-SQUARED", "f4"), ("M_0", "f4")])
+        prefix = "BPZ best fit"
+        self._output_description = OrderedDict([
+            ("Z_B", prefix),
+            ("Z_B_MIN", "{:} redshift lower {:.1%}-confidence interval".format(
+                prefix, self.config.odds)),
+            ("Z_B_MAX", "{:} redshift upper {:.1%}-confidence interval".format(
+                prefix, self.config.odds)),
+            ("T_B", "{:} template".format(prefix)),
+            ("ODDS", "Probability contained in the main BPZ posterior peak"),
+            ("Z_ML", "{:} maximum likelihood redshift".format(prefix)),
+            ("T_ML", "{:} maximum likelihood template".format(prefix)),
+            ("CHI-SQUARED", "{:} chi squared".format(prefix))])
+        # run the initialization
+        if logger is not None:
+            message = "setting up working directory: {:}"
+            logger.debug(message.format(self.tempdir))
+        self._init_environment()
+        self._init_tempdir()
+        self._check_prior_template()
+        if logger is not None:
+            logger.debug("installing transmission profiles")
+        self._install_filters()
+        self._write_columns_file()
+        self._create_AB_files()
+
+    def __enter__(self, *args, **kwargs):
+        return self
+    
+    def __exit__(self, *args, **kwargs):
+        self.cleanup()
+
+    def cleanup(self):
+        self._restore_environment()
+        self._tempdir.cleanup()
+
+    def _init_environment(self):
+        self._restore_values = {}
+        # save any original values to restore later
+        for key in ("NUMERIX", "BPZPATH"):
+            try:
+                self._restore_values[key] = os.environ[key]
+            except KeyError:
+                self._restore_values[key] = None
+        # set the required values
+        os.environ["BPZPATH"] = self.tempdir
+        os.environ["NUMERIX"] = "numpy"
+
+    def _init_tempdir(self):
+        for root, dirs, files in os.walk(self._config.BPZpath):
+            if root.split(os.sep)[-1] in ("AB", "FILTER", "test", "output"):
+                continue
+            for f in files:
+                if f.startswith(".") or f.endswith(".pyc"):
+                    continue  # system or compiled files
+                relpath = os.path.relpath(root, self._config.BPZpath)
+                if relpath == ".":
+                    relpath = ""
+                source = os.path.join(root, f)
+                dest = os.path.join(self.tempdir, relpath, f)
+                if not os.path.exists(os.path.dirname(dest)):
+                    os.mkdir(os.path.dirname(dest))
+                shutil.copyfile(source, dest)
+        for folder in [
+                self._ab_path, self._filter_path,
+                self._input_path, self._output_path]:
+            os.mkdir(folder)
+
+    def _check_prior_template(self):
+        prior = self.config.prior["name"]
+        if prior not in self.installed_priors:
+            raise ValueError("unknown prior: {:}".format(prior))
+        template = self.config.templates
+        if template not in self.installed_templates:
+            raise ValueError("unknown template list: {:}".format(template))
+
+    def _restore_environment(self):
+        while len(self._restore_values) > 0:
+            key, value = self._restore_values.popitem()
+            # unset the variable if it did not exist before
+            if value is None:
+                del os.environ[key]
+            # restore the original value if it did exist before
+            else:
+                os.environ[key] = value
+
+    def _install_filters(self):
+        self._installed_filters = {}
+        for name, path in self.config.filters.items():
+            if name in self._installed_filters:
+                raise ValueError("filter already exists: {:}".format(name))
+            dest = os.path.join(self._filter_path, "{:}.res".format(name))
+            # copy the transmission file and mark it for later removal
+            shutil.copyfile(path, dest)
+            self._installed_filters[name] = dest
+
+    def _write_columns_file(self):
+        width = max(
+            len(name) for name in self.config.filter_names)
+        width = max(width, 8)
+        # create the file header
+        header = "{:<{width}}  columns  AB/Vega  zp_error  zp_offset\n"
+        lines = header.format("# filter", width=width)
+        line = "{:<{width}}  {:3d},{:3d}  {:>7}  {:8.4f}  {:9.4f}\n"
+        # current implementation with fixed photometric zero-points
+        zp_error, zp_offset = 0.01, 0.0
+        system = "AB"
+        # add a line for each filter (with column for magnitude and error)
+        for idx, name in enumerate(self.config.filter_names):
+            mag_col_idx = 2 * idx + 1
+            err_col_idx = 2 * idx + 2
+            lines += line.format(
+                name, mag_col_idx, err_col_idx, self.config.system,
+                zp_error, zp_offset, width=width)
+        # add the prior magnitude column
+        M_0_idx = self.config.filter_names.index(self.config.prior["filter"])
+        lines += "{:<{width}}  {:7d}\n".format(
+            "M_0", 2 * M_0_idx + 1, width=width)
+        # write the file into the temporary directory
+        with open(self._columns_file, "w") as f:
+            f.write(lines)
+
+    def _create_AB_files(self):
+        dummy_args = [[20.0], [0.01]] * len(self.filter_names)
+        self.execute(*dummy_args)
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
+    def path(self):
+        return self._tempdir.name
+
+    @property
+    def tempdir(self):
+        return self._tempdir.name
+
+    @property
+    def interpreter(self):
+        if self.config.BPZenv == "python2":
+            return self.config.BPZenv
+        else:
+            return os.path.join(self.config.BPZenv, "bin", "python2")
+
+    @property
+    def installed_templates(self):
+        # find all files that match SED/*.list
+        templates = {}
+        dirname = os.path.join(self.path, "SED")
+        for fname in os.listdir(dirname):
+            if fname.endswith(".list"):
+                key = fname.rstrip(".list")
+                templates[key] = os.path.join(dirname, fname)
+        return templates
+
+    @property
+    def installed_priors(self):
+        # find all files that match prior_*.py
+        priors = {}
+        for fname in os.listdir(self.path):
+            if fname.startswith("prior_") and fname.endswith(".py"):
+                key = fname.lstrip("prior_").rstrip(".py")
+                priors[key] = os.path.join(self.path, fname)
+        return priors
+
+    @property
+    def installed_filters(self):
+        return self._installed_filters
+
+    @property
+    def filter_names(self):
+        return self._config.filter_names
+
+    @property
+    def colnames(self):
+        return tuple(self._output_dtype.fields)
+
+    @property
+    def dtype(self):
+        return self._output_dtype
+
+    @property
+    def descriptions(self):
+        return self._output_description
+
+    def _write_input(self, *mags_errs, threadID=None):
+        n_filters = len(self.filter_names)
+        if len(mags_errs) != 2 * n_filters:
+            message = "expected {n:d} magnitude and {n:d} error columns"
+            raise ValueError(message.format(n=n_filters))
+        # establish the line format: mags_errs should be 32bit floats
+        line = ""
+        for n in range(n_filters):
+            line += "{:.5e} {:.5e} "  # filter and it's error
+        line += "\n"
+        # format the lines
+        lines = [line.format(*values) for values in zip(*mags_errs)]
+        # write the lines
+        threadID = "" if threadID is None else "_" + str(threadID)
+        with open(self._input_template.format(threadID), "w") as f:
+            f.write("\n".join(lines))
+
+    def _build_command(self, threadID, verbose=False):
+        threadID = "" if threadID is None else "_" + str(threadID)
+        # BPZ call
+        command = [
+            self.interpreter, os.path.join(self.path, "bpz.py"),
+            # in-/output
+            os.path.join(
+                self.tempdir, self._input_template.format(threadID)),
+            "-COLUMNS", os.path.join(self.tempdir, self._columns_file),
+            "-OUTPUT", os.path.join(
+                self.tempdir, self._output_template.format(threadID)),
+            # filters and template-filter convolutions
+            "-AB_DIR", self._ab_path,
+            "-FILTER_DIR", self._filter_path,
+            # prior
+            "-PRIOR", str(self.config.prior["name"]),
+            # templates
+            "-SPECTRA", "{:}.list".format(self.config.templates),
+            "-INTERP", str(self.config.interpolation),
+            # likelihood
+            "-ZMIN", str(self.config.sampling["zmin"]),
+            "-ZMAX", str(self.config.sampling["zmax"]),
+            "-DZ", str(self.config.sampling["delta_z"]),
+            "-ODDS", str(self.config.odds),
+            # some extra stuff we don't need
+            "-NEW_AB", "no",
+            "-PROBS_LITE", "no",
+            "-CHECK", "no",
+            "-MIN_RMS", "0.0",
+            "-INTERACTIVE", "no",
+            "-VERBOSE", "yes" if verbose else "no"]
+        return command
+
+    def _run_BPZ(self, threadID, timeout=None, verbose=False):
+        command = self._build_command(threadID, verbose)
+        with subprocess.Popen(
+                command, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE) as proc:
+            try:
+                stdout, stderr = proc.communicate(timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                stdout, stderr = proc.communicate()
+            finally:
+                if proc.returncode != 0 or verbose:
+                    message = "########## BPZ start ##########\n"
+                    message += "{:}\n\n{:}\n".format(
+                        stdout.decode("utf-8").strip(),
+                        stderr.decode("utf-8").strip())
+                    message += "########### BPZ end ###########\n"
+                    if proc.returncode == 0:
+                        sys.stdout.write(message)
+                    else:
+                        sys.stderr.write(message)
+                        raise subprocess.CalledProcessError(
+                            proc.returncode, proc)
+
+    def _read_output(self, threadID, get_ID, get_M_0):
+        threadID = "" if threadID is None else "_" + str(threadID)
+        outputfile = os.path.join(
+            self.tempdir, self._output_template.format(threadID))
+        data = np.loadtxt(outputfile, dtype=self._output_dtype)
+        output_cols = []
+        for col in self.colnames:
+            if col == "ID" and not get_ID:
+                continue
+            if col == "M_0" and not get_M_0:
+                continue
+            output_cols.append(col)
+        bpz_result = tuple(data[col] for col in output_cols)
+        return bpz_result
+
+    def execute(
+            self, *mags_errs, threadID=None, verbose=False,
+            get_ID=False, get_M_0=False):
+        self._write_input(*mags_errs, threadID=threadID)
+        self._run_BPZ(threadID, verbose=verbose)
+        result = self._read_output(threadID, get_ID, get_M_0)
+        return result
