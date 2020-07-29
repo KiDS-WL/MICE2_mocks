@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-if [ "$1" == "test" ]
+if [ "$1" == "deep" ]
 then
-    suffix="_test_every7"
+    table="deep"
 else
-    suffix=""
+    table="256th"
 fi
 
 ../../scripts/mocks_datastore_query \
-    /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -o /net/home/fohlen13/jlvdb/TEST/Flagship_query${suffix}.hdf5 \
+    /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
+    -o ~/TEST/MICE2_query_${table}.hdf5 \
     -q "position/ra/obs >= 40.0 AND position/ra/obs < 45.0 AND position/dec/obs >= 10.0 AND position/dec/obs < 15.0"

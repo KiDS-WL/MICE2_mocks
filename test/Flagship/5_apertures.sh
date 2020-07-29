@@ -9,5 +9,5 @@ fi
 
 ../../scripts/mocks_apertures \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -c ../KV450_photometry.toml \
+    -c photometry.toml \
     --method GAaP

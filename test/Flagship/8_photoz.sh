@@ -11,6 +11,6 @@ export hostname=$HOSTNAME
 ../../scripts/mocks_BPZ \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
     -c BPZ.toml \
-    --mag mags/KV450 \
-    --zphot BPZ/KV450 \
+    --mag mags/K1000 \
+    --zphot BPZ/K1000 \
     --threads 64

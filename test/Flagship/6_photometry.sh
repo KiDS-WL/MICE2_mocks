@@ -9,7 +9,7 @@ fi
 
 ../../scripts/mocks_photometry \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -c ../KV450_photometry.toml \
+    -c photometry.toml \
     --method GAaP \
     --mag mags/lensed \
-    --real mags/KV450
+    --real mags/K1000
