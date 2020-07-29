@@ -4,13 +4,10 @@
 
 BPZpath = "~/src/bpz-1.99.3"
                         # path of the bpz installation to use
-BPZenv = "/net/$hostname/home/jlvdb/BPZenv"
-                        # path to a python2 environment used when calling BPZ
+BPZenv = ""             # path to a python2 environment used when calling BPZ
                         # (leave blank to use the default python2 interpreter)
-BPZtemp = "/dev/shm"    # temporary directory to use for bpz (I/O intense, e.g.
+BPZtemp = ""            # temporary directory to use for bpz (I/O intense, e.g.
                         # a ram disk, if blank, defaults to data store)
-delta_z = 0.01          # resolution of the redshift grid, intervals are
-                        # logarithmic: (1+z)*dz 
 flux = false            # whether the input columns are fluxes or magnitudes
 system = "AB"           # photometric system, must be "AB" or "Vega"
 interpolation = 10      # introduces n points of interpolation between the
@@ -23,15 +20,7 @@ templates = "CWWSB4"    # name of the template .list file in the
 # mapping between filter keys (same as used in the column map file for
 # mocks_init_pipeline) and paths to transmission curve files compatible with
 # BPZ.
-u = "sdss_u_obs.res"
-g = "sdss_g_obs.res"
-r = "sdss_r_obs.res"
-i = "sdss_i_obs.res"
-Z = "sdss_z_obs.res"
-Y = "des_asahi_full_y_obs.res"
-J = "vhs_j_obs.res"
-H = "vhs_h_obs.res"
-Ks = "vhs_ks_obs.res"
+i = "~/src/bpz-1.99.3/i_SDSS.res"
                         # transmission files do not need to be in the
                         # bpz_path/FILTER directory
 
@@ -42,7 +31,7 @@ filter = "i"            # filter key (one of those listed in the [filters]
                         # section) based on which the prior is evaluated
 
 [sampling]
-zmin = 0.0002             # minimum redshift probed
-zmax = 2.2984             # maximum redshift probed
+zmin = 0.01             # minimum redshift probed
+zmax = 7.00             # maximum redshift probed
 delta_z = 0.01          # redshift resolution, intervals are
                         # logarithmic: (1+z)*dz 

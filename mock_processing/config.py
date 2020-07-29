@@ -1,12 +1,48 @@
 import argparse
 import os
 import sys
+from functools import partial
+from tempfile import gettempdir
 
 import toml
+
+from .utils import expand_path
 
 
 _DEFAULT_CONFIG_PATH = os.path.join(
     os.path.dirname(__file__), "default_config")
+
+
+def load_config(path, logger, description, parser_class):
+    message = "reading {:} configuration file: {:}".format(description, path)
+    logger.info(message)
+    try:
+        return parser_class(path).get
+    except OSError as e:
+        message = "configuration file not found"
+        logger.handleException(e, message)
+    except AttributeError:
+        return parser_class(path)
+    except Exception as e:
+        message = "malformed configuration file"
+        logger.handleException(e, message)
+
+
+class DumpDefault(argparse.Action):
+
+    _parser_class = lambda *args: None  # dummy
+
+    def __init__(self, *args, nargs=0,**kwargs):
+        super().__init__(*args, nargs=nargs, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string, **kwargs):
+        # verify integrity of the default file
+        self._parser_class(self._parser_class._default_path)
+        # write the content to the screen
+        with open(self._parser_class._default_path) as f:
+            for line in f.readlines():
+                sys.stdout.write(line)
+        parser.exit()
 
 
 class ParseColumnMap(object):
@@ -19,6 +55,8 @@ class ParseColumnMap(object):
     path : str
         Column map file path
     """
+
+    _default_path = os.path.join(_DEFAULT_CONFIG_PATH, "column_map.toml")
 
     def __init__(self, path):
         # unpack the potentially nested dictionary by converting nested keys
@@ -65,34 +103,12 @@ class ParseColumnMap(object):
                 self._column_map[os.path.join(path, key)] = dtype_tuple
 
 
-class DumpColumnMap(argparse.Action):
-
-    def __init__(self, *args, nargs=0,**kwargs):
-        super().__init__(*args, nargs=nargs, **kwargs)
-
-    def __call__(self, parser, namespace, values, option_string, **kwargs):
-        path = os.path.join(_DEFAULT_CONFIG_PATH, "column_map.toml")
-        # verify integrity of the default file
-        ParseColumnMap(path)
-        # write the content to the screen
-        with open(path) as f:
-            for line in f.readlines():
-                sys.stdout.write(line)
-        parser.exit()
+class DumpColumnMap(DumpDefault):
+    _parser_class = ParseColumnMap
 
 
-def load_column_map(path, logger):
-    message = "reading column mapping file: {:}".format(path)
-    logger.info(message)
-    try:
-        col_map_dict = ParseColumnMap(path).get
-    except OSError as e:
-        message = "column mapping file not found: {:}".format(path)
-        logger.handleException(e, message)
-    except Exception as e:
-        message = "malformed column mapping file"
-        logger.handleException(e, message)
-    return col_map_dict
+load_column_map = partial(
+    load_config, description="column", parser_class=ParseColumnMap)
 
 
 class ParsePhotometryConfig(object):
@@ -113,11 +129,11 @@ class ParsePhotometryConfig(object):
         "GAaP": {
             "aper_min",
             "aper_max"}}
+    _default_path = os.path.join(_DEFAULT_CONFIG_PATH, "photometry.toml")
 
     def __init__(self, config_path):
-        default_path = os.path.join(_DEFAULT_CONFIG_PATH, "photometry.toml")
         # load default to get missing values in user input
-        self._parse_config(default_path)
+        self._parse_config(self._default_path)
         self._parse_config(config_path)
         self.filter_names = sorted(self.PSF.keys())
 
@@ -165,31 +181,107 @@ class ParsePhotometryConfig(object):
         return string.strip("\n")
 
 
-class DumpPhotometryConfig(argparse.Action):
-
-    def __init__(self, *args, nargs=0,**kwargs):
-        super().__init__(*args, nargs=nargs, **kwargs)
-
-    def __call__(self, parser, namespace, values, option_string, **kwargs):
-        path = os.path.join(_DEFAULT_CONFIG_PATH, "photometry.toml")
-        # verify integrity of the default file
-        ParsePhotometryConfig(path)
-        # write the content to the screen
-        with open(path) as f:
-            for line in f.readlines():
-                sys.stdout.write(line)
-        parser.exit()
+class DumpPhotometryConfig(DumpDefault):
+    _parser_class = ParsePhotometryConfig
 
 
-def load_photometry_config(path, logger):
-    message = "reading photometry configuration file: {:}".format(path)
-    logger.info(message)
-    try:
-        config = ParsePhotometryConfig(path)
-    except OSError as e:
-        message = "column mapping file not found: {:}".format(path)
-        logger.handleException(e, message)
-    except Exception as e:
-        message = "malformed column mapping file"
-        logger.handleException(e, message)
-    return config
+load_photometry_config = partial(
+    load_config, description="photometry", parser_class=ParsePhotometryConfig)
+
+
+class ParseBpzConfig(object):
+
+    _general_params = {
+        "BPZpath",
+        "BPZenv",
+        "BPZtemp",
+        "delta_z",
+        "flux",
+        "system",
+        "interpolation",
+        "odds",
+        "templates",
+        # these are filter specific (dictionary) values:
+        "filters"}
+    _param_groups = {
+        "prior": {
+            "name",
+            "filter",
+            "zmin",
+            "zmax"},
+        "sampling": {
+            "zmin",
+            "zmax",
+            "delta_z"}}
+    _default_path = os.path.join(_DEFAULT_CONFIG_PATH, "BPZ.toml")
+
+    def __init__(self, config_path):
+        # load default to get missing values in user input
+        self._parse_config(self._default_path)
+        self._parse_config(config_path)
+        self.filter_names = sorted(self.filters.keys())
+        # configure the BPZ executable
+        self.BPZpath = expand_path(self.BPZpath)
+        if self.BPZenv == "":
+            self.BPZenv = "python2"
+        else:
+            self.BPZenv = expand_path(self.BPZenv)
+        if self.BPZtemp == "":
+            self.BPZtemp = gettempdir()
+        else:
+            self.BPZtemp = expand_path(self.BPZtemp)
+        if not os.path.isdir(self.BPZpath):
+            message = "BPZ install path is not a directory: {:}"
+            raise OSError(message.format(self.BPZpath))
+
+    def _parse_config(self, config_path):
+        with open(config_path) as f:
+            config = toml.load(f)
+        # determine all allowed top-level parameter names
+        known_params = self._general_params.copy()
+        for group_name in self._param_groups:
+            known_params.add(group_name)
+        # check for unknown parameters
+        diff = set(config.keys()) - known_params
+        try:
+            param_name = diff.pop()  # successful only if diff is not empty
+            message = "unknown BPZ paramter: {:}".format(param_name)
+            raise ValueError(message)
+        except KeyError:
+            pass
+        # register all parameters as class attributes, algorithms as
+        # dictionaries
+        for key, value in config.items():
+            if key in self._param_groups:
+                self._parse_group(key, value)
+            elif key == "filters":
+                setattr(self, key, {
+                    f: expand_path(path) for f, path in value.items()})
+            else:
+                setattr(self, key, value)
+        # check if the prior filter is provided
+        if self.prior["filter"] not in self.filters:
+            message = "prior filter is not included in the filter list: {:}"
+            raise KeyError(message.format(self.prior["filter"]))
+
+    def _parse_group(self, name, params):
+        for key, value in params.items():
+            if key not in self._param_groups[name]:
+                message = "unknown paramter in '{:}': {:}".format(name, key)
+                raise ValueError(message)
+        setattr(self, name, params)
+
+    def __str__(self):
+        string = ""
+        for attr in sorted(self.__dict__):
+            if not attr.startswith("_"):
+                string += "{:}: {:}\n".format(attr, str(self.__dict__[attr]))
+        return string.strip("\n")
+
+
+class DumpBpzConfig(DumpDefault):
+    _parser_class = ParseBpzConfig
+
+
+load_bpz_config = partial(
+    load_config, description="BPZ", parser_class=ParseBpzConfig)

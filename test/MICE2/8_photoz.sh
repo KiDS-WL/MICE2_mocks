@@ -13,4 +13,4 @@ export hostname=$HOSTNAME
     -c BPZ.toml \
     --mag mags/KV450 \
     --zphot BPZ/KV450 \
-    --threads 64
+    --threads 32

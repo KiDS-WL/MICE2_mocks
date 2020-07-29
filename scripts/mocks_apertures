@@ -4,9 +4,9 @@ import os
 import sys
 
 from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.config import DumpPhotometryConfig, load_photometry_config
 from mock_processing.parallel import ParallelTable
 from mock_processing.photometry import load_photometry, apertures_wrapped
-from mock_processing.config import DumpPhotometryConfig, load_photometry_config
 from mock_processing.utils import (ModificationStamp, create_column,
                                    require_column)
 

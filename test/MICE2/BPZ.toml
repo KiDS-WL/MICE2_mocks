@@ -7,9 +7,12 @@ BPZpath = "~/src/bpz-1.99.3"
 BPZenv = "/net/$hostname/home/jlvdb/BPZenv"
                         # path to a python2 environment used when calling BPZ
                         # (leave blank to use the default python2 interpreter)
+BPZtemp = "/dev/shm"    # temporary directory to use for bpz (I/O intense, e.g.
+                        # a ram disk, if blank, defaults to data store)
 delta_z = 0.01          # resolution of the redshift grid, intervals are
                         # logarithmic: (1+z)*dz 
 flux = false            # whether the input columns are fluxes or magnitudes
+system = "AB"           # photometric system, must be "AB" or "Vega"
 interpolation = 10      # introduces n points of interpolation between the
                         # templates in the color space
 odds = 0.68             # redshift confidence limits
@@ -39,7 +42,7 @@ filter = "i"            # filter key (one of those listed in the [filters]
                         # section) based on which the prior is evaluated
 
 [sampling]
-zmin = 0.01             # minimum redshift probed
-zmax = 7.00             # maximum redshift probed
+zmin = 0.073             # minimum redshift probed
+zmax = 1.417             # maximum redshift probed
 delta_z = 0.01          # redshift resolution, intervals are
                         # logarithmic: (1+z)*dz 
