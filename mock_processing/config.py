@@ -189,6 +189,67 @@ load_photometry_config = partial(
     load_config, description="photometry", parser_class=ParsePhotometryConfig)
 
 
+class ParseMatchingConfig(object):
+
+    _general_params = {
+        "input",
+        "normalize",
+        "max_dist",
+        # these are filter specific (dictionary) values:
+        "features",
+        "observables",
+        "fallback"}
+    # NOTE: register paramters for new algorithms here
+    _algorithm_params = {}
+    _default_path = os.path.join(_DEFAULT_CONFIG_PATH, "matching.toml")
+
+    def __init__(self, config_path):
+        # load default to get missing values in user input
+        self._parse_config(self._default_path)
+        self._parse_config(config_path)
+        self.feature_names = sorted(self.features.keys())
+        self.observable_names = sorted(self.observables.keys())
+
+    def _parse_config(self, config_path):
+        with open(config_path) as f:
+            config = toml.load(f)
+        # determine all allowed top-level parameter names
+        known_params = self._general_params.copy()
+        for algorithm_name in self._algorithm_params:
+            known_params.add(algorithm_name)
+        # check for unknown parameters
+        diff = set(config.keys()) - known_params
+        try:
+            param_name = diff.pop()  # successful only if diff is not empty
+            message = "unknown photometry paramter: {:}".format(param_name)
+            raise ValueError(message)
+        except KeyError:
+            pass
+        # register all parameters as class attributes, algorithms as
+        # dictionaries
+        for key, value in config.items():
+            setattr(self, key, value)
+        # check that there are no fallback values with no matching observable
+        if not self.observables.keys() >= self.fallback.keys():
+            message = "fallback values are provided for undefined observables"
+            raise KeyError(message)
+
+    def __str__(self):
+        string = ""
+        for attr in sorted(self.__dict__):
+            if not attr.startswith("_"):
+                string += "{:}: {:}\n".format(attr, str(self.__dict__[attr]))
+        return string.strip("\n")
+
+
+class DumpMatchingConfig(DumpDefault):
+    _parser_class = ParseMatchingConfig
+
+
+load_matching_config = partial(
+    load_config, description="matching", parser_class=ParseMatchingConfig)
+
+
 class ParseBpzConfig(object):
 
     _general_params = {

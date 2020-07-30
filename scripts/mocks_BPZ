@@ -40,7 +40,7 @@ help_group.add_argument(
     help="show this help message and exit")
 help_group.add_argument(
     "--dump", nargs=0, action="dump",
-    help="dump a default columns file to stdout and exit")
+    help="dump a default BPZ configuration file to stdout and exit")
 
 
 def main():

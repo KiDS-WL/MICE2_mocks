@@ -30,7 +30,7 @@ parser.add_argument(
     help="sub-directory within data store where the photometry realisations "
          "are stored")
 parser.add_argument(
-    "-m", "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
+    "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
     help="photometry algorthim to apply (default: %(default)s)")
 parser.add_argument(
     "-c", "--config", type=expand_path, required=True,
@@ -39,7 +39,8 @@ parser.add_argument(
          "obtain a default parameter file)")
 parser.add_argument(
     "--no-aper", action="store_true",
-    help="do not apply the aperture size depending signal-to-noise correction")
+    help="do not apply the aperture size depending signal-to-noise "
+         "correction, running 'mocks_apertures' is no longer required")
 parser.add_argument(
     "--seed", default="sapling",
     help="string to seed the random generator (default: %(default)s, results "
@@ -54,7 +55,7 @@ help_group.add_argument(
     help="show this help message and exit")
 help_group.add_argument(
     "--dump", nargs=0, action="dump",
-    help="dump a default columns file to stdout and exit")
+    help="dump a default photometry configuration file to stdout and exit")
 
 
 def main():

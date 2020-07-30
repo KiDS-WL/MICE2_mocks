@@ -1,0 +1,27 @@
+input = ""              # path to input table, must be MemmapTable compatible
+normalize = false       # whether each feature space dimension is normalized by
+                        # the standard deviation of the values in the dimension
+max_dist = 1.0          # maximum distance (Euclidean metric) to consider the
+                        # nearest neighbour a match, otherwise the fallback
+                        # value is assigned
+
+[features]
+# Mapping between columns of the input data table and the columns of the mock
+# pipeline data store. The input features are used to build the search tree,
+# the data store features are matched against tree.
+                        # key must be a valid column name in the input table,
+                        # value an existing column name in the data store
+
+[observables]
+# Mapping between columns of the input data table and the columns of the mock
+# pipeline data store. The observables of the input data that are assigned to
+# the nearest neighbour of an object in the data store.
+                        # key must be a valid column name in the input table,
+                        # value a pair of output column name in the data store
+                        # and fall back value if distance > max_dist
+
+[fallback]
+# Fallback value to assign if the nearest neighbour distance > max_dist. If no
+# value is provided the value of the observable is assigned instead.
+                        # key must match one of the keys in observables, value
+                        # must have the same data type as the observables

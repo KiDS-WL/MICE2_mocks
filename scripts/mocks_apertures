@@ -22,7 +22,7 @@ parser.add_argument(
     help="directory in which the data store is located")
 
 parser.add_argument(
-    "-m", "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
+    "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
     help="photometry algorthim to apply (default: %(default)s)")
 parser.add_argument(
     "-c", "--config", type=expand_path, required=True,
@@ -39,7 +39,7 @@ help_group.add_argument(
     help="show this help message and exit")
 help_group.add_argument(
     "--dump", nargs=0, action="dump",
-    help="dump a default columns file to stdout and exit")
+    help="dump a default photometry configuratin file to stdout and exit")
 
 
 def main():
