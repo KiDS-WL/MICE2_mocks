@@ -105,10 +105,16 @@ class BpzManager(object):
     def _check_prior_template(self):
         prior = self.config.prior["name"]
         if prior not in self.installed_priors:
-            raise ValueError("unknown prior: {:}".format(prior))
+            message = "unknown prior: {:} (options are: {:})"
+            message = message.format(
+                prior, ", ".join(self.installed_priors))
+            raise ValueError(message)
         template = self.config.templates
         if template not in self.installed_templates:
-            raise ValueError("unknown template list: {:}".format(template))
+            message = "unknown template list: {:} (options are: {:})"
+            message = message.format(
+                prior, ", ".join(self.installed_templates))
+            raise ValueError(message)
 
     def _restore_environment(self):
         while len(self._restore_values) > 0:
@@ -248,9 +254,6 @@ class BpzManager(object):
             "-COLUMNS", os.path.join(self.tempdir, self._columns_file),
             "-OUTPUT", os.path.join(
                 self.tempdir, self._output_template.format(threadID)),
-            # filters and template-filter convolutions
-            "-AB_DIR", self._ab_path,
-            "-FILTER_DIR", self._filter_path,
             # prior
             "-PRIOR", str(self.config.prior["name"]),
             # templates

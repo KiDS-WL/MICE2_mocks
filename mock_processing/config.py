@@ -195,7 +195,6 @@ class ParseBpzConfig(object):
         "BPZpath",
         "BPZenv",
         "BPZtemp",
-        "delta_z",
         "flux",
         "system",
         "interpolation",

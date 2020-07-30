@@ -9,14 +9,13 @@ BPZenv = "/net/$hostname/home/jlvdb/BPZenv"
                         # (leave blank to use the default python2 interpreter)
 BPZtemp = "/dev/shm"    # temporary directory to use for bpz (I/O intense, e.g.
                         # a ram disk, if blank, defaults to data store)
-delta_z = 0.01          # resolution of the redshift grid, intervals are
-                        # logarithmic: (1+z)*dz 
 flux = false            # whether the input columns are fluxes or magnitudes
 system = "AB"           # photometric system, must be "AB" or "Vega"
 interpolation = 10      # introduces n points of interpolation between the
                         # templates in the color space
 odds = 0.68             # redshift confidence limits
-templates = "CWWSB4"    # name of the template .list file in the
+templates = "CWWSB4_capak"
+                        # name of the template .list file in the
                         # bpz_path/SED directory
 
 [filters]
@@ -36,7 +35,7 @@ Ks = "filters/vhs_ks_obs.res"
                         # bpz_path/FILTER directory
 
 [prior]
-name = "hdfn_gen"       # template-magnitude prior module in the bpz_path
+name = "nvgs"           # template-magnitude prior module in the bpz_path
                         # directory (filename: prior_[name].py)
 filter = "i"            # filter key (one of those listed in the [filters]
                         # section) based on which the prior is evaluated
