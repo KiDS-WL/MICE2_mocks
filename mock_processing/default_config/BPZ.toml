@@ -10,11 +10,6 @@ BPZtemp = ""            # temporary directory to use for bpz (I/O intense, e.g.
                         # a ram disk, if blank, defaults to data store)
 flux = false            # whether the input columns are fluxes or magnitudes
 system = "AB"           # photometric system, must be "AB" or "Vega"
-interpolation = 10      # introduces n points of interpolation between the
-                        # templates in the color space
-odds = 0.68             # redshift confidence limits
-templates = "CWWSB4"    # name of the template .list file in the
-                        # bpz_path/SED directory
 
 [filters]
 # mapping between filter keys (same as used in the column map file for
@@ -30,8 +25,16 @@ name = "hdfn_gen"       # template-magnitude prior module in the bpz_path
 filter = "i"            # filter key (one of those listed in the [filters]
                         # section) based on which the prior is evaluated
 
-[sampling]
+[templates]
+name = "CWWSB4"         # name of the template .list file in the
+                        # bpz_path/SED directory
+interpolation = 10      # introduces n points of interpolation between the
+                        # templates in the color space
+
+[likelihood]
 zmin = 0.01             # minimum redshift probed
 zmax = 7.00             # maximum redshift probed
-delta_z = 0.01          # redshift resolution, intervals are
+dz = 0.01               # redshift resolution, intervals are
                         # logarithmic: (1+z)*dz 
+odds = 0.68             # redshift confidence limits
+min_rms = 0.0           # intrinsic scatter of the photo-z in dz/(1+z)

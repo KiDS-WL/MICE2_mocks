@@ -39,9 +39,9 @@ class BpzManager(object):
         self._output_description = OrderedDict([
             ("Z_B", prefix),
             ("Z_B_MIN", "{:} redshift lower {:.1%}-confidence interval".format(
-                prefix, self.config.odds)),
+                prefix, self.config.likelihood["odds"])),
             ("Z_B_MAX", "{:} redshift upper {:.1%}-confidence interval".format(
-                prefix, self.config.odds)),
+                prefix, self.config.likelihood["odds"])),
             ("T_B", "{:} template".format(prefix)),
             ("ODDS", "Probability contained in the main BPZ posterior peak"),
             ("Z_ML", "{:} maximum likelihood redshift".format(prefix)),
@@ -109,7 +109,7 @@ class BpzManager(object):
             message = message.format(
                 prior, ", ".join(self.installed_priors))
             raise ValueError(message)
-        template = self.config.templates
+        template = self.config.templates["name"]
         if template not in self.installed_templates:
             message = "unknown template list: {:} (options are: {:})"
             message = message.format(
@@ -231,22 +231,20 @@ class BpzManager(object):
         if len(mags_errs) != 2 * n_filters:
             message = "expected {n:d} magnitude and {n:d} error columns"
             raise ValueError(message.format(n=n_filters))
-        # establish the line format: mags_errs should be 32bit floats
-        line = ""
-        for n in range(n_filters):
-            line += "{:.5e} {:.5e} "  # filter and it's error
-        line += "\n"
         # format the lines
+        line = "{:.5e} {:.5e} " * n_filters + "\n"
         lines = [line.format(*values) for values in zip(*mags_errs)]
         # write the lines
         threadID = "" if threadID is None else "_" + str(threadID)
-        with open(self._input_template.format(threadID), "w") as f:
+        filename = self._input_template.format(threadID)
+        with open(filename, "w") as f:
             f.write("\n".join(lines))
 
     def _build_command(self, threadID, verbose=False):
         threadID = "" if threadID is None else "_" + str(threadID)
         # BPZ call
         command = [
+            # select interpreter and executable
             self.interpreter, os.path.join(self.path, "bpz.py"),
             # in-/output
             os.path.join(
@@ -257,19 +255,17 @@ class BpzManager(object):
             # prior
             "-PRIOR", str(self.config.prior["name"]),
             # templates
-            "-SPECTRA", "{:}.list".format(self.config.templates),
-            "-INTERP", str(self.config.interpolation),
+            "-SPECTRA", "{:}.list".format(self.config.templates["name"]),
+            "-INTERP", str(self.config.templates["interpolation"]),
             # likelihood
-            "-ZMIN", str(self.config.sampling["zmin"]),
-            "-ZMAX", str(self.config.sampling["zmax"]),
-            "-DZ", str(self.config.sampling["delta_z"]),
-            "-ODDS", str(self.config.odds),
-            # some extra stuff we don't need
-            "-NEW_AB", "no",
-            "-PROBS_LITE", "no",
-            "-CHECK", "no",
-            "-MIN_RMS", "0.0",
-            "-INTERACTIVE", "no",
+            "-ZMIN", str(self.config.likelihood["zmin"]),
+            "-ZMAX", str(self.config.likelihood["zmax"]),
+            "-DZ", str(self.config.likelihood["dz"]),
+            "-ODDS", str(self.config.likelihood["odds"]),
+            "-MIN_RMS", str(self.config.likelihood["min_rms"]),
+            # disable extra stuff we don't need
+            "-PROBS", "no", "-PROBS2", "no", "-PROBS_LITE", "no",
+            "-NEW_AB", "no", "-CHECK", "no", "-INTERACTIVE", "no",
             "-VERBOSE", "yes" if verbose else "no"]
         return command
 

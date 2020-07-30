@@ -197,21 +197,21 @@ class ParseBpzConfig(object):
         "BPZtemp",
         "flux",
         "system",
-        "interpolation",
-        "odds",
-        "templates",
         # these are filter specific (dictionary) values:
         "filters"}
     _param_groups = {
         "prior": {
             "name",
-            "filter",
-            "zmin",
-            "zmax"},
-        "sampling": {
+            "filter"},
+        "templates": {
+            "name",
+            "interpolation"},
+        "likelihood": {
             "zmin",
             "zmax",
-            "delta_z"}}
+            "dz",
+            "odds",
+            "min_rms"}}
     _default_path = os.path.join(_DEFAULT_CONFIG_PATH, "BPZ.toml")
 
     def __init__(self, config_path):
