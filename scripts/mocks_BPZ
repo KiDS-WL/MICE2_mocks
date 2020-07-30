@@ -81,8 +81,6 @@ def main():
 
             # create the output columns
             for key, desc in bpz.descriptions.items():
-                if key == "ID":
-                    continue
                 zphot_path = os.path.join(args.zphot, key)
                 # create new output columns
                 column = create_column(

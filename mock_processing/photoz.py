@@ -216,7 +216,7 @@ class BpzManager(object):
 
     @property
     def colnames(self):
-        return tuple(self._output_dtype.fields)
+        return tuple(self._output_description.keys())
 
     @property
     def dtype(self):
