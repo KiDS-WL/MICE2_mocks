@@ -469,7 +469,10 @@ def _thread_worker(wrap_args):
         return_values = function(*call_args, **call_kwargs)
         # map back and write results
         if len(results_expanded) == 1:
-            results_expanded[0][start:end] = return_values
+            try:
+                results_expanded[0][start:end] = return_values
+            except ValueError:
+                results_expanded[0][start:end] = return_values[0]
         elif len(results_expanded) > 1:
             for result, values in zip(results_expanded, return_values):
                 result[start:end] = values
