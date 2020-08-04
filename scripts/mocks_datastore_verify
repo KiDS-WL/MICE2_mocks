@@ -33,20 +33,31 @@ def main():
             len(colname) for colname in table.colnames))
         print("\n{:}    {:}  {:}".format(
             header.ljust(width_cols), "STATUS ", "HASH"))
+        # compute and verify the store checksums column by column
+        n_good, n_warn, n_error = 0, 0, 0
         line = "{:<{width}s}    {:<7s}  {:s}"
         for name in table.colnames:
             column = table[name]
             try:
                 checksum = column.attr["SHA-1 checksum"]
                 assert(checksum == sha1sum(column.filename))
+                n_good += 1
             except KeyError:
                 print(line.format(
                     name, "WARNING", "no checksum provided", width=width_cols))
+                n_warn += 1
             except AssertionError:
                 print(line.format(
                     name, "ERROR", "checksums do not match", width=width_cols))
+                n_error += 1
             else:
                 print(line.format(name, "OK", checksum, width=width_cols))
+        # do a final report
+        if n_good == len(table.colnames):
+            print("\nAll columns passed")
+        else:
+            print("\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(
+                n_good, n_warn, n_error))
 
 
 if __name__ == "__main__":

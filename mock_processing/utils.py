@@ -37,6 +37,31 @@ def expand_path(path):
     return path
 
 
+def sha1sum(path):
+    """
+    Compute a SHA-1 checksum for a given path.
+
+    Parameters:
+    -----------
+    path : str
+        Path to file for which the checksum is computed.
+
+    Returns:
+    --------
+    checksum : str
+        Checksum encoded as 40-digit hex-string.
+    """
+    hasher = sha1()
+    with open(path, "rb") as f:
+        while True:
+            buffer = f.read(1048576)
+            if not buffer:
+                break
+            hasher.update(buffer)
+    checksum = hasher.hexdigest()
+    return checksum
+
+
 def open_datastore(path, logger, readonly=True):
     """
     Wrapper to open an existing MemmapTable on disk.
@@ -208,18 +233,6 @@ class ProgressBar(tqdm):
             total=n_rows, leave=False, unit_scale=True, unit=" rows",
             dynamic_ncols=True, desc=prefix)
         self.smoothing = 0.05
-
-
-def sha1sum(path):
-    hasher = sha1() 
-    with open(path, "rb") as f:
-        while True:
-            buffer = f.read(1048576)
-            if not buffer:
-                break
-            hasher.update(buffer)
-    checksum = hasher.hexdigest()
-    return checksum
 
 
 class ModificationStamp(object):

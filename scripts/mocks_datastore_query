@@ -11,7 +11,7 @@ from memmap_table.mathexpression import MathTerm
 from mock_processing import PipeLogger, expand_path, open_datastore
 from mock_processing.readwrite import (BUFFERSIZE, guess_format,
                                        supported_writers)
-from mock_processing.utils import (ModificationStamp, ProgressBar,
+from mock_processing.utils import (ModificationStamp, ProgressBar, sha1sum,
                                    build_history, bytesize_with_prefix)
 
 
@@ -22,6 +22,9 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is created")
+parser.add_argument(
+    "--verify", action="store_true",
+    help="verify the data integrity of all accessed columns")
 parser.add_argument(
     "-q", "--query",
     help="expression to select a subset of the pipeline output "
@@ -124,6 +127,30 @@ def main():
         else:
             dtype = table.dtype
             request_table = table
+        
+        # verify the data if requested
+        if args.verify:
+            logger.info("running SHA-1 checksums")
+            if args.columns is None:
+                verification_columns = table.colnames
+            else:
+                verification_columns = [col for col in args.columns]
+                if selection_columns is not None:
+                    verification_columns.extend(selection_columns)
+            name_width = max(len(name) for name in verification_columns)
+            for i, name in enumerate(verification_columns, 1):
+                sys.stdout.write("checking {:3d} / {:3d}: {:}\r".format(
+                    i, len(verification_columns), name.ljust(name_width)))
+                sys.stdout.flush()
+                column = table[name]
+                try:
+                    checksum = column.attr["SHA-1 checksum"]
+                    assert(checksum == sha1sum(column.filename))
+                except KeyError:
+                    logger.warn("no checksum provided: {:}".format(name))
+                except AssertionError:
+                    message = "checksums do not match: {:}".format(name)
+                    logger.handleException(AssertionError(message))
 
         # automatically determine the format file format
         if args.output is None:  # write to stdout in csv format
@@ -185,20 +212,6 @@ def main():
                     pbar.update(end - start)
             if not to_stdout:
                 pbar.close()
-
-            # write a summary of the data store history if possible
-            """
-            TODO: fix this issue
-            if hasattr(writer, "write_history"):
-                date_width = 24
-                for date, call in build_history(table, logger).items():
-                    writer.write_history(
-                        "{:} : {:}".format(date.ljust(date_width), call))
-                # add the call of this script
-                call = ModificationStamp(sys.argv)._attrs["created by"]
-                writer.write_history(
-                    "{:} : {:}".format(asctime().ljust(date_width), call))
-            """
 
         message = "wrote {:,d} matching entries (total: {:,d})"
         logger.info(message.format(n_select, end))
