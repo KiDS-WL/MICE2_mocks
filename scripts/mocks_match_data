@@ -78,7 +78,7 @@ def main():
                 pool.add_result_column(output_path)
 
             logger.info(
-                "building feature space tree, this may take a while ...")
+                "building feature space tree, this may take a while...")
             matcher.build_tree()
 
             # compute and store the corrected magnitudes

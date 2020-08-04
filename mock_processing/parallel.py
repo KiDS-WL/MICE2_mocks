@@ -362,10 +362,10 @@ class ParallelTable(object):
             # notify begin of processing
             if self._logger is not None:
                 if threads > 1:
-                    message = "processing input stream using {:d} threads ..."
+                    message = "processing input stream using {:d} processes..."
                     message = message.format(threads)
                 else:
-                    message = "processing input stream ..."
+                    message = "processing input stream..."
                 self._logger.info(message)
             # create the worker pool
             with mp.Pool(threads) as pool:
