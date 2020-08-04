@@ -195,10 +195,12 @@ class ParseMatchingConfig(object):
         "input",
         "normalize",
         "max_dist",
+        "every_n",
         # these are filter specific (dictionary) values:
         "features",
         "observables",
-        "fallback"}
+        "fallback",
+        "weights"}
     # NOTE: register paramters for new algorithms here
     _algorithm_params = {}
     _default_path = os.path.join(_DEFAULT_CONFIG_PATH, "matching.toml")
@@ -232,6 +234,10 @@ class ParseMatchingConfig(object):
         # check that there are no fallback values with no matching observable
         if not self.observables.keys() >= self.fallback.keys():
             message = "fallback values are provided for undefined observables"
+            raise KeyError(message)
+        # check that there are no weights with no matching observable
+        if not self.observables.keys() >= self.weights.keys():
+            message = "weights are provided for undefined observables"
             raise KeyError(message)
 
     def __str__(self):

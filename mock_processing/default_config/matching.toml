@@ -4,6 +4,8 @@ normalize = false       # whether each feature space dimension is normalized by
 max_dist = 1.0          # maximum distance (Euclidean metric) to consider the
                         # nearest neighbour a match, otherwise the fallback
                         # value is assigned
+every_n = 1             # take a regular sample of the input data to speed up
+                        # tree build and query times
 
 [features]
 # Mapping between columns of the input data table and the columns of the mock
@@ -23,5 +25,12 @@ max_dist = 1.0          # maximum distance (Euclidean metric) to consider the
 [fallback]
 # Fallback value to assign if the nearest neighbour distance > max_dist. If no
 # value is provided the value of the observable is assigned instead.
+                        # key must match one of the keys in observables, value
+                        # must have the same data type as the observables
+
+[weights]
+# Weights are used to scale the feature space along specific axes. This is
+# useful to give a higher or lower significance to some features when matching.
+# If no weight is provided for a feature, no scaling is applied.
                         # key must match one of the keys in observables, value
                         # must have the same data type as the observables

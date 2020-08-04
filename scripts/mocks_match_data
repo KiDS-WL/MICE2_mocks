@@ -1,0 +1,95 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+
+from mock_processing import PipeLogger, expand_path, open_datastore
+from mock_processing.config import DumpMatchingConfig, load_matching_config
+from mock_processing.matching import DataMatcher
+from mock_processing.parallel import ParallelTable
+from mock_processing.utils import (ModificationStamp, create_column,
+                                   require_column)
+
+
+parser = argparse.ArgumentParser(
+    description="Infer attributes from an external data set using a k-nearest "
+                "neighbour matching.",
+    epilog="The input data must be loaded to memory at once, building the "
+           "search tree is not parallelized. Therefore matching against large "
+           "data sets may be slow.",
+    add_help=False)
+parser.register("action", "dump", DumpMatchingConfig)
+
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+parser.add_argument(
+    "-c", "--config", type=expand_path, required=True,
+    help="parameter file in TOML format that defines the properties of the "
+         "photometry realisation and the method parameters (use --dump to "
+         "obtain a default parameter file)")
+parser.add_argument(
+    "--threads", type=int, default=4,
+    help="number of threads to use (default: %(default)s)")
+
+help_group = parser.add_argument_group("help and documentation")
+help_group.add_argument(
+    "-h", "--help", action="help",
+    help="show this help message and exit")
+help_group.add_argument(
+    "--dump", nargs=0, action="dump",
+    help="dump a default columns file to stdout and exit")
+
+
+def main():
+
+    args = parser.parse_args()
+    logger = PipeLogger(__file__, args.datastore)
+    timestamp = ModificationStamp(sys.argv)
+
+    # check the configuration file
+    config = load_matching_config(args.config, logger)
+
+    # apply the magnification correction to the model magnitudes
+    with open_datastore(args.datastore, logger, readonly=False) as table:
+
+        with DataMatcher(config, logger) as matcher:
+
+            pool = ParallelTable(table, logger)
+            pool.chunksize = max(args.threads * 4096, pool.chunksize)
+            pool.set_worker(matcher.apply)
+
+            # select the required feature columns
+            for feature_path in config.features.values():
+                require_column(table, logger, feature_path, "feature")
+                pool.add_argument_column(feature_path, keyword=feature_path)
+            # check that the data types are compatible
+            try:
+                matcher.check_features(table)
+            except Exception as e:
+                logger.handleException(e)
+
+            # make the output columns for each observable
+            for output_path, dtype, attr in matcher.observable_information():
+                column = create_column(
+                    table, logger, output_path, dtype=dtype, attr=attr,
+                    overwrite=True)
+                timestamp.register(column)
+                pool.add_result_column(output_path)
+
+            logger.info(
+                "building feature space tree, this may take a while ...")
+            matcher.build_tree()
+
+            # compute and store the corrected magnitudes
+            pool.add_argument_constant(args.threads, keyword="threads")
+            pool.execute(1)  # cKDTree implementation releases GIL in queries
+
+        logger.info("updating headers and closing data store")
+        timestamp.finalize()
+    # close the table and flush data
+    logger.info("computation completed for {:,d} entries".format(len(table)))
+
+
+if __name__ == "__main__":
+    main()
