@@ -1,6 +1,7 @@
 import os
 import sys
 from collections import OrderedDict
+from hashlib import sha1
 from time import asctime, strptime
 
 from tqdm import tqdm
@@ -209,6 +210,18 @@ class ProgressBar(tqdm):
         self.smoothing = 0.05
 
 
+def sha1sum(path):
+    hasher = sha1() 
+    with open(path, "rb") as f:
+        while True:
+            buffer = f.read(1048576)
+            if not buffer:
+                break
+            hasher.update(buffer)
+    checksum = hasher.hexdigest()
+    return checksum
+
+
 class ModificationStamp(object):
     """
     Write attributes which indicate by which pipeline scipt (including command
@@ -244,7 +257,7 @@ class ModificationStamp(object):
             raise TypeError("column must have an attribute 'attr'")
         self._columns.append(column)
 
-    def finalize(self, timestamp=None):
+    def finalize(self, timestamp=None, checksum=True):
         """
         Take the current local time and format and write the attributes to the
         registered columns.
@@ -253,6 +266,8 @@ class ModificationStamp(object):
         -----------
         timestamp : str
             Text encoded time stamp.
+        checksum : bool
+            Whether to add a SHA-1 checksum attribute.
         """
         # store the current time if none is provided
         if timestamp is None:
@@ -263,4 +278,6 @@ class ModificationStamp(object):
         for column in self._columns:
             attrs = column.attr  # read
             attrs.update(self._attrs)
+            if checksum:
+                attrs.update({"SHA-1 checksum": sha1sum(column.filename)})
             column.attr = attrs  # write

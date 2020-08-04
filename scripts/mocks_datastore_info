@@ -8,8 +8,9 @@ from mock_processing.utils import build_history, bytesize_with_prefix
 
 
 parser = argparse.ArgumentParser(
-    description="Select a (sub-)sample of the pipeline output and save it "
-                "in a different data format")
+    description="Show information about the data store like the size on disk, "
+                "shape, column names, descriptions, attributes and pipeline "
+                "logs and processing history.")
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is created")

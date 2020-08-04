@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+import argparse
+import os
+
+from memmap_table import MemmapTable
+from mock_processing import expand_path
+from mock_processing.utils import build_history, bytesize_with_prefix, sha1sum
+
+
+parser = argparse.ArgumentParser(
+    description="Verify the data integrity by using SHA-1 checksums")
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
+
+
+def main():
+
+    args = parser.parse_args()
+    with MemmapTable(args.datastore) as table:
+
+        # display the table meta data
+        print("==> META DATA")
+        size = bytesize_with_prefix(table.nbytes)
+        n_cols, n_rows = table.shape
+        print("root:     {:}".format(table.root))
+        print("size:     {:}".format(size))
+        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
+
+        # verify the check sums
+        header = "==> COLUMN NAME"
+        width_cols = max(len(header), max(
+            len(colname) for colname in table.colnames))
+        print("\n{:}    {:}  {:}".format(
+            header.ljust(width_cols), "STATUS ", "HASH"))
+        line = "{:<{width}s}    {:<7s}  {:s}"
+        for name in table.colnames:
+            column = table[name]
+            try:
+                checksum = column.attr["SHA-1 checksum"]
+                assert(checksum == sha1sum(column.filename))
+            except KeyError:
+                print(line.format(
+                    name, "WARNING", "no checksum provided", width=width_cols))
+            except AssertionError:
+                print(line.format(
+                    name, "ERROR", "checksums do not match", width=width_cols))
+            else:
+                print(line.format(name, "OK", checksum, width=width_cols))
+
+
+if __name__ == "__main__":
+    main()
