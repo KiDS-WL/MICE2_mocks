@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ./1_init_pipeline.sh $1 $2
-./2_evolution_correction.sh $1 $2
+./2_flux_to_magnitudes.sh $1 $2
 ./3_magnification_correction.sh $1 $2
 ./4_effective_radius.sh $1 $2
 ./5_apertures.sh $1 $2
