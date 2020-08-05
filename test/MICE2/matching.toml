@@ -5,7 +5,7 @@ normalize = false       # whether each feature space dimension is normalized by
 max_dist = 1.0          # maximum distance (Euclidean metric) to consider the
                         # nearest neighbour a match, otherwise the fallback
                         # value is assigned
-every_n = 10            # take a regular sample of the input data to speed up
+every_n = 1             # take a regular sample of the input data to speed up
                         # tree build and query times
 
 [features]

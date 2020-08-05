@@ -3,8 +3,12 @@
 if [ "$1" == "deep" ]
 then
     table="deep"
-else
+elif [ "$1" == "test" ]
+then
     table="256th"
+else
+    echo "ERROR: invalid setup \"$1\", must be \"test\" or \"deep\""
+    exit 1;
 fi
 
 export hostname=$HOSTNAME
@@ -13,4 +17,4 @@ export hostname=$HOSTNAME
     -c BPZ.toml \
     --mag mags/KV450 \
     --zphot BPZ/KV450 \
-    --threads 32
+    --threads ${2:-32}
