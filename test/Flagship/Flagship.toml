@@ -1,5 +1,5 @@
 index_halo = "halo_id"
-index_galaxy = "galaxy_id"
+index_galaxy = ["galaxy_id", "i2"]
 
 [position]
 "ra/true" = "ra_gal"
@@ -37,4 +37,4 @@ kappa = "kappa"
 is_satellite = ["kind", "bool"]
 log_M_halo = "halo_lm"
 log_M_stellar = "log_stellar_mass"
-n_sattelites = "halo_n_sats"
+n_sattelites = ["halo_n_sats", "i2"]

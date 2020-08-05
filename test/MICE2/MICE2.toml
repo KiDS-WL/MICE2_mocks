@@ -40,4 +40,4 @@ kappa = "kappa"
 is_central = [ "flag_central", "bool",]
 log_M_halo = "lmhalo"
 log_M_stellar = "lmstellar"
-n_sattelites = "nsats"
+n_sattelites = ["nsats", "i2"]
