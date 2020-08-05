@@ -44,7 +44,8 @@ class BpzManager(object):
             ("ODDS", "Probability contained in the main BPZ posterior peak"),
             ("Z_ML", "{:} maximum likelihood redshift".format(prefix)),
             ("T_ML", "{:} maximum likelihood template".format(prefix)),
-            ("CHI-SQUARED", "{:} chi squared".format(prefix))])
+            ("CHI-SQUARED", "{:} chi squared".format(prefix)),
+            ("M_0", "reference magnitude of the PBZ prior")])
         # run the initialization
         if logger is not None:
             message = "setting up working directory: {:}"
@@ -308,7 +309,7 @@ class BpzManager(object):
 
     def execute(
             self, *mags_errs, threadID=None, verbose=False,
-            get_ID=False, get_M_0=False):
+            get_ID=False, get_M_0=True):
         self._write_input(*mags_errs, threadID=threadID)
         self._run_BPZ(threadID, verbose=verbose)
         result = self._read_output(threadID, get_ID, get_M_0)

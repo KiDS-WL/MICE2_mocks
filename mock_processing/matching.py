@@ -116,7 +116,8 @@ class DataMatcher(object):
         transformed = None
         for i, (path, scale) in enumerate(zip(paths, scales)):
             if transformed is None:
-                transformed = np.empty((len(table[path]), len(paths)))
+                transformed = np.empty(
+                    (len(table[path]), len(paths)), dtype=self._feature_dtype)
             transformed[:, i] = table[path] * scale
         return transformed
 
