@@ -24,7 +24,7 @@ class ModificationStamp(object):
     """
 
     def __init__(self, sys_argv):
-        self._columns = []
+        self._columns = {}
         # store the script call that created/modified this column
         call_basename = os.path.basename(sys_argv[0])
         call_arguments = sys_argv[1:]
@@ -36,7 +36,7 @@ class ModificationStamp(object):
     def __len__(self):
         return len(self._columns)
 
-    def register(self, column):
+    def register(self, column, name):
         """
         Register a column for which the attributes should be updated.
 
@@ -44,10 +44,12 @@ class ModificationStamp(object):
         -----------
         column : memmap_table.Column
             Column instance from the data store to update.
+        name : string
+            Name of the column (path within the data store).
         """
         if not hasattr(column, "attr"):
             raise TypeError("column must have an attribute 'attr'")
-        self._columns.append(column)
+        self._columns[name] = column
 
     def finalize(self, timestamp=None, checksum=True):
         """
@@ -67,14 +69,21 @@ class ModificationStamp(object):
         else:
             self._attrs["created at"] = timestamp
         # update all columns
-        for i, column in enumerate(self._columns, 1):
+        name_width = max(len(name) for name in self._columns)
+        for i, (name, column) in enumerate(self._columns.items(), 1):
             attrs = column.attr  # read
             if attrs is None:
                 attrs = {}
             attrs.update(self._attrs)
             if checksum:
+                sys.stdout.write("processing {:3d} / {:3d}: {:}\r".format(
+                    i, len(self), name.ljust(name_width)))
+                sys.stdout.flush()
                 attrs.update({"SHA-1 checksum": sha1sum(column.filename)})
             column.attr = attrs  # write
+        if checksum:  # clear the line
+            sys.stdout.write(" " * (22 + name_width) + "\r")
+            sys.stdout.flush()
 
 
 class DataStore(MemmapTable):
@@ -186,7 +195,7 @@ class DataStore(MemmapTable):
         else:
             self._logger.debug("creating column: {:}".format(path))
         column = super().add_column(path, *args, **kwargs)
-        self._timestamp.register(column)
+        self._timestamp.register(column, path)
         self._filesize = bytesize_with_prefix(self.nbytes)
         return column
 
