@@ -51,8 +51,10 @@ def main():
 
         with DataMatcher(config, logger) as matcher:
 
-            ds.pool.chunksize = max(args.threads * 4096, ds.pool.chunksize)
             ds.pool.set_worker(matcher.apply)
+            # increase the default chunksize, larger chunks will be marginally
+            # faster but the progress update will be infrequent
+            ds.pool.chunksize = max(args.threads * 4096, ds.pool.chunksize)
 
             # select the required feature columns
             for feature_path in config.features.values():
@@ -76,7 +78,7 @@ def main():
 
             # compute and store the corrected magnitudes
             ds.pool.add_argument_constant(args.threads, keyword="threads")
-            ds.pool.execute(1)  # cKDTree implementation releases GIL
+            ds.pool.apply()  # cKDTree implementation releases GIL
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 

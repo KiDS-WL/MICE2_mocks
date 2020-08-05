@@ -204,8 +204,10 @@ def main():
             if not to_stdout:
                 pbar.close()
 
-        message = "wrote {:,d} matching entries (total: {:,d})"
-        logger.info(message.format(n_select, end))
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
+        message = "wrote {:,d} matching entries ({:})".format(
+            n_select, bytesize_with_prefix(writer.filesize))
+        logger.info(message)
 
 
 if __name__ == "__main__":

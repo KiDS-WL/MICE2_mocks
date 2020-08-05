@@ -315,7 +315,7 @@ class ParallelTable(object):
     def execute(self, n_threads=None, prefix=None, seed=None):
         """
         Apply the worker function on the input table using a given number of
-        threads and writing the results to the output columns.
+        parallel processes and writing the results to the output columns.
 
         Parameters:
         -----------
@@ -325,8 +325,8 @@ class ParallelTable(object):
             Prefix for the progressbar (optional).
         seed : str
             String to seed the random generator (optional). Each thread appends
-            it's index to assure that the random state in each thread is
-            differnt.
+            it's index to this string to assure that the random state in each
+            thread is differnt.
         """
         threads = self._n_threads(n_threads)
         # assign row subsets to the threads
@@ -353,24 +353,59 @@ class ParallelTable(object):
             if seed is None:
                 seeds = [None] * threads
             else:
-                seeds = ["{}{:d}".format(seed, i) for i in range(threads)]
+                seeds = ["{:}{:d}".format(seed, i) for i in range(threads)]
             worker_args = list(zip(
                 index_ranges, repeat(self._worker_function),
                 repeat(self._call_args), repeat(self._call_kwargs),
                 repeat(self._return_map), repeat(progress_queue), seeds,
                 threadIDs))
             # notify begin of processing
+            message = "processing column data using {:d} processes ..."
+            message = message.format(threads)
             if self._logger is not None:
-                if threads > 1:
-                    message = \
-                        "processing input stream using {:d} processes ..."
-                    message = message.format(threads)
-                else:
-                    message = "processing input stream ..."
                 self._logger.info(message)
             # create the worker pool
             with mp.Pool(threads) as pool:
                 pool.map(_thread_worker, worker_args)
+            # send the sentinel object that stops the monitor process from
+            # reading from the queue 
+            progress_queue.put(None)
+        finally:
+            progress_monitor.join()
+
+    def apply(self, prefix=None, seed=None):
+        """
+        Apply the worker function on the input table sequentially and writing
+        the results to the output columns. Useful, if most of the worker
+        function code releases the GIL.
+
+        Parameters:
+        -----------
+        prefix : str
+            Prefix for the progressbar (optional).
+        seed : str
+            String to seed the random generator (optional).
+        """
+        n_rows = len(self._table)
+        # Initialize the monitoring thread that manages a progress bar,
+        # managing the progress over all threads. The row progress is
+        # communicated through a queue.
+        mp_manager = mp.Manager()
+        progress_queue = mp_manager.Queue()
+        progress_monitor = mp.Process(
+            target=_monitor_worker, args=(progress_queue, n_rows, prefix))
+        progress_monitor.start()
+        try:
+            # collect the call arguments for the worker
+            chunk_iter = ParallelIterator(0, n_rows, self.chunksize)
+            worker_args = [
+                chunk_iter, self._worker_function,
+                self._call_args, self._call_kwargs, self._return_map,
+                progress_queue, seed, 0 if self._parse_thread_id else None]
+            message = "processing column data ..."
+            if self._logger is not None:
+                self._logger.info(message)
+            _thread_worker(worker_args)
             # send the sentinel object that stops the monitor process from
             # reading from the queue 
             progress_queue.put(None)
