@@ -3,20 +3,15 @@ import argparse
 import os
 import sys
 
-from mock_processing import PipeLogger, expand_path, open_datastore
+import mock_processing as mocks
 from mock_processing.MICE2 import evolution_correction_wrapped
-from mock_processing.parallel import ParallelTable
-from mock_processing.photometry import load_photometry
-from mock_processing.utils import (ModificationStamp, create_column,
-                                   require_column)
 
 
 parser = argparse.ArgumentParser(
     description="Apply the evolutionary correction to the MICE2 model "
                 "magnitudes.")
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is located")
+    "datastore", help="directory in which the data store is located")
 parser.add_argument(
     "--mag",
     help="sub-directory within data store which contains the input magnitudes")
@@ -32,23 +27,21 @@ parser.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__, args.datastore)
-    timestamp = ModificationStamp(sys.argv)
+    logger = mocks.PipeLogger(__file__, args.datastore)
 
     # apply the evolution correction to the model magnitudes
-    with open_datastore(args.datastore, logger, readonly=False) as table:
+    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
 
-        pool = ParallelTable(table, logger)
-        pool.set_worker(evolution_correction_wrapped)
+        ds.pool.set_worker(evolution_correction_wrapped)
 
         # find redshift column
         z_path = "position/z/true"
-        require_column(table, logger, z_path, "true redshift")
-        pool.add_argument_column(z_path)
+        ds.require_column(z_path, "true redshift")
+        ds.pool.add_argument_column(z_path)
 
         # find all magnitude columns
         try:
-            model_mags, _ = load_photometry(table, args.mag)
+            model_mags, _ = ds.load_photometry(args.mag)
         except KeyError as e:
             logger.handleException(e)
 
@@ -56,24 +49,18 @@ def main():
         for key, mag_path in model_mags.items():
             evo_path = os.path.join(args.evo, key)
             # create new output columns
-            column = create_column(
-                table, logger, evo_path, dtype=table[mag_path].dtype.str,
+            ds.add_column(
+                evo_path, dtype=ds[mag_path].dtype.str, overwrite=True,
                 attr={
                     "description":
-                    "{:} with evolution correction applied".format(mag_path)},
-                overwrite=True)
-            timestamp.register(column)
+                    "{:} with evolution correction applied".format(mag_path)})
             # add columns to call signature
-            pool.add_argument_column(mag_path)
-            pool.add_result_column(evo_path)
+            ds.pool.add_argument_column(mag_path)
+            ds.pool.add_result_column(evo_path)
 
         # compute and store the corrected magnitudes in parallel
-        pool.execute(args.threads)
-
-        logger.info("updating headers and closing data store")
-        timestamp.finalize()
-    # close the table and flush data
-    logger.info("computation completed for {:,d} entries".format(len(table)))
+        ds.pool.execute(args.threads)
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
 if __name__ == "__main__":

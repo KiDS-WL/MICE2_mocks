@@ -3,13 +3,10 @@ import argparse
 import os
 import sys
 
-from mock_processing import PipeLogger, expand_path, open_datastore
-from mock_processing.config import DumpPhotometryConfig, load_photometry_config
-from mock_processing.parallel import ParallelTable
-from mock_processing.photometry import (load_photometry,
-                                        photometry_realisation_wrapped)
-from mock_processing.utils import (ModificationStamp, create_column,
-                                   require_column)
+import mock_processing as mocks
+from mock_processing.core.config import (DumpPhotometryConfig,
+                                         load_photometry_config)
+from mock_processing.photometry import photometry_realisation_wrapped
 
 
 parser = argparse.ArgumentParser(
@@ -19,8 +16,7 @@ parser = argparse.ArgumentParser(
 parser.register("action", "dump", DumpPhotometryConfig)
 
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is located")
+    "datastore", help="directory in which the data store is located")
 
 parser.add_argument(
     "--mag",
@@ -33,7 +29,7 @@ parser.add_argument(
     "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
     help="photometry algorthim to apply (default: %(default)s)")
 parser.add_argument(
-    "-c", "--config", type=expand_path, required=True,
+    "-c", "--config", required=True,
     help="parameter file in TOML format that defines the properties of the "
          "photometry realisation and the method parameters (use --dump to "
          "obtain a default parameter file)")
@@ -61,22 +57,19 @@ help_group.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__, args.datastore)
-    timestamp = ModificationStamp(sys.argv)
+    logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
     config = load_photometry_config(args.config, logger)
 
     # apply the magnification correction to the model magnitudes
-    with open_datastore(args.datastore, logger, readonly=False) as table:
+    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
 
         # find all magnitude columns
         try:
-            input_mags, _ = load_photometry(table, args.mag)
+            input_mags, _ = ds.load_photometry(args.mag)
         except KeyError as e:
             logger.handleException(e)
-
-        pool = ParallelTable(table, logger)
 
         # select the required magnitude columns
         available = set(input_mags.keys())
@@ -87,27 +80,26 @@ def main():
             logger.handleException(KeyError(message))
         
         # initialize the photometry generation
-        pool.set_worker(photometry_realisation_wrapped)
-        pool.add_argument_constant(config)
+        ds.pool.set_worker(photometry_realisation_wrapped)
+        ds.pool.add_argument_constant(config)
 
         # collect the filter-specific arguments
         for key in config.filter_names:
             # 1) magnitude column
             mag_path = input_mags[key]
-            require_column(table, logger, mag_path, "{:}-band".format(key))
-            pool.add_argument_column(mag_path)
+            ds.require_column(mag_path, "{:}-band".format(key))
+            ds.pool.add_argument_column(mag_path)
             # 2) magnitude limit
-            pool.add_argument_constant(config.limits[key])
+            ds.pool.add_argument_constant(config.limits[key])
             # 3) S/N correction factors
-            if args.no_aper:
-                pool.add_argument_constant(1.0)  # aperture correction disabled
+            if args.no_aper:  # disable aperture correction
+                ds.pool.add_argument_constant(1.0)
             else:
                 snr_path = "apertures/{:}/snr_correction/{:}".format(
                     args.method, key)
-                require_column(
-                    table, logger, mag_path,
-                    "{:}-band S/N correction".format(key))
-                pool.add_argument_column(snr_path)
+                ds.require_column(
+                    mag_path, "{:}-band S/N correction".format(key))
+                ds.pool.add_argument_column(snr_path)
 
         output_columns = (  # for each filter three output columns are required
             ("{:}/{:}",
@@ -117,22 +109,16 @@ def main():
         # make the output columns for each filter
         for key in config.filter_names:
             for out_path, desc in output_columns:
-                column = create_column(
-                    table, logger, out_path.format(args.real, key),
-                    dtype=table[mag_path].dtype.str,
-                    overwrite=True, attr={
+                ds.add_column(
+                    out_path.format(args.real, key),
+                    dtype=ds[mag_path].dtype.str, overwrite=True, attr={
                         "description": desc.format(
                             args.method, mag_path, config.limits[key])})
-                timestamp.register(column)
-                pool.add_result_column(out_path.format(args.real, key))
+                ds.pool.add_result_column(out_path.format(args.real, key))
 
         # compute and store the corrected magnitudes
-        pool.execute(args.threads, seed=args.seed)
-
-        logger.info("updating headers and closing data store")
-        timestamp.finalize()
-    # close the table and flush data
-    logger.info("computation completed for {:,d} entries".format(len(table)))
+        ds.pool.execute(args.threads, seed=args.seed)
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
 if __name__ == "__main__":

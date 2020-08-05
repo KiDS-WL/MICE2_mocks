@@ -3,13 +3,9 @@ import argparse
 import os
 import sys
 
-from mock_processing import PipeLogger, expand_path, open_datastore
-from mock_processing.config import DumpBpzConfig, load_bpz_config
-from mock_processing.parallel import ParallelTable
-from mock_processing.photometry import load_photometry
+import mock_processing as mocks
+from mock_processing.core.config import DumpBpzConfig, load_bpz_config
 from mock_processing.photoz import BpzManager
-from mock_processing.utils import (ModificationStamp, create_column,
-                                   require_column)
 
 
 parser = argparse.ArgumentParser(
@@ -19,8 +15,7 @@ parser = argparse.ArgumentParser(
 parser.register("action", "dump", DumpBpzConfig)
 
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is located")
+    "datastore", help="directory in which the data store is located")
 parser.add_argument(
     "--mag",
     help="sub-directory within data store which contains the input magnitudes")
@@ -28,7 +23,7 @@ parser.add_argument(
     "--zphot",
     help="sub-directory within data store where the BPZ output is stored")
 parser.add_argument(
-    "-c", "--config", type=expand_path, required=True,
+    "-c", "--config", required=True,
     help="parameter file in TOML format to configure BPZ")
 parser.add_argument(
     "--threads", type=int,
@@ -46,36 +41,33 @@ help_group.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__, args.datastore)
-    timestamp = ModificationStamp(sys.argv)
+    logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
     config = load_bpz_config(args.config, logger)
 
     # run BPZ on the selected magnitudes
-    with open_datastore(args.datastore, logger, readonly=False) as table:
+    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
 
         # find all magnitude columns
         try:
-            input_mags, input_errs = load_photometry(table, args.mag)
+            input_mags, input_errs = ds.load_photometry(args.mag)
         except KeyError as e:
             logger.handleException(e)
-
-        pool = ParallelTable(table, logger)
 
         # launch the BPZ manager
         logger.info("initializing BPZ")
         with BpzManager(config, logger) as bpz:
 
-            pool.set_worker(bpz.execute)
-            pool.parse_thread_id = True
+            ds.pool.set_worker(bpz.execute)
+            ds.pool.parse_thread_id = True
 
             # add the magnitude and error columns to call signature
             for key in bpz.filter_names:
                 try:
                     mag_key, err_key = input_mags[key], input_errs[key]
-                    pool.add_argument_column(mag_key)
-                    pool.add_argument_column(err_key)
+                    ds.pool.add_argument_column(mag_key)
+                    ds.pool.add_argument_column(err_key)
                 except KeyError as e:
                     logger.handleException(e)
 
@@ -83,20 +75,14 @@ def main():
             for key, desc in bpz.descriptions.items():
                 zphot_path = os.path.join(args.zphot, key)
                 # create new output columns
-                column = create_column(
-                    table, logger, zphot_path, dtype=bpz.dtype[key].str,
-                    attr={"description": desc},
-                    overwrite=True)
-                timestamp.register(column)
+                ds.add_column(
+                    zphot_path, dtype=bpz.dtype[key].str, overwrite=True,
+                    attr={"description": desc})
                 # add columns to call signature
-                pool.add_result_column(zphot_path)
+                ds.pool.add_result_column(zphot_path)
 
-            pool.execute(args.threads)
-
-        logger.info("updating headers and closing data store")
-        timestamp.finalize()
-    # close the table and flush data
-    logger.info("computation completed for {:,d} entries".format(len(table)))
+            ds.pool.execute(args.threads)
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
 if __name__ == "__main__":

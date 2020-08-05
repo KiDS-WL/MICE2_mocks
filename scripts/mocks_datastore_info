@@ -2,9 +2,7 @@
 import argparse
 import os
 
-from memmap_table import MemmapTable
-from mock_processing import expand_path
-from mock_processing.utils import build_history, bytesize_with_prefix
+import mock_processing as mocks
 
 
 parser = argparse.ArgumentParser(
@@ -12,8 +10,7 @@ parser = argparse.ArgumentParser(
                 "shape, column names, descriptions, attributes and pipeline "
                 "logs and processing history.")
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is created")
+    "datastore", help="directory in which the data store is created")
 parser.add_argument(
     "-c", "--columns", action="store_true", help="show the column data types")
 parser.add_argument(
@@ -28,38 +25,37 @@ parser.add_argument(
 def main():
 
     args = parser.parse_args()
-    with MemmapTable(args.datastore) as table:
+    with mocks.DataStore.open(args.datastore) as ds:
 
         # display the table meta data
         print("==> META DATA")
-        size = bytesize_with_prefix(table.nbytes)
-        n_cols, n_rows = table.shape
-        print("root:     {:}".format(table.root))
-        print("size:     {:}".format(size))
+        n_cols, n_rows = ds.shape
+        print("root:     {:}".format(ds.root))
+        print("size:     {:}".format(ds.filesize))
         print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
 
         if args.columns:
             # list all the column names and data types
             header = "==> COLUMN NAME"
             width_cols = max(len(header), max(
-                len(colname) for colname in table.colnames))
+                len(colname) for colname in ds.colnames))
             print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
-            for name in table.colnames:
+            for name in ds.colnames:
                 colname_padded = name.ljust(width_cols)
                 line = "{:}    {:}".format(
-                    colname_padded, str(table[name].dtype))
+                    colname_padded, str(ds[name].dtype))
                 print(line)
 
         if args.attr:
             # for each column print a summary of the attached attributes
             print("\n==> ATTRIBUTES")
-            for name in table.colnames:
+            for name in ds.colnames:
                 print()
                 # print the column name indented and then a tree-like listing
                 # of the attributes (drawing connecting lines for better
                 # visibitilty)
                 print("{:}".format(name))
-                attrs = table[name].attr
+                attrs = ds[name].attr
                 # all attributes from the pipeline should be dictionaries
                 if type(attrs) is dict:
                     i_last = len(attrs)
@@ -78,13 +74,13 @@ def main():
             # list all pipeline script calls ordered by time
             print("\n==> HISTORY")
             date_width = 24
-            for date, call in build_history(table).items():
+            for date, call in ds.get_history().items():
                 print("{:} : {:}".format(date.ljust(date_width), call))
 
         if args.logs:
             # show the log file
             print("\n==> LOGS")
-            logpath = table.root + ".log"
+            logpath = ds.root + ".log"
             if not os.path.exists(logpath):
                 raise OSError("log file not found: {:}".format(logpath))
             with open(logpath) as f:

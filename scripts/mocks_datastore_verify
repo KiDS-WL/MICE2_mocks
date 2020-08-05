@@ -2,42 +2,39 @@
 import argparse
 import os
 
-from memmap_table import MemmapTable
-from mock_processing import expand_path
-from mock_processing.utils import build_history, bytesize_with_prefix, sha1sum
+import mock_processing as mocks
+from mock_processing.core.utils import sha1sum
 
 
 parser = argparse.ArgumentParser(
     description="Verify the data integrity by using SHA-1 checksums")
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is created")
+    "datastore", help="directory in which the data store is created")
 
 
 def main():
 
     args = parser.parse_args()
-    with MemmapTable(args.datastore) as table:
+    with mocks.DataStore.open(args.datastore) as ds:
 
         # display the table meta data
         print("==> META DATA")
-        size = bytesize_with_prefix(table.nbytes)
-        n_cols, n_rows = table.shape
-        print("root:     {:}".format(table.root))
-        print("size:     {:}".format(size))
+        n_cols, n_rows = ds.shape
+        print("root:     {:}".format(ds.root))
+        print("size:     {:}".format(ds.filesize))
         print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
 
         # verify the check sums
         header = "==> COLUMN NAME"
         width_cols = max(len(header), max(
-            len(colname) for colname in table.colnames))
+            len(colname) for colname in ds.colnames))
         print("\n{:}    {:}  {:}".format(
             header.ljust(width_cols), "STATUS ", "HASH"))
         # compute and verify the store checksums column by column
         n_good, n_warn, n_error = 0, 0, 0
         line = "{:<{width}s}    {:<7s}  {:s}"
-        for name in table.colnames:
-            column = table[name]
+        for name in ds.colnames:
+            column = ds[name]
             try:
                 checksum = column.attr["SHA-1 checksum"]
                 assert(checksum == sha1sum(column.filename))
@@ -53,7 +50,7 @@ def main():
             else:
                 print(line.format(name, "OK", checksum, width=width_cols))
         # do a final report
-        if n_good == len(table.colnames):
+        if n_good == len(ds.colnames):
             print("\nAll columns passed")
         else:
             print("\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(

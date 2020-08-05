@@ -4,26 +4,24 @@ import os
 import sys
 
 from memmap_table import MemmapTable
-from mock_processing import PipeLogger, expand_path
-from mock_processing.readwrite import guess_format, supported_readers
-from mock_processing.utils import (ModificationStamp, ProgressBar,
-                                   bytesize_with_prefix, create_column)
+
+import mock_processing as mocks
+from mock_processing.core.utils import ProgressBar
+from mock_processing.core.readwrite import guess_format, supported_readers
 
 
 parser = argparse.ArgumentParser(
     description="Convert a data set to an internal data store.")
 
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is created")
+    "datastore", help="directory in which the data store is created")
 parser.add_argument(
     "--purge", action="store_true",
     help="delete any existing data in datastore")
 
 input_group = parser.add_argument_group("input simulation table")
 input_group.add_argument(
-    "-i", "--input", required=True, type=expand_path,
-    help="path to input simulation table")
+    "-i", "--input", required=True, help="path to input simulation table")
 input_group.add_argument(
     "--format", choices=sorted(supported_readers.keys()),
     help="input table file format (default: inferred from file extension)")
@@ -35,7 +33,7 @@ input_group.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__)
+    logger = mocks.PipeLogger(__file__)
 
     # automatically determine the input file format
     if args.format is None:
@@ -60,31 +58,14 @@ def main():
     # read the data file and write it to the memmory mapped data store
     with reader:
 
-        # create the memmory mapped data store
-        exists = os.path.exists(args.datastore)
-        if not args.purge and exists:
-            # this is a safety feature since any existing output directory is
-            # erased completely
-            message = "ouput path exists but overwriting is not permitted: {:}"
-            message = message.format(args.datastore)
-            logger.handleException(OSError(message))
-        logger.info("creating data store: {:}".format(args.datastore))
-        try:
-            table = MemmapTable(args.datastore, nrows=len(reader), mode="w+")
-        except Exception as e:
-            logger.handleException(e)
+        with mocks.DataStore.create(
+                args.datastore, len(reader), args.purge, logger=logger) as ds:
 
-        with table:
             # create the new data columns
             logger.debug(
                 "registering {:,d} new columns".format(len(reader.colnames)))
             for colname in reader.colnames:
-                try:
-                    column = create_column(
-                        table, logger, colname, dtype=reader.dtype[colname])
-                except KeyError as e:
-                    logger.handleException(e)
-            logger.debug("allocated {:,d} table rows".format(len(table)))
+                ds.add_column(colname, dtype=reader.dtype[colname])
 
             # copy the data
             logger.info("processing input stream ...")
@@ -104,33 +85,27 @@ def main():
                     # the CSV reader provides a conservative estimate of the
                     # required number of rows so we need to keep allocating
                     # more memory if necessary
-                    if end > len(table):
-                        # resize the table
-                        table.resize(len(table) + len(chunk))
-                        logger.debug("allocated {:,d} additional rows".format(
-                            len(chunk)))
-                    table[colname][start:end] = chunk[colname]
+                    if end > len(ds):
+                        ds.expand(len(chunk))
+                    ds[colname][start:end] = chunk[colname]
                 # update the current row index
                 pbar.update(end - start)
                 start = end
             pbar.close()
 
             # if using the CSV reader: truncate any allocated, unused rows
-            if len(table) > end:
-                table.resize(end)
+            if len(ds) > end:
+                ds.resize(end)
 
             # print a preview of the table as quick check
             try:
-                preview = str(table)
+                preview = str(ds)
                 sys.stdout.write("\n" + preview + "\n\n")
             except Exception:
                 logger.warn("table preview failed")
 
-            logger.info("updating headers and closing data store")
-            filesize = bytesize_with_prefix(table.nbytes)
-        # close the table and flush data
-        message = "finalized data store with {:} ({:,d} rows)"
-        logger.info(message.format(filesize, end))
+            message = "finalized data store with {:,d} rows ({:})"
+            logger.info(message.format(end, ds.filesize))
 
 
 if __name__ == "__main__":

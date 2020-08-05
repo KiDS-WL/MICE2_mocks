@@ -3,19 +3,15 @@ import argparse
 import os
 import sys
 
-from mock_processing import PipeLogger, expand_path, open_datastore
-from mock_processing.parallel import ParallelTable
+import mock_processing as mocks
 from mock_processing.photometry import find_percentile_wrapped
-from mock_processing.utils import (ModificationStamp, create_column,
-                                   require_column)
 
 
 parser = argparse.ArgumentParser(
     description="Compute the projected effective galaxy radius from galaxy "
                 "bulge (Sersic n=4) and disk (Sersic n=1) components.")
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is located")
+    "datastore", help="directory in which the data store is located")
 parser.add_argument(
     "--flux-frac", type=float, default=0.5,
     help="fraction of the total flux emitted from within computed radius "
@@ -28,16 +24,14 @@ parser.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__, args.datastore)
-    timestamp = ModificationStamp(sys.argv)
+    logger = mocks.PipeLogger(__file__, args.datastore)
 
     # apply the magnification correction to the model magnitudes
-    with open_datastore(args.datastore, logger, readonly=False) as table:
+    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
 
-        pool = ParallelTable(table, logger)
-        pool.set_worker(find_percentile_wrapped)
+        ds.pool.set_worker(find_percentile_wrapped)
 
-        pool.add_argument_constant(args.flux_frac)
+        ds.pool.add_argument_constant(args.flux_frac)
 
         # find disk and bulge component columns
         input_columns = (
@@ -45,29 +39,22 @@ def main():
             ("bulge size", "shape/bulge/size"),
             ("bulge fraction", "shape/bulge/fraction"))
         for col_desc, path in input_columns:
-            require_column(table, logger, path, col_desc)
-            pool.add_argument_column(path)
+            ds.require_column(path, col_desc)
+            ds.pool.add_argument_column(path)
 
         r_e_path = "shape/R_effective"
         # create the output column
-        column = create_column(
-            table, logger, r_e_path, dtype="f4",
-            attr={
+        ds.add_column(
+            r_e_path, dtype="f4", overwrite=True, attr={
                 "description":
                 "effective radius (emitting {:.1%} of the flux)".format(
-                    args.flux_frac)},
-            overwrite=True)
-        timestamp.register(column)
+                    args.flux_frac)})
         # add column to call signature
-        pool.add_result_column(r_e_path)
+        ds.pool.add_result_column(r_e_path)
 
         # compute and store the corrected magnitudes
-        pool.execute(args.threads)
-
-        logger.info("updating headers and closing data store")
-        timestamp.finalize()
-    # close the table and flush data
-    logger.info("computation completed for {:,d} entries".format(len(table)))
+        ds.pool.execute(args.threads)
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
 if __name__ == "__main__":

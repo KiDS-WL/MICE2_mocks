@@ -3,18 +3,14 @@ import argparse
 import os
 import sys
 
-from mock_processing import PipeLogger, expand_path, open_datastore
+import mock_processing as mocks
 from mock_processing.Flagship import flux_to_magnitudes_wrapped
-from mock_processing.parallel import ParallelTable
-from mock_processing.photometry import load_photometry
-from mock_processing.utils import ModificationStamp, create_column
 
 
 parser = argparse.ArgumentParser(
     description="Convert fluxes in Flagship to AB magnitudes.")
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is located")
+    "datastore", help="directory in which the data store is located")
 parser.add_argument(
     "--flux",
     help="sub-directory within data store which contains the input fluxes")
@@ -29,18 +25,17 @@ parser.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__, args.datastore)
-    timestamp = ModificationStamp(sys.argv)
+    logger = mocks.PipeLogger(__file__, args.datastore)
 
     # convert model fluxes to model magnitudes
-    with open_datastore(args.datastore, logger, readonly=False) as table:
+    with mocks.DataStore.open(
+            args.datastore, readonly=False, logger=logger) as ds:
 
-        pool = ParallelTable(table, logger)
-        pool.set_worker(flux_to_magnitudes_wrapped)
+        ds.pool.set_worker(flux_to_magnitudes_wrapped)
 
         # find all flux columns
         try:
-            model_fluxes, _ = load_photometry(table, args.flux)
+            model_fluxes, _ = ds.load_photometry(args.flux)
         except KeyError as e:
             logger.handleException(e)
 
@@ -48,24 +43,18 @@ def main():
         for key, flux_path in model_fluxes.items():
             mag_path = os.path.join(args.mag, key)
             # create new output columns
-            column = create_column(
-                table, logger, mag_path, dtype=table[flux_path].dtype.str,
+            ds.add_column(
+                mag_path, dtype=ds[flux_path].dtype.str, overwrite=True,
                 attr={
                     "description":
-                    "{:} converted to AB magnitudes".format(flux_path)},
-                overwrite=True)
-            timestamp.register(column)
+                    "{:} converted to AB magnitudes".format(flux_path)})
             # add columns to call signature
-            pool.add_argument_column(flux_path)
-            pool.add_result_column(mag_path)
+            ds.pool.add_argument_column(flux_path)
+            ds.pool.add_result_column(mag_path)
 
         # compute and store the corrected magnitudes in parallel
-        pool.execute(args.threads)
-
-        logger.info("updating headers and closing data store")
-        timestamp.finalize()
-    # close the table and flush data
-    logger.info("computation completed for {:,d} entries".format(len(table)))
+        ds.pool.execute(args.threads)
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
 if __name__ == "__main__":

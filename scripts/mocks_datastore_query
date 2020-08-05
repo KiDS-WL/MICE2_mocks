@@ -8,11 +8,11 @@ from time import asctime
 import numpy as np
 
 from memmap_table.mathexpression import MathTerm
-from mock_processing import PipeLogger, expand_path, open_datastore
-from mock_processing.readwrite import (BUFFERSIZE, guess_format,
-                                       supported_writers)
-from mock_processing.utils import (ModificationStamp, ProgressBar, sha1sum,
-                                   build_history, bytesize_with_prefix)
+
+import mock_processing as mocks
+from mock_processing.core.readwrite import (BUFFERSIZE, guess_format,
+                                            supported_writers)
+from mock_processing.core.utils import ProgressBar, bytesize_with_prefix
 
 
 parser = argparse.ArgumentParser(
@@ -20,8 +20,7 @@ parser = argparse.ArgumentParser(
                 "in a different data format")
 
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is created")
+    "datastore", help="directory in which the data store is created")
 parser.add_argument(
     "--verify", action="store_true",
     help="verify the data integrity of all accessed columns")
@@ -32,7 +31,7 @@ parser.add_argument(
 
 output_group = parser.add_argument_group("output table")
 output_group.add_argument(
-    "-o", "--output", type=expand_path,
+    "-o", "--output",
     help="path to output data table (default: write on stdout)")
 output_group.add_argument(
     "--format", choices=sorted(supported_writers.keys()),
@@ -57,14 +56,14 @@ output_group.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__, args.datastore)
+    logger = mocks.PipeLogger(__file__, args.datastore)
     # determine if output goes to stdout in CSV format (allows redirecting)
     to_stdout = args.output is None
     if to_stdout:  # only print in case of error
         logger.setTermLevel("error")
 
     # read the input table and write the selected entries to the output file
-    with open_datastore(args.datastore, logger) as table:
+    with mocks.DataStore.open(args.datastore, logger=logger) as ds:
 
         # parse the math expression
         if args.query is not None:
@@ -76,7 +75,7 @@ def main():
             try:
                 # apply the substitutions to all valid column names apperaing
                 # in the math expression to avoid substitute intended divisions
-                for colname in table.colnames:
+                for colname in ds.colnames:
                     substitue = colname.replace("/", substitute)
                     while colname in args.query:
                         args.query = args.query.replace(colname, substitue)
@@ -93,7 +92,7 @@ def main():
             except Exception as e:
                 logger.handleException(e)
             # create a sub-table with the data needed for the selection
-            selection_table = table[sorted(selection_columns)]
+            selection_table = ds[sorted(selection_columns)]
         else:
             expression = None
             selection_columns = None
@@ -108,7 +107,7 @@ def main():
                     logger.handleException(KeyError(message))
                 requested_columns.add(colname)
             # find requested columns that do not exist in the table
-            missing_cols = requested_columns - set(table.colnames)
+            missing_cols = requested_columns - set(ds.colnames)
             if len(missing_cols) > 0:
                 message = "column {:} not found: {:}".format(
                     "name" if len(missing_cols) == 1 else "names",
@@ -121,18 +120,18 @@ def main():
                 message += "s"
             logger.info(message)
             dtype = np.dtype([
-                (colname, table.dtype[colname]) for colname in args.columns])
+                (colname, ds.dtype[colname]) for colname in args.columns])
             # create a table view with only the requested columns
-            request_table = table[args.columns]
+            request_table = ds[args.columns]
         else:
-            dtype = table.dtype
-            request_table = table
+            dtype = ds.dtype
+            request_table = ds
         
         # verify the data if requested
         if args.verify:
             logger.info("running SHA-1 checksums")
             if args.columns is None:
-                verification_columns = table.colnames
+                verification_columns = ds.colnames
             else:
                 verification_columns = [col for col in args.columns]
                 if selection_columns is not None:
@@ -142,15 +141,7 @@ def main():
                 sys.stdout.write("checking {:3d} / {:3d}: {:}\r".format(
                     i, len(verification_columns), name.ljust(name_width)))
                 sys.stdout.flush()
-                column = table[name]
-                try:
-                    checksum = column.attr["SHA-1 checksum"]
-                    assert(checksum == sha1sum(column.filename))
-                except KeyError:
-                    logger.warn("no checksum provided: {:}".format(name))
-                except AssertionError:
-                    message = "checksums do not match: {:}".format(name)
-                    logger.handleException(AssertionError(message))
+                ds.verify_column(name)
 
         # automatically determine the format file format
         if args.output is None:  # write to stdout in csv format
@@ -179,7 +170,7 @@ def main():
         with writer:
 
             # determine an automatic buffer/chunk size
-            chunksize = BUFFERSIZE // table.itemsize
+            chunksize = BUFFERSIZE // ds.itemsize
             message = "buffer size: {:} ({:,d} rows)".format(
                 bytesize_with_prefix(writer.buffersize), writer.bufferlength)
             logger.debug(message)
@@ -187,9 +178,9 @@ def main():
             # query the table and write to the output fie
             logger.info("processing input stream ...")
             if not to_stdout:
-                pbar = ProgressBar(len(table))
+                pbar = ProgressBar(len(ds))
             n_select = 0
-            for start, end in table.row_iter(chunksize):
+            for start, end in ds.row_iter(chunksize):
 
                 # apply optional selection, read only minimal amount of data
                 if expression is not None:

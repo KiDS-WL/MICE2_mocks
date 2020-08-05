@@ -3,12 +3,10 @@ import argparse
 import os
 import sys
 
-from mock_processing import PipeLogger, expand_path, open_datastore
-from mock_processing.config import DumpMatchingConfig, load_matching_config
+import mock_processing as mocks
+from mock_processing.core.config import (DumpMatchingConfig,
+                                         load_matching_config)
 from mock_processing.matching import DataMatcher
-from mock_processing.parallel import ParallelTable
-from mock_processing.utils import (ModificationStamp, create_column,
-                                   require_column)
 
 
 parser = argparse.ArgumentParser(
@@ -21,10 +19,9 @@ parser = argparse.ArgumentParser(
 parser.register("action", "dump", DumpMatchingConfig)
 
 parser.add_argument(
-    "datastore", type=expand_path,
-    help="directory in which the data store is located")
+    "datastore", help="directory in which the data store is located")
 parser.add_argument(
-    "-c", "--config", type=expand_path, required=True,
+    "-c", "--config", required=True,
     help="parameter file in TOML format that defines the properties of the "
          "photometry realisation and the method parameters (use --dump to "
          "obtain a default parameter file)")
@@ -44,51 +41,43 @@ help_group.add_argument(
 def main():
 
     args = parser.parse_args()
-    logger = PipeLogger(__file__, args.datastore)
-    timestamp = ModificationStamp(sys.argv)
+    logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
     config = load_matching_config(args.config, logger)
 
     # apply the magnification correction to the model magnitudes
-    with open_datastore(args.datastore, logger, readonly=False) as table:
+    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
 
         with DataMatcher(config, logger) as matcher:
 
-            pool = ParallelTable(table, logger)
-            pool.chunksize = max(args.threads * 4096, pool.chunksize)
-            pool.set_worker(matcher.apply)
+            ds.pool.chunksize = max(args.threads * 4096, ds.pool.chunksize)
+            ds.pool.set_worker(matcher.apply)
 
             # select the required feature columns
             for feature_path in config.features.values():
-                require_column(table, logger, feature_path, "feature")
-                pool.add_argument_column(feature_path, keyword=feature_path)
+                ds.require_column(feature_path, "feature")
+                ds.pool.add_argument_column(feature_path, keyword=feature_path)
             # check that the data types are compatible
             try:
-                matcher.check_features(table)
+                matcher.check_features(ds)
             except Exception as e:
                 logger.handleException(e)
 
             # make the output columns for each observable
             for output_path, dtype, attr in matcher.observable_information():
-                column = create_column(
-                    table, logger, output_path, dtype=dtype, attr=attr,
-                    overwrite=True)
-                timestamp.register(column)
-                pool.add_result_column(output_path)
+                ds.add_column(
+                    output_path, dtype=dtype, attr=attr, overwrite=True)
+                ds.pool.add_result_column(output_path)
 
             logger.info(
                 "building feature space tree, this may take a while...")
             matcher.build_tree()
 
             # compute and store the corrected magnitudes
-            pool.add_argument_constant(args.threads, keyword="threads")
-            pool.execute(1)  # cKDTree implementation releases GIL in queries
-
-        logger.info("updating headers and closing data store")
-        timestamp.finalize()
-    # close the table and flush data
-    logger.info("computation completed for {:,d} entries".format(len(table)))
+            ds.pool.add_argument_constant(args.threads, keyword="threads")
+            ds.pool.execute(1)  # cKDTree implementation releases GIL
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
 if __name__ == "__main__":
