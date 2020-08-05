@@ -10,19 +10,21 @@ from .utils import expand_path
 
 
 _DEFAULT_CONFIG_PATH = os.path.join(
-    os.path.dirname(__file__), "default_config")
+    os.path.dirname(os.path.dirname(__file__)), "default_config")
 
 
 def load_config(path, logger, description, parser_class):
-    message = "reading {:} configuration file: {:}".format(description, path)
+    full_path = expand_path(path)
+    message = "reading {:} configuration file: {:}".format(
+        description, full_path)
     logger.info(message)
     try:
-        return parser_class(path).get
+        return parser_class(full_path).get
     except OSError as e:
         message = "configuration file not found"
         logger.handleException(e, message)
     except AttributeError:
-        return parser_class(path)
+        return parser_class(full_path)
     except Exception as e:
         message = "malformed configuration file"
         logger.handleException(e, message)

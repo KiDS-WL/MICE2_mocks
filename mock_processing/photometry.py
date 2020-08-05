@@ -7,59 +7,6 @@ from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 
 
-def load_photometry(table, photometry_path, filter_selection=None):
-    """
-    Collect all columns belonging to a photometry (realization) by using a
-    subpath (e.g. /mags/model).
-
-    Parameters:
-    -----------
-    table : memmap_table.MemmapTable
-        Data storage with to scan.
-    photometry_path : str
-        Path within the data table that contains photometric data (labeled with
-        filter names, e.g. /mags/model/r, /mags/model/i).
-    filter_selection : array_like
-        filter keys to exclude from the selection.
-
-    Returns:
-    --------
-    photometry_columns : dict
-        Dictionary of column names with photometric data, labeled with the
-        filter name.
-    error_columns : dict
-        Dictionary of column names with photometric errors, labeled with the
-        filter name.
-    """
-    if filter_selection is None:
-        filter_selection = []
-    photometry_columns = {}
-    error_columns = {}
-    for column in table.colnames:
-        # match the root name of each column against the photometry path
-        root, key_str = os.path.split(column)
-        if key_str.endswith("_err"):
-            key = key_str[:-4]
-        else:
-            key = key_str
-        if root == photometry_path:
-            # check if the matching filter is excluded
-            if key in filter_selection:
-                continue
-            # check that this filter does not exist yet, which could happen if
-            # a path is selected that contains multiple photometries
-            if key_str.endswith("_err"):
-                error_columns[key] = column
-            elif key in photometry_columns:
-                message = "found multiple matches for filter: {:}".format(key)
-                raise ValueError(message)
-            else:
-                photometry_columns[key] = column
-    if len(photometry_columns) == 0:
-        raise KeyError("photometry not found: {:}".format(photometry_path))
-    return photometry_columns, error_columns
-
-
 def magnification_correction(kappa, mag):
     """
     Magnification calculated from the convergence, following Fosalba+15 eq. 21.

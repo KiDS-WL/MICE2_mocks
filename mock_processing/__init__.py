@@ -1,3 +1,3 @@
-from .logger import PipeLogger
-from .utils import expand_path, open_datastore
-from ._version import __version__
+from .core.version import __version__
+from .core.logger import PipeLogger
+from .core.datastore import DataStore

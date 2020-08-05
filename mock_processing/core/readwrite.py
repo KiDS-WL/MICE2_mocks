@@ -7,6 +7,8 @@ from collections import OrderedDict
 
 import numpy as np
 
+from .utils import expand_path
+
 
 _mega_byte = 1024 * 1024
 BUFFERSIZE = 100 * _mega_byte
@@ -407,7 +409,7 @@ class CSVreader(Reader):
     """
 
     def __init__(self, fpath, dtypes=None, **kwargs):
-        self._path = fpath
+        self._path = expand_path(fpath)
         self._file = open(fpath)
         try:
             self._guess_dialect()
@@ -614,7 +616,10 @@ class CSVwriter(Writer):
     _header_written = False
 
     def __init__(self, dtype, fpath=None, overwrite=False, **kwargs):
-        self._path = fpath
+        if fpath is None:
+            self._path = None
+        else:
+            self._path = expand_path(fpath)
         self._dtype = dtype
         # initialize the file writer and the buffer
         self._buffer = BufferQueue(dtype)
@@ -690,7 +695,7 @@ try:
         """
 
         def __init__(self, fpath, ext=1, **kwargs):
-            self._path = fpath
+            self._path = expand_path(fpath)
             self._ext = ext
             self._file = FITS(fpath)
             # select the file extension and verify that it contains binary data
@@ -772,7 +777,7 @@ try:
         """
 
         def __init__(self, dtype, fpath, overwrite=False, **kwargs):
-            self._path = fpath
+            self._path = expand_path(fpath)
             self._check_overwrite(fpath, overwrite)
             self._dtype = dtype
             # initialize the file writer and the buffer
@@ -845,7 +850,7 @@ try:
         """
 
         def __init__(self, fpath, datasets=None, **kwargs):
-            self._path = fpath
+            self._path = expand_path(fpath)
             self._file = h5py.File(fpath, mode="r")
             self._closed = False
             self._init_datasets(datasets)
@@ -987,7 +992,7 @@ try:
         def __init__(
                 self, dtype, fpath, overwrite=False, compression=None,
                 hdf5_shuffle=True, hdf5_checksum=True, **kwargs):
-            self._path = fpath
+            self._path = expand_path(fpath)
             self._check_overwrite(fpath, overwrite)
             self._dtype = dtype
             # initialize the file writer and the buffer
@@ -1061,7 +1066,7 @@ try:
         _row_group_idx = 0
 
         def __init__(self, fpath, **kwargs):
-            self._path = fpath
+            self._path = expand_path(fpath)
             self._file = pq.ParquetFile(fpath)
             self._closed = False
             self._get_dtype()
@@ -1164,7 +1169,7 @@ try:
         def __init__(
                 self, dtype, fpath, overwrite=False,
                 compression=None, **kwargs):
-            self._path = fpath
+            self._path = expand_path(fpath)
             self._check_overwrite(fpath, overwrite)
             self._dtype = dtype
             # we cannot open the file yet, create a dummy instead

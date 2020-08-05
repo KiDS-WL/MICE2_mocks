@@ -1,26 +1,6 @@
 import numpy as np
 
 
-def compute_unique_index(halo_id, gal_id):
-    """
-    Compute a unique galaxy index by adding the halo and galaxy indices from
-    the Flagship simulation catalogue.
-
-    Parameters:
-    -----------
-    halo_id : array_like
-        The halo identifier.
-    gal_id : array_like
-        The galaxy identifier within the host halo.
-
-    Returns:
-    --------
-    index : array_like
-        Combined unique galaxy index.
-    """
-    return halo_id + gal_id
-
-
 def flux_to_magnitudes(flux):
     """
     Convert flux columns in the Flagship simulation to AB magnitudes with a

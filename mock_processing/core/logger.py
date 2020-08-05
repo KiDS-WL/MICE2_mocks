@@ -111,3 +111,20 @@ class PipeLogger(object):
             self._file_handler.setLevel(getattr(logging, levelstr.upper()))
         else:
             self.warn("logging file not set, cannot change logger level")
+
+
+class DummyLogger(object):
+    """
+    Dummy logger as default argument for DataStore. Only implemnted method is
+    handleException, such that exceptions are raised as expected.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __getattr__(self, item):
+        func = lambda *args, **kwargs: None
+        return func
+
+    def handleException(self, exception, message=None):
+        raise exception

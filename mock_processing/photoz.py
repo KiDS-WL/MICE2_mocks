@@ -6,9 +6,7 @@ from collections import OrderedDict
 from tempfile import TemporaryDirectory
 from time import sleep
 
-
 import numpy as np
-from .utils import expand_path
 
 
 class BpzManager(object):
