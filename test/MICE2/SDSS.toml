@@ -1,0 +1,14 @@
+mask = "samples/SDSS"   # path at which the sample selection bit mask is saved
+                        # in the data store
+
+[magnitudes]
+mag_g = "mags/KV450/g"  # path of g-band magnitude in the data store
+mag_r = "mags/KV450/r"  # path of r-band magnitude in the data store
+mag_i = "mags/KV450/i"  # path of i-band magnitude in the data store
+# if the following paramters are not set, the QSO selection is not applied
+is_central = "environ/is_central"
+                        # path of flag indicating a central host galaxy
+lmhalo = "environ/log_M_halo"
+                        # path of logarithmic halo mass
+lmstellar = "environ/log_M_stellar"
+                        # path of logarithmic stellar mass

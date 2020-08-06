@@ -1,0 +1,11 @@
+mask = "samples/2dFLenS"
+                        # path at which the sample selection bit mask is saved
+                        # in the data store
+
+[magnitudes]
+mag_g = "mags/KV450/g"  # path of g-band magnitude in the data store
+mag_r = "mags/KV450/r"  # path of r-band magnitude in the data store
+mag_i = "mags/KV450/i"  # path of i-band magnitude in the data store
+mag_Z = "mags/KV450/Z"  # path of Z-band magnitude in the data store
+mag_Ks = "mags/KV450/Ks" 
+                        # path of Ks-band magnitude in the data store
