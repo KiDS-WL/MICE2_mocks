@@ -13,18 +13,19 @@ _DEFAULT_CONFIG_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "default_config")
 
 
-def load_config(path, logger, description, parser_class):
+def load_config(path, logger, description, parser_class, **kwargs):
     full_path = expand_path(path)
     message = "reading {:} configuration file: {:}".format(
         description, full_path)
     logger.info(message)
     try:
-        return parser_class(full_path).get
+        if hasattr(parser_class, "get"):
+            return parser_class(full_path, **kwargs).get
+        else:
+            return parser_class(full_path, **kwargs)
     except OSError as e:
         message = "configuration file not found"
         logger.handleException(e, message)
-    except AttributeError:
-        return parser_class(full_path)
     except Exception as e:
         message = "malformed configuration file"
         logger.handleException(e, message)
@@ -353,3 +354,99 @@ class DumpBpzConfig(DumpDefault):
 
 load_bpz_config = partial(
     load_config, description="BPZ", parser_class=ParseBpzConfig)
+
+
+class ParseSampleConfig(object):
+
+    def __init__(self, config_path, sample):
+        self._sample = sample
+        self._default_path = os.path.join(
+            _DEFAULT_CONFIG_PATH, "{:}.toml".format(sample))
+        # load default to get missing values in user input
+        self._parse_default()
+        # get the actual configuration
+        self._parse_config(config_path)
+
+    def _parse_default(self):
+        # this is needed to figure out the expected parameters and the optional
+        # parameters indicated by an empty string
+        with open(self._default_path) as f:
+            config = toml.load(f)
+        # convert to a flat dict since the structure is irrelevant
+        if "mask" not in config:
+            message = "invalid default sample configuration: 'mask' field "
+            message += "must always be defined"
+            raise KeyError(message)
+        self._is_required = {
+            "mask": True}  # list known params and if they are required
+        for key, value in config.items():
+            if key == "mask":
+                continue
+            elif type(value) is not dict:
+                # parameter is not required if it is empty in the default file
+                self._is_required[key] = value != ""
+            else:  # visit all parameters in group
+                self._is_required.update({
+                    k: len(v) > 0 for k, v in value.items()})
+
+    def _parse_config(self, config_path):
+        # load and flatten the parameter dictionary
+        with open(config_path) as f:
+            config = toml.load(f)
+        parameters = {}
+        for key, value in config.items():
+            if type(value) is not dict:
+                # parameter is not required if it is empty in the default file
+                parameters[key] = value
+            else:  # visit all parameters in group
+                parameters.update(value)
+        # check that only the expected parameters exist
+        if parameters.keys() != self._is_required.keys():
+            message = "configuration for '{:}' contains invalid paramters"
+            raise KeyError(message.format(self._sample))
+        # check if all required parameters are required
+        for key, value in parameters.items():
+            if self._is_required[key] and value == "":
+                message = "parameter is required but not set: {:}".foramt(key)
+                raise ValueError(message)
+            elif value == "":  # substitute None for optional parameters
+                parameters[key] = None
+            setattr(self, key, parameters[key])
+
+    @property
+    def selection_args(self):
+        kwarg_names = []
+        for attr in sorted(self.__dict__):
+            if attr.startswith("_") or attr == "mask":
+                continue
+            kwarg_names.append(attr)
+        return kwarg_names
+
+    def __str__(self):
+        string = ""
+        for attr in sorted(self.__dict__):
+            if not attr.startswith("_"):
+                string += "{:}: {:}\n".format(attr, str(self.__dict__[attr]))
+        return string.strip("\n")
+
+
+class DumpSampleConfig(argparse.Action):
+
+    _parser_class = lambda *args: None  # dummy
+
+    def __init__(self, *args, nargs=1,**kwargs):
+        super().__init__(*args, nargs=nargs, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string, **kwargs):
+        sample = values[0]
+        # write the content to the screen
+        default_path = os.path.join(
+            _DEFAULT_CONFIG_PATH, "{:}.toml".format(sample))
+        with open(default_path) as f:
+            for line in f.readlines():
+                sys.stdout.write(line)
+        parser.exit()
+
+
+load_sample_config = partial(
+    load_config, description="BPZ", parser_class=ParseSampleConfig)

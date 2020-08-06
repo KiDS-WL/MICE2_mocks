@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+
+import mock_processing as mocks
+from mock_processing.core.config import DumpSampleConfig, load_sample_config
+from mock_processing import samples
+
+
+parser = argparse.ArgumentParser(
+    description="Apply sample selections on to obtain a mock representation "
+                "of a specific photometric or spectroscopic sample.",
+    add_help=False)
+parser.register("action", "dump", DumpSampleConfig)
+
+parser.add_argument(
+    "datastore", help="directory in which the data store is located")
+parser.add_argument(
+    "-s", "--sample", required=True, choices=samples.REGISTERED_SAMPLES,
+    help="name of the sample selection to apply")
+parser.add_argument(
+    "-c", "--config", required=True,
+    help="parameter file in TOML format that defines data columns required "
+         "for the sample selection (use --dump to obtain a default parameter "
+         "file)")
+parser.add_argument(
+    "--threads", type=int, default=8,
+    help="number of threads to use (default: %(default)s)")
+
+help_group = parser.add_argument_group("help and documentation")
+help_group.add_argument(
+    "-h", "--help", action="help",
+    help="show this help message and exit")
+help_group.add_argument(
+    "--dump", nargs=1, action="dump", metavar="sample",
+    choices=samples.REGISTERED_SAMPLES,
+    help="dump a default configuration file to stdout and exit for a given "
+         "sample (see --sample for a list of valid names)")
+
+
+def main():
+
+    args = parser.parse_args()
+    logger = mocks.PipeLogger(__file__, args.datastore)
+
+    # check the configuration file
+    config = load_sample_config(args.config, logger, sample=args.sample)
+
+    # apply the magnification correction to the model magnitudes
+    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
+
+        # initialize the selection function
+        selector = getattr(samples, "Select{:}".format(args.sample))()
+
+        ds.pool.set_worker(selector)
+
+        # select the columns needed for the selection function
+        for name in config.selection_args:
+            path = getattr(config, name)
+            ds.require_column(path)
+            ds.pool.add_argument_column(path, keyword=name)
+
+        # make the output column
+        ds.add_column(
+            config.mask, dtype=selector.dtype, overwrite=True,
+            attr={"description": selector.description})
+        ds.pool.add_result_column(config.mask)
+
+        # compute and store the corrected magnitudes
+        ds.pool.execute(args.threads)
+        logger.info("computation completed for {:,d} entries".format(len(ds)))
+
+
+if __name__ == "__main__":
+    main()

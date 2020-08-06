@@ -1,0 +1,8 @@
+mask = "samples/KiDS"   # path at which the sample selection bit mask is saved
+                        # in the data store
+
+[properties]
+recal_weight = "..."    # path of lensing weight in the data store
+prior_magnitude = "..." 
+                        # path of BPZ prior magnitude in the data store
+                        # (leave blank to keep non-detections in this filter)
