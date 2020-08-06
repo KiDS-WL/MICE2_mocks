@@ -13,5 +13,5 @@ fi
 
 ../../scripts/mocks_match_data \
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
-    -c matching.toml \
+    -c config/matching.toml \
     --threads ${2:-32}

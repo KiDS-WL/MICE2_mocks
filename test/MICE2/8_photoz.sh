@@ -14,7 +14,7 @@ fi
 export hostname=$HOSTNAME
 ../../scripts/mocks_BPZ \
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
-    -c BPZ.toml \
+    -c config/BPZ.toml \
     --mag mags/KV450 \
     --zphot BPZ/KV450 \
     --threads ${2:-32}
