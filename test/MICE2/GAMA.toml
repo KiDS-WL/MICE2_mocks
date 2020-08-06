@@ -2,4 +2,4 @@ mask = "samples/GAMA"   # path at which the sample selection bit mask is saved
                         # in the data store
 
 [magnitudes]
-mag_r = "mags/KV450/r"           # path of r-band magnitude in the data store
+mag_r = "mags/KV450/r"  # path of r-band magnitude in the data store

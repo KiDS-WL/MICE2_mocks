@@ -11,7 +11,7 @@ else
     exit 1;
 fi
 
-for sample in KiDS 2dFLenS GAMA SDSS
+for sample in KiDS 2dFLenS GAMA SDSS DEEP2 VVDSf02 zCOSMOS
 do
     ../../scripts/mocks_select_sample \
         /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \

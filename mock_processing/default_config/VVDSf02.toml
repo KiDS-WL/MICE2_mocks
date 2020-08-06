@@ -1,0 +1,7 @@
+mask = "samples/VVDSf02"
+                        # path at which the sample selection bit mask is saved
+                        # in the data store
+redshift = "..."        # path of redshift column in the data store
+
+[magnitudes]
+mag_Ic = "..."          # path of Johnson Ic-band magnitude in the data store

@@ -17,7 +17,7 @@ parser.register("action", "dump", DumpSampleConfig)
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
 parser.add_argument(
-    "-s", "--sample", required=True, choices=samples.REGISTERED_SAMPLES,
+    "--sample", required=True, choices=samples.REGISTERED_SAMPLES,
     help="name of the sample selection to apply")
 parser.add_argument(
     "-c", "--config", required=True,
@@ -25,7 +25,11 @@ parser.add_argument(
          "for the sample selection (use --dump to obtain a default parameter "
          "file)")
 parser.add_argument(
-    "--threads", type=int, default=8,
+    "--seed", default="sapling",
+    help="string to seed the random generator (default: %(default)s, results "
+         "are only reproducible for the same number of threads)")
+parser.add_argument(
+    "--threads", type=int, default=16,
     help="number of threads to use (default: %(default)s)")
 
 help_group = parser.add_argument_group("help and documentation")
@@ -68,7 +72,7 @@ def main():
         ds.pool.add_result_column(config.mask)
 
         # compute and store the corrected magnitudes
-        ds.pool.execute(args.threads)
+        ds.pool.execute(args.threads, seed=args.seed)
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 

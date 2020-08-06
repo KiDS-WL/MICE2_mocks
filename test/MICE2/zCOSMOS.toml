@@ -1,0 +1,9 @@
+mask = "samples/zCOSMOS"
+                        # path at which the sample selection bit mask is saved
+                        # in the data store
+redshift = "position/z/obs"
+                        # path of redshift column in the data store
+
+[magnitudes]
+mag_Ic = "mags/lensed/Ic"
+                        # path of Johnson Ic-band magnitude in the data store

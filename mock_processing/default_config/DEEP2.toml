@@ -1,0 +1,7 @@
+mask = "samples/DEEP2"  # path at which the sample selection bit mask is saved
+                        # in the data store
+
+[magnitudes]
+mag_B = "..."           # path of Johnson B-band magnitude in the data store
+mag_Rc = "..."          # path of Johnson Rc-band magnitude in the data store
+mag_Ic = "..."          # path of Johnson Ic-band magnitude in the data store

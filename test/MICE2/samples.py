@@ -207,7 +207,7 @@ class SelectSDSS(SelectSample):
             lmstellar=None):
         bitmask = self.MAIN_selection(mag_r)
         bitmask = np.bitwise_or(
-            self.BOSS_selection(mag_g, mag_r, mag_i),
+            mag_BOSS_selection(mag_g, mag_r, mag_i),
             bitmask)
         if all(val is not None for val in [is_central, lmhalo, lmstellar]):
             bitmask = np.bitwise_or(
@@ -275,17 +275,17 @@ class SelectDEEP2(SelectSample):
         bitmask = np.where(mask, 2, 0).astype(self.dtype)
         return bitmask
 
-    def specz_success(self, mag_Rc):
+    def specz_success(self, mag_R):
         # Randomly sample objects according to their success rate
-        random_draw = np.random.rand(len(mag_Rc))
-        mask = random_draw < self._p_success_R(mag_Rc)
+        random_draw = np.random.rand(len(mag_R))
+        mask = random_draw < self._p_success_R(mag_R)
         bitmask = np.where(mask, 4, 0).astype(self.dtype)
         return bitmask
 
     def __call__(self, mag_B, mag_Rc, mag_Ic):
         bitmask = self.colour_selection(mag_B, mag_Rc, mag_Ic)
         bitmask = np.bitwise_or(
-            self.specz_success(mag_Rc),
+            self.specz_success(mag_R),
             bitmask)
         # for convenience flag all objects that pass the selection
         bitmask = np.bitwise_or(
@@ -315,7 +315,7 @@ class SelectVVDSf02(SelectSample):
                 success_rate_dir, "VVDSf02_I_success"))
         # interpolate the success rate as probability of being selected with
         # the probability at I > 24 being 0
-        self._p_success_I = interp1d(
+        p_success_I = interp1d(
             success_I_centers, success_I_rate, kind="quadratic",
             bounds_error=False, fill_value=(success_I_rate[0], 0.0))
         # Spec-z success rate as function of redshift read of Figure 13a/b in
@@ -351,7 +351,7 @@ class SelectVVDSf02(SelectSample):
     def specz_success(self, mag_Ic, redshift):
         # Randomly sample objects according to their success rate
         random_draw = np.random.rand(len(mag_Ic))
-        mask = random_draw < self._p_success_I(mag_Ic)
+        mask = random_draw < p_success_I(mag_Ic)
         iterator = zip(
             [mag_Ic <= 22.5, mag_Ic > 22.5],
             [self._p_success_z_bright, self._p_success_z_deep])

@@ -129,7 +129,7 @@ def main():
         
         # verify the data if requested
         if args.verify:
-            logger.info("running SHA-1 checksums")
+            logger.info("verifying SHA-1 checksums")
             if args.columns is None:
                 verification_columns = ds.colnames
             else:
