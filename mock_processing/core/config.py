@@ -361,7 +361,7 @@ class ParseSampleConfig(object):
     def __init__(self, config_path, sample):
         self._sample = sample
         self._default_path = os.path.join(
-            _DEFAULT_CONFIG_PATH, "{:}.toml".format(sample))
+            _DEFAULT_CONFIG_PATH, "samples", "{:}.toml".format(sample))
         # load default to get missing values in user input
         self._parse_default()
         # get the actual configuration
@@ -372,7 +372,6 @@ class ParseSampleConfig(object):
         # parameters indicated by an empty string
         with open(self._default_path) as f:
             config = toml.load(f)
-        # convert to a flat dict since the structure is irrelevant
         if "mask" not in config:
             message = "invalid default sample configuration: 'mask' field "
             message += "must always be defined"
@@ -386,41 +385,31 @@ class ParseSampleConfig(object):
                 # parameter is not required if it is empty in the default file
                 self._is_required[key] = value != ""
             else:  # visit all parameters in group
-                self._is_required.update({
-                    k: len(v) > 0 for k, v in value.items()})
+                self._is_required[key] = {
+                    k: v != "" for k, v in value.items()}
 
     def _parse_config(self, config_path):
-        # load and flatten the parameter dictionary
+        # load the parameter dictionary
         with open(config_path) as f:
             config = toml.load(f)
-        parameters = {}
+        self._parse_group(config, self._is_required)
         for key, value in config.items():
-            if type(value) is not dict:
-                # parameter is not required if it is empty in the default file
-                parameters[key] = value
-            else:  # visit all parameters in group
-                parameters.update(value)
+            setattr(self, key, value)
+
+    def _parse_group(self, parameters, is_required):
         # check that only the expected parameters exist
-        if parameters.keys() != self._is_required.keys():
-            message = "configuration for '{:}' contains invalid paramters"
+        if parameters.keys() != is_required.keys():
+            message = "configuration for '{:}' contains invalid parameters"
             raise KeyError(message.format(self._sample))
-        # check if all required parameters are required
+        # check if all required parameters are set
         for key, value in parameters.items():
-            if self._is_required[key] and value == "":
-                message = "parameter is required but not set: {:}".foramt(key)
+            if type(value) is dict:
+                self._parse_group(value, is_required[key])
+            elif is_required[key] and value == "":
+                message = "parameter is required but not set: {:}".format(key)
                 raise ValueError(message)
             elif value == "":  # substitute None for optional parameters
                 parameters[key] = None
-            setattr(self, key, parameters[key])
-
-    @property
-    def selection_args(self):
-        kwarg_names = []
-        for attr in sorted(self.__dict__):
-            if attr.startswith("_") or attr == "mask":
-                continue
-            kwarg_names.append(attr)
-        return kwarg_names
 
     def __str__(self):
         string = ""

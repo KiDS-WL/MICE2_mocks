@@ -1,6 +1,8 @@
 import json
 import os
 import pickle
+from collections import OrderedDict
+
 import numpy as np
 
 from scipy.interpolate import interp1d, interp2d
@@ -112,8 +114,9 @@ success_rate_dir = os.path.join(
     "sample_data")
 
 
-class SelectSample(object):
+class _SelectSample(object):
 
+    _dtype = np.uint8
     _description = "describes the fields of the selection bit mask"
 
     @property
@@ -122,14 +125,14 @@ class SelectSample(object):
 
     @property
     def dtype(self):
-        return np.uint8
+        return self._dtype
 
     @property
     def description(self):
         return self._description
 
 
-class SelectKiDS(SelectSample):
+class SelectKiDS(_SelectSample):
 
     _description = "KiDS sample selection bit mask. Select objects passing "
     _description += "the lensfit weight selection by (mask & 2), objects "
@@ -160,7 +163,7 @@ class SelectKiDS(SelectSample):
 ###############################################################################
 
 
-class Select2dFLenS(SelectSample):
+class Select2dFLenS(_SelectSample):
 
     _description = "2dFLenS sample selection bit mask. Select the LOWZ sample "
     _description += "by (mask & 2), the MIDZ sample by (mask & 4), the HIGHZ "
@@ -230,7 +233,7 @@ class Select2dFLenS(SelectSample):
         return bitmask
 
 
-class SelectGAMA(SelectSample):
+class SelectGAMA(_SelectSample):
 
     _description = "GAMA sample selection bit mask. Select sample objects by "
     _description += "(mask & 1)"
@@ -243,7 +246,7 @@ class SelectGAMA(SelectSample):
         return bitmask
 
 
-class SelectSDSS(SelectSample):
+class SelectSDSS(_SelectSample):
 
     _description = "SDSS sample selection bit mask. Select the main galaxy "
     _description += "sample by (mask & 2), the BOSS LOWZ sample by "
@@ -333,7 +336,7 @@ class SelectSDSS(SelectSample):
 ###############################################################################
 
 
-class SelectDEEP2(SelectSample):
+class SelectDEEP2(_SelectSample):
 
     _description = "DEEP2 sample selection bit mask. Select objects passing "
     _description += "photometric cuts by (mask & 2), objects passing the "
@@ -396,7 +399,7 @@ class SelectDEEP2(SelectSample):
         return bitmask
 
 
-class SelectVVDSf02(SelectSample):
+class SelectVVDSf02(_SelectSample):
 
     _description = "VVDS-02h field selection bit mask. Select objects passing "
     _description += "photometric cuts by (mask & 2), objects passing the "
@@ -474,7 +477,7 @@ class SelectVVDSf02(SelectSample):
         return bitmask
 
 
-class SelectzCOSMOS(SelectSample):
+class SelectzCOSMOS(_SelectSample):
 
     _description = "zCOSMOS sample selection bit mask. Select objects passing "
     _description += "photometric cuts by (mask & 2), objects passing the "
@@ -544,7 +547,13 @@ class SelectzCOSMOS(SelectSample):
 
 ###############################################################################
 
-REGISTERED_SAMPLES = []
-for name in sorted(dir()):
+REGISTERED_SAMPLES = OrderedDict()
+for name, selector in OrderedDict(locals()).items():
     if name.startswith("Select"):
-        REGISTERED_SAMPLES.append(name[6:])
+        REGISTERED_SAMPLES[name[6:]] = selector
+# sample selections that required the mock area paramter
+REQUIRE_AREA = []
+for name, selector in REGISTERED_SAMPLES.items():
+    if hasattr(selector, "_density_sampling"):
+        REQUIRE_AREA.append(name)
+    

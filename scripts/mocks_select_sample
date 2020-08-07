@@ -17,13 +17,19 @@ parser.register("action", "dump", DumpSampleConfig)
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
 parser.add_argument(
-    "--sample", required=True, choices=samples.REGISTERED_SAMPLES,
+    "--sample", required=True,
+    choices=sorted(samples.REGISTERED_SAMPLES.keys()),
     help="name of the sample selection to apply")
 parser.add_argument(
     "-c", "--config", required=True,
     help="parameter file in TOML format that defines data columns required "
          "for the sample selection (use --dump to obtain a default parameter "
          "file)")
+parser.add_argument(
+    "--area", type=float,
+    help="total area in squared degrees on the sky covered by the base "
+         "simulation (required by: {:})".format(
+             ", ".join(sorted(samples.REQUIRE_AREA))))
 parser.add_argument(
     "--seed", default="sapling",
     help="string to seed the random generator (default: %(default)s, results "
@@ -38,7 +44,7 @@ help_group.add_argument(
     help="show this help message and exit")
 help_group.add_argument(
     "--dump", nargs=1, action="dump", metavar="sample",
-    choices=samples.REGISTERED_SAMPLES,
+    choices=sorted(samples.REGISTERED_SAMPLES.keys()),
     help="dump a default configuration file to stdout and exit for a given "
          "sample (see --sample for a list of valid names)")
 
@@ -46,6 +52,9 @@ help_group.add_argument(
 def main():
 
     args = parser.parse_args()
+    if args.area is None and args.sample in samples.REQUIRE_AREA:
+        message = "'{:}' requires --area parameter".format(args.sample)
+        raise parser.error(message)
     logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
@@ -55,13 +64,13 @@ def main():
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
 
         # initialize the selection function
-        selector = getattr(samples, "Select{:}".format(args.sample))()
+        selector_class = samples.REGISTERED_SAMPLES[args.sample]
+        selector = selector_class()
 
         ds.pool.set_worker(selector)
 
         # select the columns needed for the selection function
-        for name in config.selection_args:
-            path = getattr(config, name)
+        for name, path in config.selection.items():
             ds.require_column(path)
             ds.pool.add_argument_column(path, keyword=name)
 

@@ -1,9 +1,11 @@
 mask = "samples/VVDSf02"
                         # path at which the sample selection bit mask is saved
                         # in the data store
-redshift = "position/z/obs"
-                        # path of redshift column in the data store
 
-[magnitudes]
+[selection]
+# Mapping form keyword argument names in selection function to column path in
+# the data store. Optional arguments can be left blank.
 mag_Ic = "mags/lensed/Ic"
-                        # path of Johnson Ic-band magnitude in the data store
+                        # Johnson Ic-band magnitude
+redshift = "position/z/obs"
+                        # (observed) redshifts

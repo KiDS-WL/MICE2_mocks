@@ -1,11 +1,12 @@
-mask = "samples/zCOSMOS"
+mask = "samples/2dFLenS"
                         # path at which the sample selection bit mask is saved
                         # in the data store
 
 [selection]
 # Mapping form keyword argument names in selection function to column path in
 # the data store. Optional arguments can be left blank.
-mag_Ic = "mags/lensed/Ic"
-                        # Johnson Ic-band magnitude
-redshift = "position/z/obs"
-                        # (observed) redshifts
+mag_g = "..."           # SDSS g-band magnitude
+mag_r = "..."           # SDSS r-band magnitude
+mag_i = "..."           # SDSS i-band magnitude
+mag_Z = "..."           # SDSS Z-band magnitude
+mag_Ks = "..."          # SDSS Ks-band magnitude

@@ -4,9 +4,6 @@ mask = "samples/DEEP2"  # path at which the sample selection bit mask is saved
 [selection]
 # Mapping form keyword argument names in selection function to column path in
 # the data store. Optional arguments can be left blank.
-mag_B = "mags/lensed/B"
-                        # Johnson B-band magnitude
-mag_Rc = "mags/lensed/Rc"
-                        # Johnson Rc-band magnitude
-mag_Ic = "mags/lensed/Ic"
-                        # Johnson Ic-band magnitude
+mag_B = "..."           # Johnson B-band magnitude
+mag_Rc = "..."          # Johnson Rc-band magnitude
+mag_Ic = "..."          # Johnson Ic-band magnitude
