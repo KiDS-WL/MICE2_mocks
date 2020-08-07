@@ -104,6 +104,10 @@ class AverageShiftedHistogram(object):
                 "bounds_error": False, "fill_value": self._fill_value})
         return interp1d(self._centers, self._counts, **kwargs)
 
+    def scale_amplitude(self, scale):
+        self._counts *= scale
+        self._interp = self._interpolate()
+
     def __call__(self, x):
         return self._interp(x)
 
@@ -112,6 +116,80 @@ class AverageShiftedHistogram(object):
 success_rate_dir = os.path.join(
     os.path.dirname(__file__),  # location of this script
     "sample_data")
+
+
+class Sampler(object):
+
+    def __init__(self, path, mock_redshifts, mock_area):
+        try:  # sample as function or redshift
+            # get the sample density in arcmin^-2
+            self._sample_dens = AverageShiftedHistogram.from_file(
+                path, fill_value=0.0)
+            self._sample_dens.scale_amplitude(3600.0)  # scale deg^-2
+            # mock density in deg^-2, we can use the same binning
+            self._mock_dens = AverageShiftedHistogram(
+                mock_redshifts, self._sample_dens.xmin, self._sample_dens.xmax,
+                self._sample_dens.width, True, self._sample_dens.smooth,
+                fill_value=0.0)
+            # Find the number of mock galaxies that fall in the sample redshift
+            # range. If all mock galaxies are used, the number density is
+            # underestimated
+            n_mock = np.count_nonzero(
+                (mock_redshifts >= self._sample_dens.xmin) &
+                (mock_redshifts < self._sample_dens.xmax))
+            # rescale such that it the n(z) integrates to mock density
+            self._mock_dens.scale_amplitude(n_mock / mock_area)
+
+        except AttributeError:  # sample surface denisty
+            # get the sample density in arcmin^-2
+            with open(path) as f:
+                self._sample_dens = json.load(f)["density"]
+                self._sample_dens *= 3600.0  # scale deg^-2
+            # mock density in deg^-2
+            self._mock_dens = len(mock_redshifts) / mock_area
+
+        if self.sample_density >= self.mock_density:
+            message = "sample density must be smaller than mock density"
+            raise ValueError(message)
+
+    def _integrate_redshift_density(self, histogram):
+        density = np.trapz(histogram._counts, x=histogram._centers)
+        return density
+
+    @property
+    def sample_density(self):
+        try:
+            return self._integrate_redshift_density(self._sample_dens)
+        except AttributeError:
+            return self._sample_dens
+    
+    @property
+    def mock_density(self):
+        try:
+            return self._integrate_redshift_density(self._mock_dens)
+        except AttributeError:
+            return self._mock_dens
+
+    def odds(self, redshift):
+        try:
+            mock_density = self._mock_dens(redshift)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                odds = np.where(
+                    mock_density == 0.0, 0.0,  # NaNs are substituted by zeros
+                    self._sample_dens(redshift) / mock_density)
+        except TypeError:
+            odds = self._sample_dens / self._mock_dens
+        return odds
+
+    def draw(self, redshift):
+        random_draw = np.random.rand(len(redshift))
+        mask = random_draw < self.odds(redshift)
+        return mask
+
+    def update_bitmask(self, redshift, bitmask, bit_value):
+        mask = self.draw(redshift)
+        bitmask = np.bitwise_or(np.where(mask, bit_value, 0), bitmask)
+        return bitmask
 
 
 class _SelectSample(object):
