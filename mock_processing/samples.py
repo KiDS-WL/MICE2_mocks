@@ -1,8 +1,109 @@
+import json
 import os
 import pickle
 import numpy as np
 
 from scipy.interpolate import interp1d, interp2d
+
+
+class AverageShiftedHistogram(object):
+
+    def __init__(
+            self, data, xmin=None, xmax=None, width=None, density=False,
+            smooth=10, kind="linear", fill_value=None):
+        self._xmin = np.min(data) if xmin is None else xmin
+        self._xmax = np.max(data) if xmax is None else xmax
+        if width is None:
+            n_bins = int(np.sqrt(len(data)))
+            self._width = (self._xmax - self._xmin) / n_bins 
+        else:
+            self._width = width
+        # bin the data
+        binning = np.arange(self._xmin, self._xmax + self._width, self._width)
+        self._centers = (binning[1:] + binning[:-1]) / 2.0
+        counts = np.histogram(data, binning)[0]
+        # compute the average shifted histogram
+        self._smooth = int(smooth)
+        self._counts = self._ash_counts(counts, density)
+        # compute interpolation
+        self._kind = kind
+        self._fill_value = fill_value
+        self._interp = self._interpolate()
+ 
+    @classmethod
+    def from_file(cls, path, kind="linear", fill_value=None):
+        instance = cls.__new__(cls)
+        instance._kind = kind
+        instance._fill_value = fill_value
+        # load the data from the file
+        with open(path) as f:
+            attr_dict = json.load(f)
+        # set the attributes and rerun the interpolation
+        for attr, value in attr_dict.items():
+            if type(value) is list:
+                setattr(instance, attr, np.array(value))
+            else:
+                setattr(instance, attr, value)
+        instance._interpolate()
+        return instance
+
+    def to_file(self, path):
+        # save all required attributes as JSON file
+        attrs = ("_xmin", "_xmax", "_width", "_smooth", "_centers", "_counts")
+        attr_dict = {}
+        for attr in attrs:
+            value = getattr(self, attr)
+            if isinstance(value, np.ndarray):
+                attr_dict[attr] = list(value)
+            else:
+                attr_dict[attr] = value
+        with open(path, "w") as f:
+            attr_dict = json.dump(attr_dict, f)
+
+    @property
+    def xmin(self):
+        return self._xmin
+
+    @property
+    def xmax(self):
+        return self._xmax
+
+    @property
+    def width(self):
+        return self._width
+
+    @property
+    def smooth(self):
+        return self._smooth
+
+    @property
+    def kind(self):
+        return self._kind
+
+    @property
+    def fill_value(self):
+        return self._fill_value
+
+    def _ash_counts(self, counts, density):
+        smoothed = np.empty_like(counts)
+        idx_offset = max(1, self._smooth // 2)
+        for i in range(len(smoothed)):
+            start = max(0, i - idx_offset)
+            end = min(len(smoothed), i + idx_offset)
+            smoothed[i] = counts[start:end].sum()
+        if density:
+            smoothed = smoothed / np.trapz(smoothed, x=self._centers)
+        return smoothed
+
+    def _interpolate(self):
+        kwargs = {"kind": self._kind}
+        if self._fill_value is not None:
+            kwargs.update({
+                "bounds_error": False, "fill_value": self._fill_value})
+        return interp1d(self._centers, self._counts, **kwargs)
+
+    def __call__(self, x):
+        return self._interp(x)
 
 
 # folder containing data for the spec. success rate for the deep spec-z samples
