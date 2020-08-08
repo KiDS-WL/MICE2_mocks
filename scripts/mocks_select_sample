@@ -26,10 +26,9 @@ parser.add_argument(
          "for the sample selection (use --dump to obtain a default parameter "
          "file)")
 parser.add_argument(
-    "--area", type=float,
+    "--area", type=float, required=True,
     help="total area in squared degrees on the sky covered by the base "
-         "simulation (required by: {:})".format(
-             ", ".join(sorted(samples.REQUIRE_AREA))))
+         "simulation (required by: {:})")
 parser.add_argument(
     "--seed", default="sapling",
     help="string to seed the random generator (default: %(default)s, results "
@@ -64,8 +63,17 @@ def main():
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
 
         # initialize the selection function
-        selector_class = samples.REGISTERED_SAMPLES[args.sample]
-        selector = selector_class()
+        try:
+            selector_class = samples.REGISTERED_SAMPLES[args.sample]
+            logger.info(
+                "apply selection funcion: {:}".format(selector_class.name))
+            if args.sample in samples.IMPLEMENT_DOWNSAMPLING:
+                redshifts = config.selection["redshift"]
+            else:
+                redshifts = None
+            selector = selector_class(redshifts, args.area)
+        except Exception as e:
+            logger.handleException(e)
 
         ds.pool.set_worker(selector)
 

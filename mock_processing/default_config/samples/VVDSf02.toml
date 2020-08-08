@@ -5,5 +5,5 @@ mask = "samples/VVDSf02"
 [selection]
 # Mapping form keyword argument names in selection function to column path in
 # the data store. Optional arguments can be left blank.
-mag_Ic = "..."          # Johnson Ic-band magnitude
 redshift = "..."        # (observed) redshifts
+mag_Ic = "..."          # Johnson Ic-band magnitude

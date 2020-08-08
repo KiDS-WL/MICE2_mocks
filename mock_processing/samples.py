@@ -8,6 +8,14 @@ import numpy as np
 from scipy.interpolate import interp1d, interp2d
 
 
+# folder containing data for the spec. success rate for the deep spec-z samples
+SUCCESS_RATE_DIR = os.path.join(
+    os.path.dirname(__file__),  # location of this script
+    "sample_data")
+# files that provide (redshift dependent) sample density
+DENSITY_FILE_TEMPLATE = os.path.join(SUCCESS_RATE_DIR, "{:}.json")
+
+
 class AverageShiftedHistogram(object):
 
     def __init__(
@@ -60,7 +68,7 @@ class AverageShiftedHistogram(object):
             else:
                 attr_dict[attr] = value
         with open(path, "w") as f:
-            attr_dict = json.dump(attr_dict, f)
+            json.dump(attr_dict, f)
 
     @property
     def xmin(self):
@@ -110,12 +118,6 @@ class AverageShiftedHistogram(object):
 
     def __call__(self, x):
         return self._interp(x)
-
-
-# folder containing data for the spec. success rate for the deep spec-z samples
-success_rate_dir = os.path.join(
-    os.path.dirname(__file__),  # location of this script
-    "sample_data")
 
 
 class Sampler(object):
@@ -192,10 +194,16 @@ class Sampler(object):
         return bitmask
 
 
-class _SelectSample(object):
+class BaseSelection(object):
 
+    name = "Unnamed"
     _dtype = np.uint8
     _description = "describes the fields of the selection bit mask"
+
+    def __init__(self, mock_redshifts, mock_area):
+        # initialize a sample if a corresponding data file exists
+        if self.name in IMPLEMENT_DOWNSAMPLING:
+            self._sampler = Sampler(density_file, mock_redshifts, mock_area)
 
     @property
     def __name__(self):
@@ -207,12 +215,13 @@ class _SelectSample(object):
 
     @property
     def description(self):
-        return self._description
+        return self._description.format(self.name)
 
 
-class SelectKiDS(_SelectSample):
+class SelectKiDS(BaseSelection):
 
-    _description = "KiDS sample selection bit mask. Select objects passing "
+    name = "KiDS"
+    _description = "{:} sample selection bit mask. Select objects passing "
     _description += "the lensfit weight selection by (mask & 2), objects "
     _description += "passing the prior magnitude selection by (mask & 4) and "
     _description += "the full sample by (mask & 1)."
@@ -241,9 +250,10 @@ class SelectKiDS(_SelectSample):
 ###############################################################################
 
 
-class Select2dFLenS(_SelectSample):
+class Select2dFLenS(BaseSelection):
 
-    _description = "2dFLenS sample selection bit mask. Select the LOWZ sample "
+    name = "2dFLenS"
+    _description = "{:} sample selection bit mask. Select the LOWZ sample "
     _description += "by (mask & 2), the MIDZ sample by (mask & 4), the HIGHZ "
     _description += "sample by (mask & 8) and the full sample by (mask & 1)."
 
@@ -311,9 +321,10 @@ class Select2dFLenS(_SelectSample):
         return bitmask
 
 
-class SelectGAMA(_SelectSample):
+class SelectGAMA(BaseSelection):
 
-    _description = "GAMA sample selection bit mask. Select sample objects by "
+    name = "GAMA"
+    _description = "{:} sample selection bit mask. Select sample objects by "
     _description += "(mask & 1)"
 
     def __call__(self, mag_r):
@@ -324,9 +335,10 @@ class SelectGAMA(_SelectSample):
         return bitmask
 
 
-class SelectSDSS(_SelectSample):
+class SelectSDSS(BaseSelection):
 
-    _description = "SDSS sample selection bit mask. Select the main galaxy "
+    name = "SDSS"
+    _description = "{:} sample selection bit mask. Select the main galaxy "
     _description += "sample by (mask & 2), the BOSS LOWZ sample by "
     _description += "(mask & 4), the CMASS sample by (mask & 8), the QSO "
     _description += "sample by (mask & 16) and the full sample by (mask & 1)."
@@ -409,19 +421,64 @@ class SelectSDSS(_SelectSample):
         return bitmask
 
 
+class SelectWiggleZ(BaseSelection):
+
+    name = "WiggleZ"
+    _description = "{:} sample selection bit mask. Select objects passing "
+    _description += "the photometric selection by (mask & 2), objects passing "
+    _description += "the redshift weighted density sampling by (mask & 4) "
+    _description += "and the full sample by (mask & 1)."
+
+    def colour_selection(self, mag_g, mag_r, mag_i, mag_Z):
+        ###############################################################
+        #   based on Drinkwater+10                                    #
+        ###############################################################
+        # mask multi-band non-detections
+        colour_mask = (np.abs(mag_g) < 90.0) & (np.abs(mag_r) < 90.0)
+        colour_mask &= (np.abs(mag_r) < 90.0) & (np.abs(mag_i) < 90.0)
+        colour_mask &= (np.abs(mag_g) < 90.0) & (np.abs(mag_i) < 90.0)
+        colour_mask &= (np.abs(mag_r) < 90.0) & (np.abs(mag_Z) < 90.0)
+        # photometric cuts
+        # we cannot reproduce the FUV, NUV, S/N and position matching cuts
+        include = (
+            (mag_r > 20.0) &
+            (mag_r < 22.5))
+        exclude = (
+            (mag_g < 22.5) &
+            (mag_i < 21.5) &
+            (mag_r-mag_i < (mag_g-mag_r - 0.1)) &
+            (mag_r-mag_i < 0.4) &
+            (mag_g-mag_r > 0.6) &
+            (mag_r-mag_Z < 0.7 * (mag_g-mag_r)))
+        bitmask = np.where(include & ~exclude, 2, 0).astype(self.dtype)
+        return bitmask
+
+    def __call__(self, redshift, mag_g, mag_r, mag_i, mag_Z):
+        bitmask = self.colour_selection(mag_g, mag_r, mag_i, mag_Z)
+        bitmask = self._sampler.update_bitmask(redshift, bitmask, 4)
+        # for convenience flag all objects that pass the selection
+        bitmask = np.bitwise_or(
+            # join conditions with AND
+            np.where(bitmask == 6, 1, 0).astype(self.dtype),
+            bitmask)
+        return bitmask
+
+
 ###############################################################################
 #                            DEEP SURVEYS                                     #
 ###############################################################################
 
 
-class SelectDEEP2(_SelectSample):
+class SelectDEEP2(BaseSelection):
 
-    _description = "DEEP2 sample selection bit mask. Select objects passing "
+    name = "DEEP2"
+    _description = "{:} sample selection bit mask. Select objects passing "
     _description += "photometric cuts by (mask & 2), objects passing the "
-    _description += "sampling succes rate by (mask & 4) and the full sample "
-    _description += "by (mask & 1)."
+    _description += "sampling succes rate by (mask & 4) objects the density "
+    _description += "sampling by (mask & 8) and the full sample by (mask & 1)."
 
-    def __init__(self):
+    def __init__(self, path, mock_redshifts, mock_area):
+        super().__init__(path, mock_redshifts, mock_area)
         # Spec-z success rate as function of r_AB for Q>=3 read of Figure 13 in
         # Newman+13 for DEEP2 fields 2-4. Values are binned in steps of 0.2 mag
         # with the first and last bin centered on 19 and 24.
@@ -429,7 +486,7 @@ class SelectDEEP2(_SelectSample):
         success_R_centers = (success_R_bins[1:] + success_R_bins[:-1]) / 2.0
         # paper has given 1 - [sucess rate] in the histogram
         success_R_rate = np.loadtxt(os.path.join(
-            success_rate_dir, "DEEP2_success"))
+            SUCCESS_RATE_DIR, "DEEP2_success"))
         # interpolate the success rate as probability of being selected with
         # the probability at R > 24.1 being 0
         self._p_success_R = interp1d(
@@ -464,27 +521,30 @@ class SelectDEEP2(_SelectSample):
         bitmask = np.where(mask, 4, 0).astype(self.dtype)
         return bitmask
 
-    def __call__(self, mag_B, mag_Rc, mag_Ic):
+    def __call__(self, redshift, mag_B, mag_Rc, mag_Ic):
         bitmask = self.colour_selection(mag_B, mag_Rc, mag_Ic)
         bitmask = np.bitwise_or(
             self.specz_success(mag_Rc),
             bitmask)
+        bitmask = self._sampler.update_bitmask(redshift, bitmask, 8)
         # for convenience flag all objects that pass the selection
         bitmask = np.bitwise_or(
             # join conditions with AND
-            np.where(bitmask == 6, 1, 0).astype(self.dtype),
+            np.where(bitmask == 14, 1, 0).astype(self.dtype),
             bitmask)
         return bitmask
 
 
-class SelectVVDSf02(_SelectSample):
+class SelectVVDSf02(BaseSelection):
 
-    _description = "VVDS-02h field selection bit mask. Select objects passing "
+    name = "VVDS-02h"
+    _description = "{:} sample selection bit mask. Select objects passing "
     _description += "photometric cuts by (mask & 2), objects passing the "
-    _description += "sampling succes rate by (mask & 4) and the full sample "
-    _description += "by (mask & 1)."
+    _description += "sampling succes rate by (mask & 4) objects the density "
+    _description += "sampling by (mask & 8) and the full sample by (mask & 1)."
 
-    def __init__(self):
+    def __init__(self, mock_redshifts, mock_area):
+        super().__init__(mock_redshifts, mock_area)
         # NOTE: We use a redshift-based and I-band based success rate
         #       independently here since we do not know their correlation,
         #       which makes the success rate worse than in reality.
@@ -494,7 +554,7 @@ class SelectVVDSf02(_SelectSample):
         success_I_bins = np.arange(17.0, 24.0 + 0.01, 0.5)
         success_I_centers = (success_I_bins[1:] + success_I_bins[:-1]) / 2.0
         success_I_rate = np.loadtxt(os.path.join(
-                success_rate_dir, "VVDSf02_I_success"))
+                SUCCESS_RATE_DIR, "VVDSf02_I_success"))
         # interpolate the success rate as probability of being selected with
         # the probability at I > 24 being 0
         self._p_success_I = interp1d(
@@ -506,9 +566,9 @@ class SelectVVDSf02(_SelectSample):
         # NOTE: at z > 1.75 there are only lower limits (due to a lack of
         # spec-z?), thus the success rate is extrapolated as 1.0 at z > 1.75
         success_z_bright_centers, success_z_bright_rate = np.loadtxt(
-            os.path.join(success_rate_dir, "VVDSf02_z_bright_success")).T
+            os.path.join(SUCCESS_RATE_DIR, "VVDSf02_z_bright_success")).T
         success_z_deep_centers, success_z_deep_rate = np.loadtxt(
-            os.path.join(success_rate_dir, "VVDSf02_z_deep_success")).T
+            os.path.join(SUCCESS_RATE_DIR, "VVDSf02_z_deep_success")).T
         # interpolate the success rates as probability of being selected with
         # the probability in the bright bin at z > 1.75 being 1.0 and the deep
         # bin at z > 4.0 being 0.0
@@ -542,39 +602,42 @@ class SelectVVDSf02(_SelectSample):
         bitmask = np.where(mask, 4, 0).astype(self.dtype)
         return bitmask
 
-    def __call__(self, mag_Ic, redshift):
+    def __call__(self, redshift, mag_Ic):
         bitmask = self.colour_selection(mag_Ic)
         bitmask = np.bitwise_or(
             self.specz_success(mag_Ic, redshift),
             bitmask)
+        bitmask = self._sampler.update_bitmask(redshift, bitmask, 8)
         # for convenience flag all objects that pass the selection
         bitmask = np.bitwise_or(
             # join conditions with AND
-            np.where(bitmask == 6, 1, 0).astype(self.dtype),
+            np.where(bitmask == 14, 1, 0).astype(self.dtype),
             bitmask)
         return bitmask
 
 
-class SelectzCOSMOS(_SelectSample):
+class SelectzCOSMOS(BaseSelection):
 
-    _description = "zCOSMOS sample selection bit mask. Select objects passing "
+    name = "zCOSMOS"
+    _description = "{:} sample selection bit mask. Select objects passing "
     _description += "photometric cuts by (mask & 2), objects passing the "
-    _description += "sampling succes rate by (mask & 4) and the full sample "
-    _description += "by (mask & 1)."
+    _description += "sampling succes rate by (mask & 4) objects the density "
+    _description += "sampling by (mask & 8) and the full sample by (mask & 1)."
 
-    def __init__(self):
+    def __init__(self, mock_redshifts, mock_area):
+        super().__init__(mock_redshifts, mock_area)
         # Spec-z success rate as function of redshift (x) and I_AB (y) read of
         # Figure 3 in Lilly+09 for zCOSMOS bright sample. Do a spline
         # interpolation of the 2D data and save it as pickle on the disk for
         # faster reloads
-        pickle_file = os.path.join(success_rate_dir, "zCOSMOS.cache")
+        pickle_file = os.path.join(SUCCESS_RATE_DIR, "zCOSMOS.cache")
         if not os.path.exists(pickle_file):
             x = np.loadtxt(os.path.join(
-                success_rate_dir, "zCOSMOS_z_sampling"))
+                SUCCESS_RATE_DIR, "zCOSMOS_z_sampling"))
             y = np.loadtxt(os.path.join(
-                success_rate_dir, "zCOSMOS_I_sampling"))
+                SUCCESS_RATE_DIR, "zCOSMOS_I_sampling"))
             rates = np.loadtxt(os.path.join(
-                success_rate_dir, "zCOSMOS_success"))
+                SUCCESS_RATE_DIR, "zCOSMOS_success"))
             self._p_success_zI = interp2d(
                 x, y, rates, copy=True, kind="linear")
             with open(pickle_file, "wb") as f:
@@ -605,15 +668,16 @@ class SelectzCOSMOS(_SelectSample):
         bitmask = np.where(mask, 4, 0).astype(self.dtype)
         return bitmask
 
-    def __call__(self, mag_Ic, redshift):
+    def __call__(self, redshift, mag_Ic):
         bitmask = self.colour_selection(mag_Ic)
         bitmask = np.bitwise_or(
             self.specz_success(mag_Ic, redshift),
             bitmask)
+        bitmask = self._sampler.update_bitmask(redshift, bitmask, 8)
         # for convenience flag all objects that pass the selection
         bitmask = np.bitwise_or(
             # join conditions with AND
-            np.where(bitmask == 6, 1, 0).astype(self.dtype),
+            np.where(bitmask == 14, 1, 0).astype(self.dtype),
             bitmask)
         return bitmask
 
@@ -623,15 +687,35 @@ class SelectzCOSMOS(_SelectSample):
 ###############################################################################
 
 
+class SelectSparse24mag(BaseSelection):
+
+    name = "Sparse24mag"
+    _description = "{:} sample selection bit mask. Select objects passing "
+    _description += "the photometric selection by (mask & 2), objects passing "
+    _description += "the density sampling by (mask & 4) and the full sample "
+    _description += "by (mask & 1)."
+
+    def __call__(self, redshift, mag_r):
+        bitmask = np.where(mag_r < 24.0, 2, 0).astype(self.dtype)
+        bitmask = self._sampler.update_bitmask(redshift, bitmask, 4)
+        # for convenience flag all objects that pass the selection
+        bitmask = np.bitwise_or(
+            # join conditions with AND
+            np.where(bitmask == 6, 1, 0).astype(self.dtype),
+            bitmask)
+        return bitmask
+
+
 ###############################################################################
+
 
 REGISTERED_SAMPLES = OrderedDict()
 for name, selector in OrderedDict(locals()).items():
     if name.startswith("Select"):
         REGISTERED_SAMPLES[name[6:]] = selector
-# sample selections that required the mock area paramter
-REQUIRE_AREA = []
-for name, selector in REGISTERED_SAMPLES.items():
-    if hasattr(selector, "_density_sampling"):
-        REQUIRE_AREA.append(name)
-    
+# find all samples that provide a density file
+IMPLEMENT_DOWNSAMPLING = OrderedDict()
+for name in REGISTERED_SAMPLES:
+    density_file = DENSITY_FILE_TEMPLATE.format(name)
+    if os.path.exists(density_file):
+        IMPLEMENT_DOWNSAMPLING[name] = density_file
