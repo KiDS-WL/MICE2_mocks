@@ -1,7 +1,150 @@
+import os
+import json
+
 import numpy as np
+from scipy.interpolate import interp1d
 from scipy.spatial import cKDTree
 
 from memmap_table import MemmapTable
+
+
+class DistributionEstimator(object):
+
+    _interpolator = None
+    _normalisation = 1.0
+
+    def __init__(
+            self, xmin, xmax, width, smooth=10,
+            kind="linear", fill_value=None):
+        # construct a binning for the data
+        self._xmin = float(xmin)
+        self._xmax = float(xmax)
+        self._width = float(width)
+        self._binning = np.arange(
+            self._xmin, self._xmax + self._width, self._width)
+        # array to accumulate bin counts
+        self._counts = np.zeros(len(self._binning) - 1)
+        # set interpolation parameters
+        self._smooth = int(smooth)
+        self._kind = kind
+        self._fill_value = float(fill_value)
+ 
+    @classmethod
+    def from_file(cls, path, kind="linear", fill_value=None):
+        instance = cls.__new__(cls)
+        instance._kind = kind
+        instance._fill_value = fill_value
+        # load the data from the file
+        with open(path) as f:
+            attr_dict = json.load(f)
+        # set the attributes and rerun the interpolation
+        for attr, value in attr_dict.items():
+            if type(value) is list:
+                setattr(instance, attr, np.array(value))
+            else:
+                setattr(instance, attr, value)
+        # reconstruct the binning and the interpolation
+        instance._binning = np.arange(
+            instance._xmin, instance._xmax + instance._width, instance._width)
+        instance.interpolate()
+        return instance
+
+    def to_file(self, path):
+        # save all required attributes as JSON file
+        attrs = (
+            "_xmin", "_xmax", "_width", "_smooth", "_kind", "_fill_value",
+            "_counts", "_normalisation")
+        attr_dict = {}
+        for attr in attrs:
+            value = getattr(self, attr)
+            if type(value) is np.ndarray:
+                attr_dict[attr] = list(value)
+            else:
+                attr_dict[attr] = value
+        # do not use pickle for safety reasons
+        with open(path, "w") as f:
+            json.dump(attr_dict, f,indent=2, sort_keys=True)
+
+    def add_data(self, data):
+        self._counts += np.histogram(data, bins=self._binning, density=True)[0]
+        self._interpolator = None
+
+    @property
+    def xmin(self):
+        return self._xmin
+
+    @property
+    def xmax(self):
+        return self._xmax
+
+    @property
+    def width(self):
+        return self._width
+
+    @property
+    def bin_edges(self):
+        return self._binning
+
+    @property
+    def bin_centers(self):
+        return (self._binning[1:] + self._binning[:-1]) / 2.0
+
+    @property
+    def smoothing(self):
+        return self._smooth
+
+    @property
+    def kind(self):
+        return self._kind
+
+    @kind.setter
+    def kind(self, kind):
+        self._kind = kind
+        self.interpolate()
+
+    @property
+    def fill_value(self):
+        return self._fill_value
+
+    @fill_value.setter
+    def fill_value(self, value):
+        self._fill_value = value
+        self.interpolate()
+
+    @property
+    def normalisation(self):
+        return self._normalisation
+    
+    @normalisation.setter
+    def normalisation(self, amp):
+        self._normalisation = amp
+
+    def interpolate(self):
+        smoothed = np.empty_like(self._counts)
+        # compute the rolling sum over the high resolution histogram
+        idx_offset = max(1, self._smooth // 2)
+        for i in range(len(smoothed)):
+            start = max(0, i - idx_offset)
+            end = min(len(smoothed), i + idx_offset)
+            smoothed[i] = self._counts[start:end].sum()
+        # normalize to unity
+        bin_centers = self.bin_centers
+        if smoothed.any():
+            smoothed = smoothed / np.trapz(smoothed, x=bin_centers)
+        # interpolate the values
+        kwargs = {"kind": self._kind}
+        if self._fill_value is not None:
+            kwargs.update({
+                "bounds_error": False, "fill_value": self._fill_value})
+        self._interpolator = interp1d(bin_centers, smoothed, **kwargs)
+
+    def __call__(self, x):
+        try:
+            interp = self._interpolator(x)
+        except TypeError:
+            self.interpolate()
+            interp = self._interpolator(x)
+        return interp * self._normalisation
 
 
 class DataMatcher(object):
