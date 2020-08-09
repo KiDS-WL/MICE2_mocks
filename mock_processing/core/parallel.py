@@ -102,6 +102,7 @@ class ParallelTable(object):
     _chunksize = 16384  # default in current MemmapTable implementation
     _worker_function = None
     _parse_thread_id = False
+    _allow_modify = False
 
     def __init__(self, table, logger=None):
         # keep the table reference for later use
@@ -270,6 +271,22 @@ class ParallelTable(object):
         assert(type(boolean) is bool)
         self._parse_thread_id = boolean
 
+    @property
+    def allow_modify(self):
+        """
+        Whether input argument columns are opened as writeable.
+        """
+        return self._allow_modify
+
+    @allow_modify.setter
+    def allow_modify(self, boolean):
+        """
+        Set True or False to control, whether input argument columns are opened
+        as writeable.
+        """
+        assert(type(boolean) is bool)
+        self._allow_modify = boolean
+
     def add_result_column(self, colname):
         """
         Add an output table column that receives results from the worker
@@ -358,7 +375,7 @@ class ParallelTable(object):
                 index_ranges, repeat(self._worker_function),
                 repeat(self._call_args), repeat(self._call_kwargs),
                 repeat(self._return_map), repeat(progress_queue), seeds,
-                threadIDs))
+                repeat(self._allow_modify), threadIDs))
             # notify begin of processing
             message = "processing column data using {:d} processes ..."
             message = message.format(threads)
@@ -401,7 +418,8 @@ class ParallelTable(object):
             worker_args = [
                 chunk_iter, self._worker_function,
                 self._call_args, self._call_kwargs, self._return_map,
-                progress_queue, seed, 0 if self._parse_thread_id else None]
+                progress_queue, seed, self._allow_modify,
+                0 if self._parse_thread_id else None]
             message = "processing column data ..."
             if self._logger is not None:
                 self._logger.info(message)
@@ -454,12 +472,13 @@ def _thread_worker(wrap_args):
         dict : the function keyword arguments
         list : the column(s) where the function return values are stored
         seed : seed used to initialize the random state
+        modify : bool controlling if input columns are opened as writable
         threadID : thread identifier, if not None parsed as threadID keyword
                    to callable
     """
     # unpack all input arguments
     (iterator, function, args, kwargs, results,
-     progress_queue, seed, threadID) = wrap_args
+     progress_queue, seed, modify, threadID) = wrap_args
     # seed the random state if needed
     if seed is not None:
         hasher = md5(bytes(seed, "utf-8"))
@@ -470,7 +489,7 @@ def _thread_worker(wrap_args):
     args_expanded = []
     for arg in args:
         if type(arg) is TableColumn:
-            column = MemmapColumn(arg.path, mode="r")
+            column = MemmapColumn(arg.path, mode="r+" if modify else "r")
             args_expanded.append(column)
         else:
             args_expanded.append(arg)
@@ -479,7 +498,7 @@ def _thread_worker(wrap_args):
     for key, arg in kwargs.items():
         # this does not load any data yet
         if type(arg) is TableColumn:
-            column = MemmapColumn(arg.path, mode="r")
+            column = MemmapColumn(arg.path, mode="r+" if modify else "r")
             kwargs_expanded[key] = column
         else:
             kwargs_expanded[key] = arg
