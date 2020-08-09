@@ -1,4 +1,4 @@
-mask = "samples/VVDSf02"
+bitmask = "samples/VVDSf02"
                         # path at which the sample selection bit mask is saved
                         # in the data store
 

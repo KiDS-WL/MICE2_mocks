@@ -1,4 +1,4 @@
-mask = "samples/GAMA"   # path at which the sample selection bit mask is saved
+bitmask = "samples/GAMA"   # path at which the sample selection bit mask is saved
                         # in the data store
 
 [selection]

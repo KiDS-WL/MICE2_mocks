@@ -42,6 +42,10 @@ footprint='position/ra/obs >= 40.0 AND position/ra/obs < 45.0 AND position/dec/o
     -q "${footprint}"' AND samples/SDSS & 12'
 ../../scripts/mocks_datastore_query \
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
+    -o ~/TEST/MICE2_query_${table}_WiggleZ.fits \
+    -q "${footprint}"' AND samples/WiggleZ & 1'
+../../scripts/mocks_datastore_query \
+    /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
     -o ~/TEST/MICE2_query_${table}_DEEP2.fits \
     -q "${footprint}"' AND samples/DEEP2 & 1'
 ../../scripts/mocks_datastore_query \

@@ -1,4 +1,4 @@
-mask = "samples/DEEP2"  # path at which the sample selection bit mask is saved
+bitmask = "samples/DEEP2"  # path at which the sample selection bit mask is saved
                         # in the data store
 
 [selection]

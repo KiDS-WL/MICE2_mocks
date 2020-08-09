@@ -372,14 +372,14 @@ class ParseSampleConfig(object):
         # parameters indicated by an empty string
         with open(self._default_path) as f:
             config = toml.load(f)
-        if "mask" not in config:
-            message = "invalid default sample configuration: 'mask' field "
+        if "bitmask" not in config:
+            message = "invalid default sample configuration: 'bitmask' field "
             message += "must always be defined"
             raise KeyError(message)
         self._is_required = {
-            "mask": True}  # list known params and if they are required
+            "bitmask": True}  # list known params and if they are required
         for key, value in config.items():
-            if key == "mask":
+            if key == "bitmask":
                 continue
             elif type(value) is not dict:
                 # parameter is not required if it is empty in the default file
