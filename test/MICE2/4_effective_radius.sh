@@ -14,3 +14,4 @@ fi
 ../../scripts/mocks_effective_radius \
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
     --threads ${2:-32}
+echo

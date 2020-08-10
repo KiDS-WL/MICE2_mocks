@@ -6,6 +6,8 @@ import numpy as np
 from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 
+from .core.parallel import workload, CPUbound
+
 
 def magnification_correction(kappa, mag):
     """
@@ -28,6 +30,7 @@ def magnification_correction(kappa, mag):
     return mag_magnified
 
 
+@workload(0.10)
 def magnification_correction_wrapped(kappa, *mags):
     """
     Wrapper for magnification_correction() to compute the magnification
@@ -170,6 +173,7 @@ def find_percentile(
     return r_effective
 
 
+@CPUbound
 def find_percentile_wrapped(
         percentile, R_e_Disk, R_e_Bulge, f_B, method="newton"):
     """
@@ -257,6 +261,7 @@ def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
     return gaap_major, gaap_minor, snr_correction
 
 
+@workload(0.10)
 def apertures_wrapped(method, config, r_effective, ba_ratio):
     # select the photometry method
     if method == "GAaP":
@@ -311,6 +316,7 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
     return real, real_err
 
 
+@workload(0.33)
 def photometry_realisation_wrapped(config, *mag_mag_lim_snr_correction):
     # iterate through the listing of magnitude columns, magnitude limits and
     # S/N correction factors for all filters

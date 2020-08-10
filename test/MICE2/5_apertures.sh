@@ -14,4 +14,6 @@ fi
 ../../scripts/mocks_apertures \
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
     -c config/photometry.toml \
-    --method SExtractor
+    --method SExtractor \
+    --threads ${2:-32}
+echo

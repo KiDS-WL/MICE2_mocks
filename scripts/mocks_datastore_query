@@ -11,7 +11,7 @@ from memmap_table.mathexpression import MathTerm
 
 import mock_processing as mocks
 from mock_processing.core.readwrite import (BUFFERSIZE, guess_format,
-                                            supported_writers)
+                                            SUPPORTED_WRITERS)
 from mock_processing.core.utils import ProgressBar, bytesize_with_prefix
 
 
@@ -34,7 +34,7 @@ output_group.add_argument(
     "-o", "--output",
     help="path to output data table (default: write on stdout)")
 output_group.add_argument(
-    "--format", choices=sorted(supported_writers.keys()),
+    "--format", choices=sorted(SUPPORTED_WRITERS.keys()),
     help="output table file format (default: inferred from file extension)")
 output_group.add_argument(
     "-c", "--columns", nargs="*",
@@ -156,7 +156,7 @@ def main():
         logger.info(message)
 
         # create a standardized output writer
-        writer_class = supported_writers[args.format]
+        writer_class = SUPPORTED_WRITERS[args.format]
         try:
             writer = writer_class(
                 dtype, args.output, overwrite=True,

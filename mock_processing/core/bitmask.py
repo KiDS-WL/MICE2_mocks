@@ -169,6 +169,23 @@ class BitMaskManager(object):
         return BitMaskManager.place_bit(bitmask, 1, values, copy)
 
     @staticmethod
+    def update_master(bitmask, bit_sum, bit_join="AND", copy=False):
+        assert(bit_join in ("AND", "OR"))
+        # join the selected subset of bits
+        if bit_join == "AND":
+            is_selected = BitMaskManager.check_bits_all(bitmask, bit_sum)
+        else:
+            is_selected = BitMaskManager.check_bits_any(bitmask, bit_sum)
+        # check if the master bit is set and update it accordingly
+        is_selected &= BitMaskManager.check_master(bitmask)
+        updated = BitMaskManager.place_master(bitmask, is_selected, copy=copy)
+        if copy:
+            return updated
+        else:
+            bitmask[:] = updated
+            return bitmask
+
+    @staticmethod
     def print_binary(number, width=8):
         try:
             print(np.binary_repr(number, width))

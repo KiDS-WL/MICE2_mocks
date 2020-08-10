@@ -17,8 +17,8 @@ parser.add_argument(
     help="fraction of the total flux emitted from within computed radius "
          "(default: %(default)s)")
 parser.add_argument(
-    "--threads", type=int,
-    help="number of threads to use (default: all)")
+    "--threads", type=int, default=-1,
+    help="maximum number of threads to use (default: all)")
 
 
 def main():
@@ -28,6 +28,7 @@ def main():
 
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
+        ds.pool.max_threads = args.threads
 
         ds.pool.set_worker(find_percentile_wrapped)
 
@@ -53,7 +54,7 @@ def main():
         ds.pool.add_result_column(r_e_path)
 
         # compute and store the corrected magnitudes
-        ds.pool.execute(args.threads)
+        ds.pool.execute()
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 

@@ -14,4 +14,6 @@ fi
 ../../scripts/mocks_magnification \
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
     --mag mags/evolved \
-    --lensed mags/lensed
+    --lensed mags/lensed \
+    --threads ${2:-32}
+echo

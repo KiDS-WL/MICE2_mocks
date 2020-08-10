@@ -15,3 +15,4 @@ fi
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
     -c config/matching.toml \
     --threads ${2:-32}
+echo

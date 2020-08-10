@@ -14,4 +14,6 @@ fi
 ../../scripts/MICE2_evolution_correction \
     /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
     --mag mags/model \
-    --evo mags/evolved
+    --evo mags/evolved \
+    --threads ${2:-32}
+echo

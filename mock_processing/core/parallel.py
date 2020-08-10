@@ -1,6 +1,7 @@
 import multiprocessing as mp
 import os
 import sys
+from functools import wraps, partial
 from itertools import repeat
 from hashlib import md5
 
@@ -10,6 +11,28 @@ from memmap_table.column import MemmapColumn
 from memmap_table.table import MemmapTable
 
 from .utils import ProgressBar
+
+
+def noGIL(worker):
+    worker._nogil = True
+    return worker
+
+
+def workload(fraction):
+    def wrapper(worker):
+        worker._cpu_util = fraction
+        return worker
+    return wrapper
+
+
+def IObound(worker):
+    worker._cpu_util = 0.0
+    return worker
+
+
+def CPUbound(worker):
+    worker._cpu_util = 1.0
+    return worker
 
 
 class TableColumn(object):
@@ -103,6 +126,7 @@ class ParallelTable(object):
     _worker_function = None
     _parse_thread_id = False
     _allow_modify = False
+    _max_threads = mp.cpu_count()
 
     def __init__(self, table, logger=None):
         # keep the table reference for later use
@@ -111,31 +135,6 @@ class ParallelTable(object):
         self._call_args = []
         self._call_kwargs = {}
         self._return_map = []
-
-    @staticmethod
-    def _n_threads(n_threads=None):
-        """
-        Check and normalize the provided number of threads.
-
-        Parameters:
-        -----------
-        n_threads : int or None:
-            The suggested number of threads to use, if None, use all available.
-
-        Returns:
-        --------
-        threads : int
-            The number of threads to use.
-        """
-        max_threads = mp.cpu_count()
-        if n_threads is None:
-            threads = max_threads
-        elif 1 <= int(n_threads):
-            threads = min(int(n_threads), max_threads)
-        else:
-            message = "number of threads must be in range 1-{:d}"
-            raise ValueError(message.format(max_threads))
-        return threads
 
     def _thread_iterator(self, n_threads):
         """
@@ -272,6 +271,32 @@ class ParallelTable(object):
         self._parse_thread_id = boolean
 
     @property
+    def max_threads(self):
+        """
+        Maximum number of parallel threads or processes to use.
+        """
+        return self._max_threads
+
+    @max_threads.setter
+    def max_threads(self, n_threads):
+        """
+        Set the maximum number of parallel threads or processes to use.
+
+        Parameters:
+        -----------
+        n_threads : int or None:
+            The number of threads to use, if -1, use all available.
+        """
+        max_threads = mp.cpu_count()
+        if n_threads == -1:
+            self._max_threads = max_threads
+        elif 1 <= int(n_threads):
+            self._max_threads = min(int(n_threads), max_threads)
+        else:
+            message = "number of threads must be in range 1-{:d}"
+            raise ValueError(message.format(max_threads))
+
+    @property
     def allow_modify(self):
         """
         Whether input argument columns are opened as writeable.
@@ -329,7 +354,20 @@ class ParallelTable(object):
         sign = "{:}({:}) -> {:}".format(function.__name__, args, result)
         return sign
 
-    def execute(self, n_threads=None, prefix=None, seed=None):
+    def _n_threads(self):
+        """
+        Determine the number of threads or processes to use for the worker
+        function based on the _cpu_util attribute, if the worker is decorated
+        with @workload.
+        """
+        if not hasattr(self._worker_function, "_cpu_util"):
+            cpu_util = 0.2  # this may not be optimal
+        else:
+            cpu_util = min(1.0, max(0.0, self._worker_function._cpu_util))
+        n_threads = max(1, int(self._max_threads * cpu_util))
+        return n_threads
+
+    def _apply_processes(self, n_threads=None, prefix=None, seed=None):
         """
         Apply the worker function on the input table using a given number of
         parallel processes and writing the results to the output columns.
@@ -337,7 +375,7 @@ class ParallelTable(object):
         Parameters:
         -----------
         n_threads : int
-            Number of parallel threads to use (all by default).
+            Number of parallel processes to use (all by default).
         prefix : str
             Prefix for the progressbar (optional).
         seed : str
@@ -345,7 +383,7 @@ class ParallelTable(object):
             it's index to this string to assure that the random state in each
             thread is differnt.
         """
-        threads = self._n_threads(n_threads)
+        threads = self._n_threads()
         # assign row subsets to the threads
         n_rows = len(self._table)
         index_ranges = self._thread_iterator(
@@ -390,7 +428,7 @@ class ParallelTable(object):
         finally:
             progress_monitor.join()
 
-    def apply(self, prefix=None, seed=None):
+    def _apply_threads(self, n_threads=None, prefix=None, seed=None):
         """
         Apply the worker function on the input table sequentially and writing
         the results to the output columns. Useful, if most of the worker
@@ -398,11 +436,14 @@ class ParallelTable(object):
 
         Parameters:
         -----------
+        n_threads : int
+            Number of parallel processes to use (all by default).
         prefix : str
             Prefix for the progressbar (optional).
         seed : str
             String to seed the random generator (optional).
         """
+        threads = self._n_threads()
         n_rows = len(self._table)
         # Initialize the monitoring thread that manages a progress bar,
         # managing the progress over all threads. The row progress is
@@ -413,6 +454,7 @@ class ParallelTable(object):
             target=_monitor_worker, args=(progress_queue, n_rows, prefix))
         progress_monitor.start()
         try:
+            self.add_argument_constant(threads, keyword="threads")
             # collect the call arguments for the worker
             chunk_iter = ParallelIterator(0, n_rows, self.chunksize)
             worker_args = [
@@ -420,7 +462,8 @@ class ParallelTable(object):
                 self._call_args, self._call_kwargs, self._return_map,
                 progress_queue, seed, self._allow_modify,
                 0 if self._parse_thread_id else None]
-            message = "processing column data ..."
+            message = "processing column data using {:d} threads ..."
+            message = message.format(threads)
             if self._logger is not None:
                 self._logger.info(message)
             _thread_worker(worker_args)
@@ -429,6 +472,17 @@ class ParallelTable(object):
             progress_queue.put(None)
         finally:
             progress_monitor.join()
+
+    def execute(self, prefix=None, seed=None):
+        """
+        Apply the worker function using processes or using threads if the
+        worker function is decorated with parallel.noGIL, for reference see
+        ParallelTable._apply_threads and ParallelTable._apply_processes.
+        """
+        if hasattr(self._worker_function, "_nogil"):
+            self._apply_threads(self._n_threads, prefix, seed)
+        else:
+            self._apply_processes(self._n_threads, prefix, seed)
 
 
 def _monitor_worker(progress_queue, table_rows, prefix):

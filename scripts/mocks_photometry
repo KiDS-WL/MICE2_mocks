@@ -42,8 +42,8 @@ parser.add_argument(
     help="string to seed the random generator (default: %(default)s, results "
          "are only reproducible for the same number of threads)")
 parser.add_argument(
-    "--threads", type=int, default=16,
-    help="number of threads to use (default: %(default)s)")
+    "--threads", type=int, default=-1,
+    help="maximum number of threads to use (default: all)")
 
 help_group = parser.add_argument_group("help and documentation")
 help_group.add_argument(
@@ -64,6 +64,7 @@ def main():
 
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
+        ds.pool.max_threads = args.threads
 
         # find all magnitude columns
         try:
@@ -117,7 +118,7 @@ def main():
                 ds.pool.add_result_column(out_path.format(args.real, key))
 
         # compute and store the corrected magnitudes
-        ds.pool.execute(args.threads, seed=args.seed)
+        ds.pool.execute(seed=args.seed)
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 

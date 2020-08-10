@@ -18,5 +18,7 @@ do
     ../../scripts/mocks_select_sample \
         /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
         --sample $sample --area $area \
-        -c samples/${sample}.toml
+        -c samples/${sample}.toml \
+        --threads ${2:-32}
+    echo
 done

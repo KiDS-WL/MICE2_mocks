@@ -16,4 +16,6 @@ fi
     -c config/photometry.toml \
     --method SExtractor \
     --mag mags/lensed \
-    --real mags/KV450
+    --real mags/KV450 \
+    --threads ${2:-32}
+echo

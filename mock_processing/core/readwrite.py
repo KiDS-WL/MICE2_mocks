@@ -13,6 +13,26 @@ from .utils import expand_path
 _mega_byte = 1024 * 1024
 BUFFERSIZE = 100 * _mega_byte
 
+EXTENSION_ALIAS = {}
+SUPPORTED_READERS = {}
+SUPPORTED_WRITERS = {}
+
+
+def register(name, extensions):
+    def decorator_register(iohandler):
+        """
+        Register Reader or Writer objects.
+        """
+        if issubclass(iohandler, Reader):
+            SUPPORTED_READERS[name] = iohandler
+        elif issubclass(iohandler, Writer):
+            SUPPORTED_WRITERS[name] = iohandler
+        else:
+            raise TypeError("Object must be subclass of 'Reader' or 'Writer'")
+        EXTENSION_ALIAS[name] = extensions
+        return iohandler
+    return decorator_register
+
 
 def guess_format(fpath) -> str:
     """
@@ -31,7 +51,7 @@ def guess_format(fpath) -> str:
     _, ext = os.path.splitext(fpath.strip())
     ext = ext.lower().lstrip(".")
     # compare with all supported file types
-    for format_key, aliases in extension_alias.items():
+    for format_key, aliases in EXTENSION_ALIAS.items():
         if ext in aliases:
             return format_key
     raise NotImplementedError(
@@ -393,6 +413,7 @@ class Writer(DataBase, FileInterface):
 ###################  shipped with all python installations  ###################
 
 
+@register("csv", ("csv",))
 class CSVreader(Reader):
     """
     Read a CSV file into numpy arrays using a buffer.
@@ -599,6 +620,7 @@ class CSVreader(Reader):
         self._file.close()
 
 
+@register("csv", ("csv",))
 class CSVwriter(Writer):
     """
     Write table data to a CSV file or stdout using a buffer.
@@ -670,17 +692,12 @@ class CSVwriter(Writer):
             self._file.close()
 
 
-extension_alias = {"csv": ("csv",)}
-supported_readers = {"csv": CSVreader}
-supported_writers = {"csv": CSVwriter}
-
-
 ########################  optionally supported formats  #######################
 
 try:
     from fitsio import FITS
 
-
+    @register("fits", ("fit", "fits"))
     class FITSreader(Reader):
         """
         Read from single extension of a FITS file into numpy arrays using a
@@ -762,6 +779,7 @@ try:
                 self._file.close()
 
 
+    @register("fits", ("fit", "fits"))
     class FITSwriter(Writer):
         """
         Write table data to the first extension of a FITS file using a buffer.
@@ -822,11 +840,6 @@ try:
             #self._file.reopen()  # flush low level buffers
             self._file.close()
 
-
-    extension_alias["fits"] = ("fit", "fits")
-    supported_readers["fits"] = FITSreader
-    supported_writers["fits"] = FITSwriter
-
 except ImportError:
     pass
 
@@ -835,6 +848,7 @@ try:
     import h5py
 
 
+    @register("hdf5", ("h5", "hdf", "hdf5"))
     class HDF5reader(Reader):
         """
         Read a collection of equal length data sets from a HDF5 file into numpy
@@ -967,6 +981,7 @@ try:
             self._closed = True
 
 
+    @register("hdf5", ("h5", "hdf", "hdf5"))
     class HDF5writer(Writer):
         """
         Write table data to a HDF5 file using a buffer. Each table column is
@@ -1039,11 +1054,6 @@ try:
             self.flush()
             self._file.close()
 
-
-    extension_alias["hdf5"] = ("h5", "hdf", "hdf5")
-    supported_readers["hdf5"] = HDF5reader
-    supported_writers["hdf5"] = HDF5writer
-
 except ImportError:
     pass
 
@@ -1053,6 +1063,7 @@ try:
     from pyarrow import parquet as pq
 
 
+    @register("parquet", ("parquet", "pqt"))
     class PARQUETreader(Reader):
         """
         Read a parquet file into numpy arrays using a buffer.
@@ -1148,6 +1159,7 @@ try:
             self._closed = True
 
 
+    @register("parquet", ("parquet", "pqt"))
     class PARQUETwriter(Writer):
         """
         Write table data to a parquet file using a buffer.
@@ -1228,11 +1240,6 @@ try:
             """
             self.flush()
             self._file.close()
-
-
-    extension_alias["parquet"] = ("parquet", "pqt")
-    supported_readers["parquet"] = PARQUETreader
-    supported_writers["parquet"] = PARQUETwriter
 
 except ImportError:
     pass

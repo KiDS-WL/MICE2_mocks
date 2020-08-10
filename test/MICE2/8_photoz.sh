@@ -18,3 +18,4 @@ export hostname=$HOSTNAME
     --mag mags/KV450 \
     --zphot BPZ/KV450 \
     --threads ${2:-32}
+echo

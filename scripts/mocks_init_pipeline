@@ -7,7 +7,7 @@ from memmap_table import MemmapTable
 
 import mock_processing as mocks
 from mock_processing.core.config import DumpColumnMap, load_column_map
-from mock_processing.core.readwrite import guess_format, supported_readers
+from mock_processing.core.readwrite import guess_format, SUPPORTED_READERS
 from mock_processing.core.utils import ProgressBar
 
 
@@ -26,7 +26,7 @@ input_group = parser.add_argument_group("input simulation table")
 input_group.add_argument(
     "-i", "--input", required=True, help="path to input simulation table")
 input_group.add_argument(
-    "--format", choices=sorted(supported_readers.keys()),
+    "--format", choices=sorted(SUPPORTED_READERS.keys()),
     help="input table file format (default: inferred from file extension)")
 input_group.add_argument(
     "-c", "--columns", required=True,
@@ -65,7 +65,7 @@ def main():
     logger.info(message)
 
     # create a standardized input reader
-    reader_class = supported_readers[args.format]
+    reader_class = SUPPORTED_READERS[args.format]
     try:
         reader = reader_class(
             args.input, datasets=set(col_map_dict.values()),

@@ -26,8 +26,8 @@ parser.add_argument(
     "-c", "--config", required=True,
     help="parameter file in TOML format to configure BPZ")
 parser.add_argument(
-    "--threads", type=int,
-    help="number of threads to use (default: %(default)s)")
+    "--threads", type=int, default=-1,
+    help="maximum number of threads to use (default: all)")
 
 help_group = parser.add_argument_group("help and documentation")
 help_group.add_argument(
@@ -48,6 +48,7 @@ def main():
 
     # run BPZ on the selected magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
+        ds.pool.max_threads = args.threads
 
         # find all magnitude columns
         try:
@@ -81,7 +82,7 @@ def main():
                 # add columns to call signature
                 ds.pool.add_result_column(zphot_path)
 
-            ds.pool.execute(args.threads)
+            ds.pool.execute()
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 

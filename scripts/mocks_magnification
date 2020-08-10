@@ -20,8 +20,8 @@ parser.add_argument(
     help="sub-directory within data store where the magnification corrected "
          "magnitudes are stored")
 parser.add_argument(
-    "--threads", type=int, default=4,
-    help="number of threads to use (default: %(default)s)")
+    "--threads", type=int, default=-1,
+    help="maximum number of threads to use (default: all)")
 
 
 def main():
@@ -31,6 +31,7 @@ def main():
 
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
+        ds.pool.max_threads = args.threads
 
         ds.pool.set_worker(magnification_correction_wrapped)
 
@@ -60,7 +61,7 @@ def main():
             ds.pool.add_result_column(lensed_path)
 
         # compute and store the corrected magnitudes
-        ds.pool.execute(args.threads)
+        ds.pool.execute()
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
