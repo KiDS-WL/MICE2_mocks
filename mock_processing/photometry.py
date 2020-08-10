@@ -261,7 +261,7 @@ def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
     return gaap_major, gaap_minor, snr_correction
 
 
-@workload(0.10)
+@workload(0.20)
 def apertures_wrapped(method, config, r_effective, ba_ratio):
     # select the photometry method
     if method == "GAaP":
