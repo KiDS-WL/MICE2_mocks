@@ -39,12 +39,14 @@ def register(name):
         else:
             message = "Object must be subclass of 'BaseSelection' or 'Sampler'"
             raise TypeError(message)
-        # all known sample names
+        # set the name
+        selector.name = name
         return selector
     return decorator_register
 
 
 class Sampler(object):
+
     name = "Generic Sample"
 
 
@@ -188,7 +190,6 @@ class BaseSelection(object):
 @register("KiDS")
 class SelectKiDS(BaseSelection):
 
-    name = "KiDS"
     bit_descriptions = ("non-zero lensfit weight", "BPZ prior band detection")
 
     def lensing_selection(self, bitmask, recal_weight, prior_magnitude):
@@ -214,7 +215,6 @@ class SelectKiDS(BaseSelection):
 @register("2dFLenS")
 class Select2dFLenS(BaseSelection):
 
-    name = "2dFLenS"
     bit_descriptions = ("LOWZ", "MIDZ", "HIGHZ")
 
     def colour_selection(self, bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks):
@@ -277,7 +277,6 @@ class Select2dFLenS(BaseSelection):
 @register("GAMA")
 class SelectGAMA(BaseSelection):
 
-    name = "GAMA"
     bit_descriptions = ("r-band cut",)
 
     @workload(0.10)
@@ -294,7 +293,6 @@ class SelectGAMA(BaseSelection):
 @register("SDSS")
 class SelectSDSS(BaseSelection):
 
-    name = "SDSS"
     bit_descriptions = ("main sample", "BOSS LOWZ", "BOSS CMASS", "QSO")
 
     def MAIN_selection(self, bitmask, mag_r):
@@ -359,7 +357,6 @@ class SelectSDSS(BaseSelection):
 @register("WiggleZ")
 class SelectWiggleZ(BaseSelection):
 
-    name = "WiggleZ"
     bit_descriptions = ("inclusion rules", "exclusion rules")
 
     def colour_selection(self, bitmask, mag_g, mag_r, mag_i, mag_Z):
@@ -396,8 +393,6 @@ class SelectWiggleZ(BaseSelection):
 @register("WiggleZ")
 class SampleWiggleZ(RedshiftSampler):
 
-    name = "WiggleZ"
-
     def __init__(self, bit_manager, mock_area, bitmask, redshifts):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
         super().__init__(
@@ -412,7 +407,6 @@ class SampleWiggleZ(RedshiftSampler):
 @register("DEEP2")
 class SelectDEEP2(BaseSelection):
 
-    name = "DEEP2"
     bit_descriptions = ("colour/magnitude selection", "spectroscopic success")
 
     def __init__(self, bitvalues):
@@ -468,8 +462,6 @@ class SelectDEEP2(BaseSelection):
 @register("DEEP2")
 class SampleDEEP2(DensitySampler):
 
-    name = "DEEP2"
-
     def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
         super().__init__(bit_manager, density_file, mock_area, bitmask)
@@ -478,7 +470,6 @@ class SampleDEEP2(DensitySampler):
 @register("VVDSf02")
 class SelectVVDSf02(BaseSelection):
 
-    name = "VVDSf02"
     bit_descriptions = ("magnitude selection", "spectroscopic success")
 
     def __init__(self, bit_manager):
@@ -547,8 +538,6 @@ class SelectVVDSf02(BaseSelection):
 @register("VVDSf02")
 class SampleVVDSf02(DensitySampler):
 
-    name = "VVDSf02"
-
     def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
         super().__init__(bit_manager, density_file, mock_area, bitmask)
@@ -557,7 +546,6 @@ class SampleVVDSf02(DensitySampler):
 @register("zCOSMOS")
 class SelectzCOSMOS(BaseSelection):
 
-    name = "zCOSMOS"
     bit_descriptions = ("magnitude selection", "spectroscopic success")
 
     def __init__(self, bit_manager):
@@ -612,8 +600,6 @@ class SelectzCOSMOS(BaseSelection):
 
 @register("zCOSMOS")
 class SamplezCOSMOS(DensitySampler):
-
-    name = "zCOSMOS"
 
     def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
