@@ -7,7 +7,6 @@ bitmask = "samples/SDSS"   # path at which the sample selection bit mask is save
 mag_g = "..."           # SDSS g-band magnitude
 mag_r = "..."           # SDSS r-band magnitude
 mag_i = "..."           # SDSS i-band magnitude
-# if the following paramters are not set, the QSO selection is not applied
-is_central = ""         # flag indicating if it is central host galaxy
-lmhalo = ""             # logarithmic halo mass
-lmstellar = ""          # logarithmic stellar mass
+is_central = "..."      # flag indicating if it is central host galaxy
+lmhalo = "..."          # logarithmic halo mass
+lmstellar = "..."       # logarithmic stellar mass
