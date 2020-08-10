@@ -1,6 +1,7 @@
 import os
 from hashlib import sha1
 
+import numpy as np
 from tqdm import tqdm
 
 
@@ -104,3 +105,32 @@ class ProgressBar(tqdm):
             total=n_rows, leave=False, unit_scale=True, unit=" rows",
             dynamic_ncols=True, desc=prefix)
         self.smoothing = 0.05
+
+
+def footprint_area(RAmin, RAmax, DECmin, DECmax):
+    """
+    Calculate the area within a RA/DEC bound.
+
+    Parameters
+    ----------
+    RAmin : array_like or float
+        Minimum right ascension of the bounds.
+    RAmax : array_like or float
+        Maximum right ascension of the bounds.
+    DECmin : array_like or float
+        Minimum declination of the bounds.
+    DECmax : array_like or float
+        Maximum declination of the bounds.
+
+    Returns
+    -------
+    area : array_like or float
+        Area within the bounds in square degrees.
+    """
+    # np.radians and np.degrees avoids rounding errors
+    sin_DEC_min, sin_DEC_max = np.sin(np.radians([DECmin, DECmax]))
+    dRA = RAmax - RAmin
+    if RAmin > RAmax:
+        dRA += 360.0
+    area = dRA * np.degrees(sin_DEC_max - sin_DEC_min)
+    return area

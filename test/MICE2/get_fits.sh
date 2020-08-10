@@ -11,6 +11,7 @@ else
     exit 1;
 fi
 
+# this selects 24.4 deg^2
 footprint='position/ra/obs >= 40.0 AND position/ra/obs < 45.0 AND position/dec/obs >= 10.0 AND position/dec/obs < 15.0'
 
 ../../scripts/mocks_datastore_query \
