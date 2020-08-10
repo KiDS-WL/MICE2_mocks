@@ -2,8 +2,9 @@ import multiprocessing as mp
 import os
 import sys
 from functools import wraps, partial
-from itertools import repeat
 from hashlib import md5
+from inspect import signature
+from itertools import repeat
 
 import numpy as np
 
@@ -445,6 +446,10 @@ class ParallelTable(object):
         """
         threads = self._n_threads()
         n_rows = len(self._table)
+        # check if the funtion accepts the 'thread' keyword before passing it
+        sign = signature(self._worker_function)
+        if "threads" in sign.parameters:
+            self.add_argument_constant(threads, keyword="threads")
         # Initialize the monitoring thread that manages a progress bar,
         # managing the progress over all threads. The row progress is
         # communicated through a queue.
@@ -454,7 +459,6 @@ class ParallelTable(object):
             target=_monitor_worker, args=(progress_queue, n_rows, prefix))
         progress_monitor.start()
         try:
-            self.add_argument_constant(threads, keyword="threads")
             # collect the call arguments for the worker
             chunk_iter = ParallelIterator(0, n_rows, self.chunksize)
             worker_args = [
