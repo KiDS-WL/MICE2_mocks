@@ -4,6 +4,7 @@ import os
 import sys
 
 import mock_processing as mocks
+from mock_processing.core.bitmask import BitMaskManager
 from mock_processing.core.config import DumpSampleConfig, load_sample_config
 from mock_processing.matching import DistributionEstimator
 from mock_processing import samples
@@ -65,9 +66,9 @@ def main():
         ds.pool.allow_modify = True
 
         # make the output column
-        bits = samples.BitMaskHelper(args.sample)
+        BMM = BitMaskManager(args.sample)
         bitmask = ds.add_column(
-            config.bitmask, dtype=bits.dtype, overwrite=True)
+            config.bitmask, dtype=BMM.dtype, overwrite=True)
         # initialize the selection bit (bit 1) to true, all subsequent
         # selections will be joined with AND
         logger.debug("initializing bit mask")
@@ -76,9 +77,7 @@ def main():
         # start with photometric selection
         if args.sample in samples.PHOTOMETRIC_SELECTIONS:
             selector_class = samples.PHOTOMETRIC_SELECTIONS[args.sample]
-            bit_values = [
-                bits.reserve(desc) for desc in selector_class.bit_descriptions]
-            selector = selector_class(bit_values)
+            selector = selector_class(BMM)
 
             ds.pool.set_worker(selector)
             # select the columns needed for the selection function
@@ -97,23 +96,16 @@ def main():
 
             # surface density
             if issubclass(selector_class, samples.DensitySampler):
-                # initialize the sampler
-                bit_values = [
-                    bits.reserve("surface density downsampling")]
-                selector = selector_class(bit_values, args.area, bitmask)
-
+                selector = selector_class(BMM, args.area, bitmask)
             # redshift weighted density
             else:
-                # initialize the sampler
-                bit_values = [
-                    bits.reserve("redshift weighted density downsampling")]
                 selector = selector_class(
-                    bit_values, args.area, bitmask,
-                    ds[config.selection["redshift"]])
+                    BMM, args.area, bitmask, ds[config.selection["redshift"]])
 
             ds.pool.set_worker(selector)
             # select the columns needed for the selection function
             ds.pool.add_argument_column(config.bitmask)
+            # redshift weighted density requires a mock n(z) estimate
             if isinstance(selector, samples.RedshiftSampler):
                 ds.pool.add_argument_column(
                     config.selection["redshift"], keyword="redshift")
@@ -123,7 +115,7 @@ def main():
                 args.threads, seed=args.seed, prefix="density sampling")
 
         # add the description attribute to the output column
-        bitmask.attr = {"description": bits.description}
+        bitmask.attr = {"description": BMM.description}
 
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 

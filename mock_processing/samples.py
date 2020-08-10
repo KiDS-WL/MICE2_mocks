@@ -6,6 +6,7 @@ from collections import OrderedDict
 import numpy as np
 from scipy.interpolate import interp1d, interp2d
 
+from .core.bitmask import BitMaskManager as BMM
 from .core.utils import ProgressBar
 from .matching import DistributionEstimator
 
@@ -18,136 +19,24 @@ SUCCESS_RATE_DIR = os.path.join(
 DENSITY_FILE_TEMPLATE = os.path.join(SUCCESS_RATE_DIR, "{:}.json")
 
 
-class BitMaskHelper(object):
-
-    _bit_type_map = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
-    _base_description = "{:} sample selection bit mask, select (sub-)samples "
-    _base_description += "by (mask & bit), where the bits represent: "
-
-    def __init__(self, sample, nbits=8):
-        if nbits not in self._bit_type_map.keys():
-            message = "number of bits must be either of: {:}".format(
-                sorted(self._bit_type_map.keys))
-            raise ValueError(message)
-        self._sample = sample
-        self._bit_desc = OrderedDict()
-        # indicate which bits are occupied
-        self._bit_reserv = OrderedDict(
-            (2**i, False) for i in reversed(range(nbits)))
-        # reserve the lowest bit for easy selection of the full sample
-        self._bit_reserv[1] = True
-        self._bit_desc[1] = "full sample"
-
-    def __str__(self):
-        bitstring = "".join(
-            "1" if reserved else "0" for reserved in self._bit_reserv.values())
-        return "BitMask({:})".format(bitstring)
-
-    @property
-    def dtype(self):
-        return self._bit_type_map[len(self._bit_reserv)]
-
-    @property
-    def available(self):
-        return tuple(
-            bit for bit, reserved in self._bit_reserv.items() if not reserved)
-
-    @property
-    def reserved(self):
-        return tuple(
-            bit for bit, reserved in self._bit_reserv.items() if reserved)
-
-    @property
-    def description(self):
-        bit_descs = []
-        for bit in self.reserved:
-            bit_descs.append("({:d}) {:}".format(bit, self._bit_desc[bit]))
-        # build the documentation string
-        string = "{:} sample selection bit mask, select ".format(self._sample)
-        string += "(sub-)samples by (mask & bit), where the bits represent: "
-        string += ", ".join(reversed(bit_descs))
-        return string
-
-    def reserve(self, description):
-        if all(self._bit_reserv.values()):
-            raise ValueError("all bits are reserved")
-        # get the lowest, unreserved bit
-        bit = self.available[-1]
-        self.reserve_bit(bit, description)
-        return bit
-
-    def reserve_bit(self, bit, description):
-        if all(self._bit_reserv.values()):
-            raise ValueError("all bits are reserved")
-        try:
-            if self._bit_reserv[bit]:
-                raise ValueError("bit is already reserved: {:d}".format(bit))
-            else:
-                self._bit_reserv[bit] = True
-                self._bit_desc[bit] = description
-        except KeyError:
-            raise KeyError("invalid bit value: {:}".format(bit))
-
-
-def update_bitmask(bitmask, bit_value, condition, copy=False):
-    is_true = bitmask.dtype.type(bit_value)
-    is_false = bitmask.dtype.type(0)
-    bits = np.where(condition, is_true, is_false)
-    if copy:
-        return bitmask | bits
-    else:
-        bitmask |= bits
-        return bitmask
-
-
-def set_master(bitmask, values, copy=False):
-    # action:   clear bit 1              set new value
-    new_mask = (bitmask & ~np.uint8(1)) | values
-    if copy:
-        return new_mask
-    else:  # change in place
-        bitmask[:] = new_mask
-        return bitmask
-
-
-def join_AND_update_master(bitmask, bit_sum, copy=False):
-    is_true = bitmask.dtype.type(1)  # write in first bit
-    is_false = bitmask.dtype.type(0)
-    # if we join with AND we want all bits to match, ignoring the selection bit
-    condition = (bitmask & bit_sum) == bit_sum
-    bits_new = np.where(condition, is_true, is_false)  # new selection bits
-    # join the new selection bit with the existing one using AND logic
-    bits_old = (bitmask & 1)
-    return set_master(bitmask, bits_new & bits_old, copy=copy)
-
-
-def join_OR_update_master(bitmask, bit_sum, copy=False):
-    is_true = bitmask.dtype.type(1)  # write in first bit
-    is_false = bitmask.dtype.type(0)
-    # if we join with OR we want any bit to match, ignoring the selection bit
-    condition = (bitmask & bit_sum) > 0  # only true if any bit matches
-    bits_new = np.where(condition, is_true, is_false)  # new selection bits
-    # join the new selection bit with the existing one using AND logic
-    bits_old = (bitmask & 1)
-    return set_master(bitmask, bits_new & bits_old, copy=copy)
-
-
 class DensitySampler(object):
 
     name = "Generic Sample"
+    bit_descriptions = ("surface density downsampling",)
 
-    def __init__(self, bitvalues, path, area, bitmask):
-        self._bit_values = bitvalues
+    def __init__(self, bit_manager, path, area, bitmask):
+        self._bits = [
+            bit_manager.reserve(desc) for desc in self.bit_descriptions]
         # load sample density in deg^-2
         with open(path) as f:
             self._sample_dens = json.load(f)["density"]
         # mock density in deg^-2
         self._mock_dens = self._count_selected(bitmask) / area
         # check the density values
+        print("densities:", self.sample_density, self.mock_density, len(bitmask) / area)
         if self.sample_density >= self.mock_density:
             message = "sample density must be smaller than mock density"
             raise ValueError(message)
-        print("densities:", self.sample_density, self.mock_density, len(bitmask) / area)
 
     def _count_selected(self, bitmask):
         # count the objects that pass the current selection, marked by the
@@ -157,7 +46,8 @@ class DensitySampler(object):
         pbar = ProgressBar(len(bitmask), "estimate mock density")
         for start in range(0, len(bitmask), chunksize):
             end = min(start + chunksize, len(bitmask))
-            n_mocks += np.sum(bitmask[start:end] & 1)  # 1 if match, else 0
+            is_selected = BMM.check_master(bitmask[start:end])
+            n_mocks += np.count_nonzero(is_selected)
             pbar.update(end - start)
         pbar.close()
         return n_mocks
@@ -179,27 +69,31 @@ class DensitySampler(object):
         return mask
 
     def __call__(self, bitmask):
-        mask = self.mask(len(bitmask))
-        update_bitmask(bitmask, self._bit_values[0], mask)
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        is_selected = self.mask(len(bitmask))
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
+        # update the master selection bit
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class RedshiftSampler(object):
 
     name = "Generic Sample"
+    bit_descriptions = ("redshift weighted density downsampling",)
 
-    def __init__(self, bitvalues, path, area, bitmask, redshifts):
-        self._bit_values = bitvalues
+    def __init__(self, bit_manager, path, area, bitmask, redshifts):
+        self._bits = [
+            bit_manager.reserve(desc) for desc in self.bit_descriptions]
         # load sample density in deg^-2 per redshift
         self._sample_dens = DistributionEstimator.from_file(path)
         # mock density per redshift
         self._mock_dens = self._get_redshift_distribution(bitmask, redshifts)
         self._mock_dens.normalisation = area  # yields deg^-2 per redshift
         # check the density values
+        print("densities:", self.sample_density, self.mock_density, len(bitmask) / area)
         if self.sample_density >= self.mock_density:
             message = "sample density must be smaller than mock density"
             raise ValueError(message)
-        print("densities:", self.sample_density, self.mock_density, len(bitmask) / area)
 
     def _get_redshift_distribution(self, bitmask, redshifts):
         density = DistributionEstimator(
@@ -212,11 +106,11 @@ class RedshiftSampler(object):
         pbar = ProgressBar(len(bitmask), "estimate mock n(z)")
         for start in range(0, len(bitmask), chunksize):
             end = min(start + chunksize, len(bitmask))
-            mask = (bitmask[start:end] & 1) == 1  # 1 if match, else 0
-            density.add_data(redshifts[start:end][mask])
+            is_selected = BMM.check_master(bitmask[start:end])
+            density.add_data(redshifts[start:end][is_selected])
             pbar.update(end - start)
-        density.interpolate()
         pbar.close()
+        density.interpolate()
         return density
 
     @property
@@ -242,17 +136,20 @@ class RedshiftSampler(object):
         return mask
 
     def __call__(self, bitmask, redshift):
-        mask = self.draw(redshift)
-        update_bitmask(bitmask, self._bit_values[0], mask)
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        is_selected = self.draw(redshift)
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
+        # update the master selection bit
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class BaseSelection(object):
 
     name = "Generic Sample"
 
-    def __init__(self, bitvalues):
-        self._bit_values = bitvalues
+    def __init__(self, bit_manager):
+        self._bits = [
+            bit_manager.reserve(desc) for desc in self.bit_descriptions]
 
     @property
     def __name__(self):
@@ -266,13 +163,19 @@ class SelectKiDS(BaseSelection):
 
     def lensing_selection(self, bitmask, recal_weight, prior_magnitude):
         # select objects with non-zero lensfit weight
-        update_bitmask(bitmask, self._bit_values[0], recal_weight > 0.0)
+        is_selected = recal_weight > 0.0
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
         # select objects that are detected in the BPZ prior band
-        update_bitmask(bitmask, self._bit_values[1], prior_magnitude < 90.0)
+        is_selected = prior_magnitude < 90.0
+        BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
     def __call__(self, bitmask, recal_weight, prior_magnitude):
         self.lensing_selection(bitmask, recal_weight, prior_magnitude)
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        # update the master selection bit
+        is_selected = BMM.check_bits_all(
+            bitmask, sum(self._bits))  # join all new bits by AND
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 ###############################################################################
@@ -314,7 +217,8 @@ class Select2dFLenS(BaseSelection):
             (mag_r < 19.6) &
             (mag_r < (13.5 + c_p / 0.32)) &  # 13.5, 0.3
             (np.abs(c_r) < 0.2))
-        update_bitmask(bitmask, self._bit_values[0], low_z1 | low_z2 | low_z3)
+        lowz = low_z1 | low_z2 | low_z3
+        BMM.set_bit(bitmask, self._bits[0], condition=lowz)
         # defining the MIDZ sample
         mid_z = colour_mask & (
             (mag_i > 17.5) &
@@ -322,7 +226,7 @@ class Select2dFLenS(BaseSelection):
             ((mag_r - mag_i) < 2.0) &
             (d_r > 0.55) &
             (mag_i < 19.86 + 1.6 * (d_r - 0.9)))  # 19.86, 1.6, 0.8
-        update_bitmask(bitmask, self._bit_values[1], mid_z)
+        BMM.set_bit(bitmask, self._bits[1], condition=mid_z)
         # defining the HIGHZ sample
         high_z = colour_mask & (
             (mag_Z < 19.9) &  # 19.95
@@ -332,11 +236,15 @@ class Select2dFLenS(BaseSelection):
             ((mag_r - mag_Ks) > 1.9 * (mag_r - mag_i)) &
             ((mag_r - mag_i) > 0.98) &
             ((mag_i - mag_Z) > 0.6))
-        update_bitmask(bitmask, self._bit_values[2], high_z)
+        BMM.set_bit(bitmask, self._bits[2], condition=high_z)
 
     def __call__(self, bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks):
         self.colour_selection(bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks)
-        join_OR_update_master(bitmask, sum(self._bit_values))
+        # update the master selection bit
+        is_selected = BMM.check_bits_any(
+            bitmask, sum(self._bits))  # join all new bits by OR
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SelectGAMA(BaseSelection):
@@ -348,8 +256,11 @@ class SelectGAMA(BaseSelection):
         ###############################################################
         #   based on Driver+11                                        #
         ###############################################################
-        update_bitmask(bitmask, self._bit_values[0], mag_r < 19.87)
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        is_selected = mag_r < 19.87
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
+        # update the master selection bit
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SelectSDSS(BaseSelection):
@@ -361,8 +272,8 @@ class SelectSDSS(BaseSelection):
         ###############################################################
         #   based on Strauss+02                                       #
         ###############################################################
-        update_bitmask(
-            bitmask, self._bit_values[0], mag_r < 17.7)  # r_pet ~ 17.5
+        is_selected = mag_r < 17.7  # r_pet ~ 17.5
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
 
     def BOSS_selection(self, bitmask, mag_g, mag_r, mag_i):
         ###############################################################
@@ -379,12 +290,12 @@ class SelectSDSS(BaseSelection):
         d_r = (mag_r - mag_i) - (mag_g - mag_r) / 8.0
         # defining the LOWZ sample
         # we cannot apply the r_psf - r_cmod cut
-        low_z = colour_mask & (
+        lowz = colour_mask & (
             (mag_r > 16.0) &
             (mag_r < 20.0) &  # 19.6
             (np.abs(c_r) < 0.2) &
             (mag_r < 13.35 + c_p / 0.3))  # 13.5, 0.3
-        update_bitmask(bitmask, self._bit_values[1], low_z)
+        BMM.set_bit(bitmask, self._bits[1], condition=lowz)
         # defining the CMASS sample
         # we cannot apply the i_fib2, i_psf - i_mod and z_psf - z_mod cuts
         cmass = colour_mask & (
@@ -393,7 +304,7 @@ class SelectSDSS(BaseSelection):
             (d_r > 0.55) &
             (mag_i < 19.98 + 1.6 * (d_r - 0.7)) &  # 19.86, 1.6, 0.8
             ((mag_r - mag_i) < 2.0))
-        update_bitmask(bitmask, self._bit_values[2], cmass)
+        BMM.set_bit(bitmask, self._bits[2], condition=cmass)
 
     def QSO_selection(self, bitmask, is_central, lmhalo, lmstellar):
         """
@@ -403,17 +314,19 @@ class SelectSDSS(BaseSelection):
         compairing the tails of the mock and data n(z) for the combined
         SDSS main, SDSS BOSS and SDSS QSO samples.
         """
-        qso = is_central & (lmstellar > 11.2) & (lmhalo > 13.3)
-        update_bitmask(bitmask, self._bit_values[3], qso)
+        is_selected = is_central & (lmstellar > 11.2) & (lmhalo > 13.3)
+        BMM.set_bit(bitmask, self._bits[3], condition=is_selected)
 
     def __call__(
-            self, bitmask, mag_g, mag_r, mag_i, is_central=None, lmhalo=None,
-            lmstellar=None):
+            self, bitmask, mag_g, mag_r, mag_i, is_central, lmhalo, lmstellar):
         self.MAIN_selection(bitmask, mag_r)
         self.BOSS_selection(bitmask, mag_g, mag_r, mag_i)
-        if all(val is not None for val in [is_central, lmhalo, lmstellar]):
-                self.QSO_selection(bitmask, is_central, lmhalo, lmstellar)
-        join_OR_update_master(bitmask, sum(self._bit_values))
+        self.QSO_selection(bitmask, is_central, lmhalo, lmstellar)
+        # update the master selection bit
+        is_selected = BMM.check_bits_any(
+            bitmask, sum(self._bits))  # join all new bits by OR
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SelectWiggleZ(BaseSelection):
@@ -435,7 +348,7 @@ class SelectWiggleZ(BaseSelection):
         include = colour_mask & (
             (mag_r > 20.0) &
             (mag_r < 22.5))
-        update_bitmask(bitmask, self._bit_values[0], include)
+        BMM.set_bit(bitmask, self._bits[0], condition=include)
         exclude = colour_mask & (
             (mag_g < 22.5) &
             (mag_i < 21.5) &
@@ -443,21 +356,25 @@ class SelectWiggleZ(BaseSelection):
             (mag_r-mag_i < 0.4) &
             (mag_g-mag_r > 0.6) &
             (mag_r-mag_Z < 0.7 * (mag_g-mag_r)))
-        update_bitmask(bitmask, self._bit_values[1], ~exclude)
+        BMM.set_bit(bitmask, self._bits[1], condition=~exclude)
 
     def __call__(self, bitmask, redshift, mag_g, mag_r, mag_i, mag_Z):
         self.colour_selection(bitmask, mag_g, mag_r, mag_i, mag_Z)
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        # update the master selection bit
+        is_selected = BMM.check_bits_all(
+            bitmask, sum(self._bits))  # join all new bits by AND
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SampleWiggleZ(RedshiftSampler):
 
     name = "WiggleZ"
 
-    def __init__(self, bitvalues, mock_area, bitmask, redshifts):
+    def __init__(self, bit_manager, mock_area, bitmask, redshifts):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
         super().__init__(
-            bitvalues, density_file, mock_area, bitmask, redshifts)
+            bit_manager, density_file, mock_area, bitmask, redshifts)
 
 
 ###############################################################################
@@ -497,34 +414,38 @@ class SelectDEEP2(BaseSelection):
         # its cut at z~0.75 and the B-R/R-I distribution (Newman+13, Fig. 12)
         # NOTE: We cannot apply the surface brightness cut and do not apply the
         #       Gaussian weighted sampling near the original colour cuts.
-        selection = colour_mask & (
+        is_selected = colour_mask & (
             (mag_Rc > 18.5) &
             (mag_Rc < 24.0) & (  # 24.1
                 #                 2.45,                     0.2976
                 (mag_B - mag_Rc < 2.0 * (mag_Rc - mag_Ic) - 0.4) |
                 (mag_Rc - mag_Ic > 1.1) |
                 (mag_B - mag_Rc < 0.2)))  # 0.5
-        update_bitmask(bitmask, self._bit_values[0], selection)
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
 
     def specz_success(self, bitmask, mag_Rc):
         # Randomly sample objects according to their success rate
         random_draw = np.random.rand(len(mag_Rc))
-        success = random_draw < self._p_success_R(mag_Rc)
-        update_bitmask(bitmask, self._bit_values[1], success)
+        is_selected = random_draw < self._p_success_R(mag_Rc)
+        BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
     def __call__(self, bitmask, mag_B, mag_Rc, mag_Ic):
         self.colour_selection(bitmask, mag_B, mag_Rc, mag_Ic)
         self.specz_success(bitmask, mag_Rc)
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        # update the master selection bit
+        is_selected = BMM.check_bits_all(
+            bitmask, sum(self._bits))  # join all new bits by AND
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SampleDEEP2(DensitySampler):
 
     name = "DEEP2"
 
-    def __init__(self, bitvalues, mock_area, bitmask):
+    def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
-        super().__init__(bitvalues, density_file, mock_area, bitmask)
+        super().__init__(bit_manager, density_file, mock_area, bitmask)
 
 
 class SelectVVDSf02(BaseSelection):
@@ -532,8 +453,8 @@ class SelectVVDSf02(BaseSelection):
     name = "VVDSf02"
     bit_descriptions = ("magnitude selection", "spectroscopic success")
 
-    def __init__(self, bitvalues):
-        super().__init__(bitvalues)
+    def __init__(self, bit_manager):
+        super().__init__(bit_manager)
         # NOTE: We use a redshift-based and I-band based success rate
         #       independently here since we do not know their correlation,
         #       which makes the success rate worse than in reality.
@@ -572,33 +493,38 @@ class SelectVVDSf02(BaseSelection):
         ###############################################################
         #   based on LeFèvre+05                                       #
         ###############################################################
-        selection = (mag_Ic > 17.5) & (mag_Ic < 24.0)  # 17.5, 24.0
-        update_bitmask(bitmask, self._bit_values[0], selection)
+        is_selected = (mag_Ic > 17.5) & (mag_Ic < 24.0)  # 17.5, 24.0
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
 
     def specz_success(self, bitmask, mag_Ic, redshift):
         # Randomly sample objects according to their success rate
         random_draw = np.random.rand(len(mag_Ic))
-        success = random_draw < self._p_success_I(mag_Ic)
+        is_selected = random_draw < self._p_success_I(mag_Ic)
         iterator = zip(
             [mag_Ic <= 22.5, mag_Ic > 22.5],
             [self._p_success_z_bright, self._p_success_z_deep])
-        for m, p_success_z in iterator:
-            success[m] &= random_draw[m] < p_success_z(redshift[m])
-        update_bitmask(bitmask, self._bit_values[1], success)
+        for mask, p_success_z in iterator:
+            is_selected[mask] &= \
+                random_draw[mask] < p_success_z(redshift[mask])
+        BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
     def __call__(self, bitmask, redshift, mag_Ic):
         self.colour_selection(bitmask, mag_Ic)
         self.specz_success(bitmask, mag_Ic, redshift)
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        # update the master selection bit
+        is_selected = BMM.check_bits_all(
+            bitmask, sum(self._bits))  # join all new bits by AND
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SampleVVDSf02(DensitySampler):
 
     name = "VVDSf02"
 
-    def __init__(self, bitvalues, mock_area, bitmask):
+    def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
-        super().__init__(bitvalues, density_file, mock_area, bitmask)
+        super().__init__(bit_manager, density_file, mock_area, bitmask)
 
 
 class SelectzCOSMOS(BaseSelection):
@@ -606,8 +532,8 @@ class SelectzCOSMOS(BaseSelection):
     name = "zCOSMOS"
     bit_descriptions = ("magnitude selection", "spectroscopic success")
 
-    def __init__(self, bitvalues):
-        super().__init__(bitvalues)
+    def __init__(self, bit_manager):
+        super().__init__(bit_manager)
         # Spec-z success rate as function of redshift (x) and I_AB (y) read of
         # Figure 3 in Lilly+09 for zCOSMOS bright sample. Do a spline
         # interpolation of the 2D data and save it as pickle on the disk for
@@ -633,8 +559,8 @@ class SelectzCOSMOS(BaseSelection):
         #   based on Lilly+09                                         #
         ###############################################################
         # NOTE: This only includes zCOSMOS bright.
-        selection = (mag_Ic > 15.0) & (mag_Ic < 22.5)  # 15.0, 22.5
-        update_bitmask(bitmask, self._bit_values[0], selection)
+        is_selected = (mag_Ic > 15.0) & (mag_Ic < 22.5)  # 15.0, 22.5
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
 
     def specz_success(self, bitmask, mag_Ic, redshift):
         # Randomly sample objects according to their success rate
@@ -645,22 +571,26 @@ class SelectzCOSMOS(BaseSelection):
             # input redshifts and magnitudes instead of evaluating pairs of
             # values
             object_rates[i] = self._p_success_zI(z, I_AB)
-        success = random_draw < object_rates
-        update_bitmask(bitmask, self._bit_values[1], success)
+        is_selected = random_draw < object_rates
+        BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
     def __call__(self, bitmask, redshift, mag_Ic):
         self.colour_selection(bitmask, mag_Ic)
         self.specz_success(bitmask, mag_Ic, redshift),
-        join_AND_update_master(bitmask, sum(self._bit_values))
+        # update the master selection bit
+        is_selected = BMM.check_bits_all(
+            bitmask, sum(self._bits))  # join all new bits by AND
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SamplezCOSMOS(DensitySampler):
 
     name = "zCOSMOS"
 
-    def __init__(self, bitvalues, mock_area, bitmask):
+    def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
-        super().__init__(bitvalues, density_file, mock_area, bitmask)
+        super().__init__(bit_manager, density_file, mock_area, bitmask)
 
 
 ###############################################################################
@@ -673,17 +603,21 @@ class SelectSparse24mag(BaseSelection):
     name = "Sparse24mag"
     bit_descriptions = ("magnitude selection")
 
-    def __call__(self, bitmask, redshift, mag_r):
-        update_bitmask(bitmask, self._bit_values[0], mag_r < 24.0)
+    def __call__(self, bitmask, mag_r):
+        is_selected = mag_r < 24.0
+        BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
+        # update the master selection bit
+        is_selected &= BMM.check_master(bitmask)
+        BMM.place_master(bitmask, is_selected)
 
 
 class SampleSparse24mag(DensitySampler):
 
     name = "Sparse24mag"
 
-    def __init__(self, bitvalues, mock_area, bitmask):
+    def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
-        super().__init__(bitvalues, density_file, mock_area, bitmask)
+        super().__init__(bit_manager, density_file, mock_area, bitmask)
 
 
 ###############################################################################
