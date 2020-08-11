@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 from collections import OrderedDict
@@ -24,7 +25,7 @@ class ModificationStamp(object):
     """
 
     def __init__(self, sys_argv):
-        self._columns = {}
+        self._columns = OrderedDict()
         # store the script call that created/modified this column
         call_basename = os.path.basename(sys_argv[0])
         call_arguments = sys_argv[1:]
@@ -35,6 +36,23 @@ class ModificationStamp(object):
     
     def __len__(self):
         return len(self._columns)
+
+    def _update_attribute(self, name, attributes):
+        """
+        Update the attribute dictionary of a given column.
+
+        Parameters:
+        -----------
+        name : str
+            Name of the column to update.
+        attributes : dict
+            Key-value pairs to add to the existing column attributes.
+        """
+        attrs = self._columns[name].attr  # read
+        if attrs is None:
+            attrs = {}
+        attrs.update(attributes)
+        self._columns[name].attr = attrs  # write
 
     def register(self, column, name):
         """
@@ -51,7 +69,17 @@ class ModificationStamp(object):
             raise TypeError("column must have an attribute 'attr'")
         self._columns[name] = column
 
-    def finalize(self, timestamp=None, checksum=True):
+    def add_checksums(self):
+        # get an ordered list of file names for the columns
+        filenames = [column.filename for column in self._columns.values()]
+        # compute the check sums in parallel processes
+        with multiprocessing.Pool(4) as pool:
+            checksums = pool.map(sha1sum, filenames)
+        # store the attributes
+        for name, checksum in zip(self._columns, checksums):
+            self._update_attribute(name, {"SHA-1 checksum": checksum})
+
+    def finalize(self, timestamp=None):
         """
         Take the current local time and format and write the attributes to the
         registered columns.
@@ -68,22 +96,9 @@ class ModificationStamp(object):
             self._attrs["created at"] = asctime()
         else:
             self._attrs["created at"] = timestamp
-        # update all columns
-        name_width = max(len(name) for name in self._columns)
-        for i, (name, column) in enumerate(self._columns.items(), 1):
-            attrs = column.attr  # read
-            if attrs is None:
-                attrs = {}
-            attrs.update(self._attrs)
-            if checksum:
-                sys.stdout.write("processing {:3d} / {:3d}: {:}\r".format(
-                    i, len(self), name.ljust(name_width)))
-                sys.stdout.flush()
-                attrs.update({"SHA-1 checksum": sha1sum(column.filename)})
-            column.attr = attrs  # write
-        if checksum:  # clear the line
-            sys.stdout.write(" " * (22 + name_width) + "\r")
-            sys.stdout.flush()
+        # update the columns attributes
+        for name in self._columns:
+            self._update_attribute(name, self._attrs)
 
 
 class DataStore(MemmapTable):
@@ -142,6 +157,7 @@ class DataStore(MemmapTable):
     def close(self):
         if len(self._timestamp) > 0:
             self._logger.info("computing checksums and updating headers")
+            self._timestamp.add_checksums()
             self._timestamp.finalize()
         super().close()
         self._logger.info("data store closed")
