@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test_every7"
+    suffix="_test"
 elif [ "$1" == "all" ]
 then
     suffix=""
@@ -14,3 +14,4 @@ fi
 ../../scripts/mocks_effective_radius \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
     --threads ${2:-64}
+echo

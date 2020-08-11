@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test_every7"
+    suffix="_test"
 elif [ "$1" == "all" ]
 then
     suffix=""
@@ -13,5 +13,6 @@ fi
 
 ../../scripts/mocks_match_data \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -c matching.toml \
+    -c config/matching.toml \
     --threads ${2:-64}
+echo

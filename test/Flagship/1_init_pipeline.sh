@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test_every7"
+    suffix="_test"
 elif [ "$1" == "all" ]
 then
     suffix=""
@@ -13,6 +13,7 @@ fi
 
 ../../scripts/mocks_init_pipeline \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -i /net/home/fohlen13/jlvdb/DATA/Flagship_downloads/Flagship_v1-8-4_deep_ugrizYJHKs_shapes_halos_WL${suffix}.fits \
-    -c Flagship.toml \
+    -i /net/home/fohlen13/jlvdb/DATA/Flagship_HDF5/Flagship_v1-8-4_deep_ugrizYJHKs_shapes_halos_WL${suffix}.hdf5 \
+    -c config/Flagship.toml \
     --purge
+echo

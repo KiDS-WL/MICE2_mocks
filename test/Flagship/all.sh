@@ -8,5 +8,6 @@
 ./6_photometry.sh $1 $2
 ./7_match_weights.sh $1 $2
 ./8_photoz.sh $1 $2
+./9_samples.sh $1 $2
 
 ./get_fits.sh $1 $2

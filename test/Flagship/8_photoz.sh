@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test_every7"
+    suffix="_test"
 elif [ "$1" == "all" ]
 then
     suffix=""
@@ -14,7 +14,8 @@ fi
 export hostname=$HOSTNAME
 ../../scripts/mocks_BPZ \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -c BPZ.toml \
+    -c config/BPZ.toml \
     --mag mags/K1000 \
     --zphot BPZ/K1000 \
     --threads ${2:-64}
+echo

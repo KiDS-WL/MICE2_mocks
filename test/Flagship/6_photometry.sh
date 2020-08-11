@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test_every7"
+    suffix="_test"
 elif [ "$1" == "all" ]
 then
     suffix=""
@@ -13,7 +13,10 @@ fi
 
 ../../scripts/mocks_photometry \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -c photometry.toml \
+    -c config/photometry.toml \
     --method GAaP \
     --mag mags/lensed \
-    --real mags/K1000
+    --real mags/K1000 \
+    --threads ${2:-64}
+echo
+

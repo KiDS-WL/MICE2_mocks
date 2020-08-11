@@ -1,0 +1,7 @@
+bitmask = "samples/GAMA"   # path at which the sample selection bit mask is saved
+                        # in the data store
+
+[selection]
+# Mapping form keyword argument names in selection function to column path in
+# the data store. Optional arguments can be left blank.
+mag_r = "mags/KV450/r"  # SDSS r-band magnitude

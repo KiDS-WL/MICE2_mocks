@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test_every7"
+    suffix="_test"
 elif [ "$1" == "all" ]
 then
     suffix=""
@@ -13,5 +13,7 @@ fi
 
 ../../scripts/mocks_apertures \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    -c photometry.toml \
-    --method GAaP
+    -c config/photometry.toml \
+    --method GAaP \
+    --threads ${2:-64}
+echo

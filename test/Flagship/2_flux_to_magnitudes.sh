@@ -2,7 +2,7 @@
 
 if [ "$1" == "test" ]
 then
-    suffix="_test_every7"
+    suffix="_test"
 elif [ "$1" == "all" ]
 then
     suffix=""
@@ -15,3 +15,5 @@ fi
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
     --flux flux/model \
     --mag mags/model
+    --threads ${2:-64}
+echo
