@@ -117,7 +117,7 @@ def main():
         bitmask.attr = {"description": BMM.description}
 
         # show final statistics
-        N_mock = samples.DensitySampler.count_selected(bitmask, verbose=False)
+        N_mock = samples.DensitySampler.count_selected(bitmask)
         density = "{:.3f} / arcmin²".format(N_mock / args.area / 3600.0)
         logger.info("density of selected objects: " + density)
         logger.info("computation completed for {:,d} entries".format(len(ds)))

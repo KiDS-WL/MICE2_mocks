@@ -68,21 +68,18 @@ class DensitySampler(Sampler):
             raise ValueError(message)
 
     @staticmethod
-    def count_selected(bitmask, verbose=True):
+    def count_selected(bitmask):
         # count the objects that pass the current selection, marked by the
         # selection bit (bit 1)
         n_mocks = 0
         chunksize = 16384
-        if verbose:
-            pbar = ProgressBar(len(bitmask), "estimate mock density")
+        pbar = ProgressBar(len(bitmask), "estimate mock density")
         for start in range(0, len(bitmask), chunksize):
             end = min(start + chunksize, len(bitmask))
             is_selected = BMM.check_master(bitmask[start:end])
             n_mocks += np.count_nonzero(is_selected)
-            if verbose:
-                pbar.update(end - start)
-        if verbose:
-            pbar.close()
+            pbar.update(end - start)
+        pbar.close()
         return n_mocks
 
     @property
@@ -118,30 +115,32 @@ class RedshiftSampler(Sampler):
             bit_manager.reserve(desc) for desc in self.bit_descriptions]
         # load sample density in deg^-2 per redshift
         self._sample_dens = DistributionEstimator.from_file(path)
-        # mock density per redshift
-        self._mock_dens = self._get_redshift_distribution(bitmask, redshifts)
-        self._mock_dens.normalisation = area  # yields deg^-2 per redshift
+        # mock density per redshift in deg^-2 per redshift
+        self._mock_dens = self.get_redshift_density(bitmask, redshifts, area)
         # check the density values
         if self.sample_density >= self.mock_density:
             message = "sample density must be smaller than mock density"
             raise ValueError(message)
 
-    def _get_redshift_distribution(self, bitmask, redshifts):
+    def get_redshift_density(self, bitmask, redshifts, area):
         density = DistributionEstimator(
             self._sample_dens._xmin, self._sample_dens._xmax,
             self._sample_dens._width, self._sample_dens._smooth,
             "linear", fill_value=0.0)
         # build an interpolated, average shifted histogram of the mock redshift
         # distribution considering only objects that pass the selection
+        n_mocks = 0
         chunksize = 16384
         pbar = ProgressBar(len(bitmask), "estimate mock n(z)")
         for start in range(0, len(bitmask), chunksize):
             end = min(start + chunksize, len(bitmask))
             is_selected = BMM.check_master(bitmask[start:end])
+            n_mocks += np.count_nonzero(is_selected)
             density.add_data(redshifts[start:end][is_selected])
             pbar.update(end - start)
         pbar.close()
         density.interpolate()
+        density.normalisation = n_mocks / area
         return density
 
     @property
