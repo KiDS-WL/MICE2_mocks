@@ -898,6 +898,8 @@ try:
                 # check if the provided data sets actually exist
                 self._datasets = {}
                 for path in dataset_list:
+                    if type(path) is not str:
+                        path = path[0]  # remove the optional type hint
                     entry = self._file[path]
                     # check that no groups entered the selection
                     if type(entry) is h5py.Group:
