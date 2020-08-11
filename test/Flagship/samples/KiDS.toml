@@ -7,5 +7,5 @@ bitmask = "samples/KiDS"   # path at which the sample selection bit mask is save
 recal_weight = "lensing/recal_weight"
                         # path of lensing weight in the data store
 # setting the following paramter will remove objects with non-detections
-prior_magnitude = "BPZ/KV450/M_0"
+prior_magnitude = "BPZ/K1000/M_0"
                         # BPZ prior magnitude

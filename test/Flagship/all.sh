@@ -10,4 +10,9 @@
 ./8_photoz.sh $1 $2
 ./9_samples.sh $1 $2
 
-./get_fits.sh $1 $2
+if [ "$HOSTNAME" == "fohlen12" ]
+then
+    ./get_fits.sh $1 $2
+else
+    ./get_hdf5.sh $1 $2
+fi

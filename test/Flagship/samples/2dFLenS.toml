@@ -5,9 +5,9 @@ bitmask = "samples/2dFLenS"
 [selection]
 # Mapping form keyword argument names in selection function to column path in
 # the data store. Optional arguments can be left blank.
-mag_g = "mags/KV450/g"  # SDSS g-band magnitude
-mag_r = "mags/KV450/r"  # SDSS r-band magnitude
-mag_i = "mags/KV450/i"  # SDSS i-band magnitude
-mag_Z = "mags/KV450/Z"  # SDSS Z-band magnitude
-mag_Ks = "mags/KV450/Ks"
+mag_g = "mags/K1000/g"  # SDSS g-band magnitude
+mag_r = "mags/K1000/r"  # SDSS r-band magnitude
+mag_i = "mags/K1000/i"  # SDSS i-band magnitude
+mag_Z = "mags/K1000/Z"  # SDSS Z-band magnitude
+mag_Ks = "mags/K1000/Ks"
                         # SDSS Ks-band magnitude

@@ -14,6 +14,6 @@ fi
 ../../scripts/Flagship_flux_to_magnitudes \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
     --flux flux/model \
-    --mag mags/model
+    --mag mags/model \
     --threads ${2:-64}
 echo

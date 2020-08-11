@@ -7,7 +7,7 @@ bitmask = "samples/WiggleZ"
 # the data store. Optional arguments can be left blank.
 redshift = "position/z/obs"
                         # (observed) redshifts
-mag_g = "mags/KV450/g"  # SDSS g-band magnitude
-mag_r = "mags/KV450/r"  # SDSS r-band magnitude
-mag_i = "mags/KV450/i"  # SDSS i-band magnitude
-mag_Z = "mags/KV450/Z"  # SDSS Z-band magnitude
+mag_g = "mags/K1000/g"  # SDSS g-band magnitude
+mag_r = "mags/K1000/r"  # SDSS r-band magnitude
+mag_i = "mags/K1000/i"  # SDSS i-band magnitude
+mag_Z = "mags/K1000/Z"  # SDSS Z-band magnitude

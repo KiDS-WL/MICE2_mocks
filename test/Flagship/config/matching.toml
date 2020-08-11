@@ -12,15 +12,15 @@ every_n = 1             # take a regular sample of the input data to speed up
 # Mapping between columns of the input data table and the columns of the mock
 # pipeline data store. The input features are used to build the search tree,
 # the data store features are matched against tree.
-MAG_GAAP_u = "mags/KV450/u"
-MAG_GAAP_g = "mags/KV450/g"
-MAG_GAAP_r = "mags/KV450/r"
-MAG_GAAP_i = "mags/KV450/i"
-MAG_GAAP_Z = "mags/KV450/Z"
-MAG_GAAP_Y = "mags/KV450/Y"
-MAG_GAAP_J = "mags/KV450/J"
-MAG_GAAP_H = "mags/KV450/H"
-MAG_GAAP_Ks = "mags/KV450/Ks"
+MAG_GAAP_u = "mags/K1000/u"
+MAG_GAAP_g = "mags/K1000/g"
+MAG_GAAP_r = "mags/K1000/r"
+MAG_GAAP_i = "mags/K1000/i"
+MAG_GAAP_Z = "mags/K1000/Z"
+MAG_GAAP_Y = "mags/K1000/Y"
+MAG_GAAP_J = "mags/K1000/J"
+MAG_GAAP_H = "mags/K1000/H"
+MAG_GAAP_Ks = "mags/K1000/Ks"
                         # key must be a valid column name in the input table,
                         # value an existing column name in the data store
 
