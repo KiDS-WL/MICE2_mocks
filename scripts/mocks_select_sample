@@ -76,7 +76,7 @@ def main():
         bitmask[:] = 1
 
         # start with photometric selection
-        if args.sample in samples.PHOTOMETRIC_SELECTIONS:
+        try:
             selector_class = samples.PHOTOMETRIC_SELECTIONS[args.sample]
             selector = selector_class(BMM)
 
@@ -89,9 +89,13 @@ def main():
 
             # apply selection
             ds.pool.execute(seed=args.seed, prefix="photometric selection")
+        except KeyError:
+            pass
+        except Exception as e:
+            logger.handleException(e)
 
         # optional density sampling
-        if args.sample in samples.SAMPLING_SELECTIONS:
+        try:
             selector_class = samples.SAMPLING_SELECTIONS[args.sample]
 
             # surface density
@@ -112,6 +116,10 @@ def main():
 
             # apply selection
             ds.pool.execute(seed=args.seed, prefix="density sampling")
+        except KeyError:
+            pass
+        except Exception as e:
+            logger.handleException(e)
 
         # add the description attribute to the output column
         bitmask.attr = {"description": BMM.description}

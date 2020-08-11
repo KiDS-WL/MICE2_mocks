@@ -14,26 +14,29 @@ from memmap_table.table import MemmapTable
 from .utils import ProgressBar
 
 
-def noGIL(worker):
-    worker._nogil = True
-    return worker
+class Schedule:
 
-
-def workload(fraction):
-    def wrapper(worker):
-        worker._cpu_util = fraction
+    @staticmethod
+    def threads(worker):
+        worker._prefer_threads = True
         return worker
-    return wrapper
 
+    @staticmethod
+    def workload(fraction):
+        def wrapper(worker):
+            worker._cpu_util = fraction
+            return worker
+        return wrapper
 
-def IObound(worker):
-    worker._cpu_util = 0.0
-    return worker
+    @staticmethod
+    def IObound(worker):
+        worker._cpu_util = 0.0
+        return worker
 
-
-def CPUbound(worker):
-    worker._cpu_util = 1.0
-    return worker
+    @staticmethod
+    def CPUbound(worker):
+        worker._cpu_util = 1.0
+        return worker
 
 
 class TableColumn(object):
@@ -483,7 +486,7 @@ class ParallelTable(object):
         worker function is decorated with parallel.noGIL, for reference see
         ParallelTable._apply_threads and ParallelTable._apply_processes.
         """
-        if hasattr(self._worker_function, "_nogil"):
+        if hasattr(self._worker_function, "_prefer_threads"):
             self._apply_threads(self._n_threads, prefix, seed)
         else:
             self._apply_processes(self._n_threads, prefix, seed)

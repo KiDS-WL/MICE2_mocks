@@ -8,7 +8,7 @@ from time import sleep
 
 import numpy as np
 
-from .core.parallel import CPUbound
+from .core.parallel import Schedule
 
 
 class BpzManager(object):
@@ -309,7 +309,7 @@ class BpzManager(object):
         bpz_result = tuple(data[col] for col in output_cols)
         return bpz_result
 
-    @CPUbound
+    @Schedule.CPUbound
     def execute(
             self, *mags_errs, threadID=None, verbose=False,
             get_ID=False, get_M_0=True):

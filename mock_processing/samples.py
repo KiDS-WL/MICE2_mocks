@@ -1,13 +1,12 @@
 import json
 import os
-import pickle
 from collections import OrderedDict
 
 import numpy as np
 from scipy.interpolate import interp1d, interp2d
 
 from .core.bitmask import BitMaskManager as BMM
-from .core.parallel import workload, CPUbound
+from .core.parallel import Schedule
 from .core.utils import ProgressBar
 from .matching import DistributionEstimator
 
@@ -98,7 +97,7 @@ class DensitySampler(Sampler):
         mask = random_draw < self.odds()
         return mask
 
-    @workload(0.10)
+    @Schedule.workload(0.10)
     def apply(self, bitmask):
         is_selected = self.mask(len(bitmask))
         BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
@@ -165,7 +164,7 @@ class RedshiftSampler(Sampler):
         mask = random_draw < self.odds(redshift)
         return mask
 
-    @workload(0.20)
+    @Schedule.workload(0.20)
     def apply(self, bitmask, redshift):
         is_selected = self.draw(redshift)
         BMM.set_bit(bitmask, self._bits[0], condition=is_selected)
@@ -199,7 +198,7 @@ class SelectKiDS(BaseSelection):
         is_selected = prior_magnitude < 90.0
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
-    @workload(0.10)
+    @Schedule.workload(0.10)
     def apply(self, bitmask, recal_weight, prior_magnitude):
         self.lensing_selection(bitmask, recal_weight, prior_magnitude)
         # update the master selection bit
@@ -266,7 +265,7 @@ class Select2dFLenS(BaseSelection):
             ((mag_i - mag_Z) > 0.6))
         BMM.set_bit(bitmask, self._bits[2], condition=high_z)
 
-    @workload(0.10)
+    @Schedule.workload(0.10)
     def apply(self, bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks):
         self.colour_selection(bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks)
         # update the master selection bit
@@ -278,7 +277,7 @@ class SelectGAMA(BaseSelection):
 
     bit_descriptions = ("r-band cut",)
 
-    @workload(0.10)
+    @Schedule.workload(0.10)
     def apply(self, bitmask, mag_r):
         ###############################################################
         #   based on Driver+11                                        #
@@ -343,7 +342,7 @@ class SelectSDSS(BaseSelection):
         is_selected = is_central & (lmstellar > 11.2) & (lmhalo > 13.3)
         BMM.set_bit(bitmask, self._bits[3], condition=is_selected)
 
-    @workload(0.10)
+    @Schedule.workload(0.10)
     def apply(
             self, bitmask, mag_g, mag_r, mag_i, is_central, lmhalo, lmstellar):
         self.MAIN_selection(bitmask, mag_r)
@@ -382,7 +381,7 @@ class SelectWiggleZ(BaseSelection):
             (mag_r-mag_Z < 0.7 * (mag_g-mag_r)))
         BMM.set_bit(bitmask, self._bits[1], condition=~exclude)
 
-    @workload(0.10)
+    @Schedule.workload(0.10)
     def apply(self, bitmask, redshift, mag_g, mag_r, mag_i, mag_Z):
         self.colour_selection(bitmask, mag_g, mag_r, mag_i, mag_Z)
         # update the master selection bit
@@ -450,7 +449,7 @@ class SelectDEEP2(BaseSelection):
         is_selected = random_draw < self._p_success_R(mag_Rc)
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
-    @workload(0.25)
+    @Schedule.workload(0.25)
     def apply(self, bitmask, mag_B, mag_Rc, mag_Ic):
         self.colour_selection(bitmask, mag_B, mag_Rc, mag_Ic)
         self.specz_success(bitmask, mag_Rc)
@@ -526,7 +525,7 @@ class SelectVVDSf02(BaseSelection):
                 random_draw[mask] < p_success_z(redshift[mask])
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
-    @workload(0.25)
+    @Schedule.workload(0.25)
     def apply(self, bitmask, redshift, mag_Ic):
         self.colour_selection(bitmask, mag_Ic)
         self.specz_success(bitmask, mag_Ic, redshift)
@@ -553,21 +552,14 @@ class SelectzCOSMOS(BaseSelection):
         # Figure 3 in Lilly+09 for zCOSMOS bright sample. Do a spline
         # interpolation of the 2D data and save it as pickle on the disk for
         # faster reloads
-        pickle_file = os.path.join(SUCCESS_RATE_DIR, "zCOSMOS.cache")
-        if not os.path.exists(pickle_file):
-            x = np.loadtxt(os.path.join(
-                SUCCESS_RATE_DIR, "zCOSMOS_z_sampling"))
-            y = np.loadtxt(os.path.join(
-                SUCCESS_RATE_DIR, "zCOSMOS_I_sampling"))
-            rates = np.loadtxt(os.path.join(
-                SUCCESS_RATE_DIR, "zCOSMOS_success"))
-            self._p_success_zI = interp2d(
-                x, y, rates, copy=True, kind="linear")
-            with open(pickle_file, "wb") as f:
-                pickle.dump(self._p_success_zI, f)
-        else:
-            with open(pickle_file, "rb") as f:
-                self._p_success_zI = pickle.load(f)
+        x = np.loadtxt(os.path.join(
+            SUCCESS_RATE_DIR, "zCOSMOS_z_sampling"))
+        y = np.loadtxt(os.path.join(
+            SUCCESS_RATE_DIR, "zCOSMOS_I_sampling"))
+        rates = np.loadtxt(os.path.join(
+            SUCCESS_RATE_DIR, "zCOSMOS_success"))
+        self._p_success_zI = interp2d(
+            x, y, rates, copy=True, kind="linear")
 
     def colour_selection(self, bitmask, mag_Ic):
         ###############################################################
@@ -589,7 +581,7 @@ class SelectzCOSMOS(BaseSelection):
         is_selected = random_draw < object_rates
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
-    @CPUbound
+    @Schedule.CPUbound
     def apply(self, bitmask, redshift, mag_Ic):
         self.colour_selection(bitmask, mag_Ic)
         self.specz_success(bitmask, mag_Ic, redshift),
@@ -616,7 +608,7 @@ class SelectSparse24mag(BaseSelection):
     name = "Sparse24mag"
     bit_descriptions = ("magnitude selection")
 
-    @workload(0.10)
+    @Schedule.workload(0.10)
     def apply(self, bitmask, mag_r):
         is_selected = mag_r < 24.0
         BMM.set_bit(bitmask, self._bits[0], condition=is_selected)

@@ -1,6 +1,6 @@
 import numpy as np
 
-from .core.parallel import workload
+from .core.parallel import Schedule
 
 
 def flux_to_magnitudes(flux):
@@ -23,7 +23,7 @@ def flux_to_magnitudes(flux):
     return mag
 
 
-@workload(0.10)
+@Schedule.workload(0.10)
 def flux_to_magnitudes_wrapped(*fluxes):
     """
     Wrapper for flux_to_magnitudes() to convert a set of fluxes to magnitudes

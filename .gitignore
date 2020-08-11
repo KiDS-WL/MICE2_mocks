@@ -103,9 +103,6 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-# temporary files
-*.cache
-
 # data files
 test/*.csv
 test/*.fits

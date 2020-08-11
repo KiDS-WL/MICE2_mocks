@@ -1,6 +1,6 @@
 import numpy as np
 
-from .core.parallel import workload
+from .core.parallel import Schedule
 
 
 def evolution_correction(redshift, mag):
@@ -23,7 +23,7 @@ def evolution_correction(redshift, mag):
     return mag - 0.8 * (np.arctan(1.5 * redshift) - 0.1489)
 
 
-@workload(0.10)
+@Schedule.workload(0.10)
 def evolution_correction_wrapped(redshift, *mags):
     """
     Wrapper for evolution_correction() to compute the evolution correction for

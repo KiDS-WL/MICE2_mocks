@@ -7,7 +7,7 @@ from scipy.spatial import cKDTree
 
 from memmap_table import MemmapTable
 
-from .core.parallel import workload, CPUbound, noGIL
+from .core.parallel import Schedule
 
 
 class DistributionEstimator(object):
@@ -280,8 +280,8 @@ class DataMatcher(object):
         features = self.transform(samples, True)  # apply scaling and weights
         self._tree = cKDTree(features)
 
-    @noGIL
-    @CPUbound
+    @Schedule.CPUbound
+    @Schedule.threads
     def apply(self, threads=-1, **feature_kwargs):
         features = self.transform(feature_kwargs)
         dist_match, idx_match = self._tree.query(features, k=1, n_jobs=threads)
