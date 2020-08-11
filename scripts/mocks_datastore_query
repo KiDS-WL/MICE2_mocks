@@ -3,7 +3,6 @@ import argparse
 import os
 import sys
 import warnings
-from time import asctime
 
 import numpy as np
 
@@ -189,8 +188,12 @@ def main():
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore")
                             mask = expression(chunk)
-                    except Exception as e:
-                        logger.handleException(e)
+                    except KeyError as e:
+                        message = "unknown column '{:}', check ".format(
+                            e.args[0])
+                        message += "the query expression for spelling "
+                        message += "mistakes or undefined columns"
+                        logger.handleException(KeyError(message))
                     selection = request_table[start:end][mask]
                 # read all entries in the range without applying the selection
                 else:

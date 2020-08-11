@@ -13,7 +13,7 @@ else
     exit 1;
 fi
 
-for sample in KiDS 2dFLenS GAMA SDSS WiggleZ DEEP2 VVDSf02 zCOSMOS
+for sample in KiDS 2dFLenS GAMA SDSS
 do
     ../../scripts/mocks_select_sample \
         /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
@@ -22,3 +22,16 @@ do
         --threads ${2:-32}
     echo
 done
+
+if [ "$1" == "deep" ]
+then
+    for sample in WiggleZ DEEP2 VVDSf02 zCOSMOS
+    do
+        ../../scripts/mocks_select_sample \
+            /net/home/fohlen12/jlvdb/DATA/MICE2_test_memmap_${table} \
+            --sample $sample --area $area \
+            -c samples/${sample}.toml \
+            --threads ${2:-32}
+        echo
+    done
+fi

@@ -216,14 +216,14 @@ def apertures_SExtractor(config, filter_key, r_effective, ba_ratio):
     mag_auto_scale = config.SExtractor["phot_autoparams"]
     if config.legacy:
         galaxy_major = r_effective * mag_auto_scale
-    else:
-        galaxy_major = r_effective
-    galaxy_minor = galaxy_major * ba_ratio
-    # "convolution" with the PSF
-    if config.legacy:
+        galaxy_minor = galaxy_major * ba_ratio
+        # "convolution" with the PSF
         aperture_major = np.sqrt(galaxy_major**2 + psf_sigma**2)
         aperture_minor = np.sqrt(galaxy_minor**2 + psf_sigma**2)
     else:  # mag auto: scaling the Petrosian radius by 2.5 (default)
+        galaxy_major = r_effective
+        galaxy_minor = galaxy_major * ba_ratio
+        # "convolution" with the PSF
         aperture_major = mag_auto_scale * np.sqrt(
             galaxy_major**2 + psf_sigma**2)
         aperture_minor = mag_auto_scale * np.sqrt(
@@ -261,7 +261,7 @@ def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
     return gaap_major, gaap_minor, snr_correction
 
 
-@Schedule.workload(0.20)
+@Schedule.workload(0.15)
 def apertures_wrapped(method, config, r_effective, ba_ratio):
     # select the photometry method
     if method == "GAaP":
