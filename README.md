@@ -12,22 +12,11 @@ packages:
 - `astropy>=3.0` (recommended for the improved astropy.table performance)
 - `matplotlib>=2.0` for the plotting scripts
 
-> Currently the code also depends on a wrapper for the STOMP library. A python3
-version can be downloaded [here](https://github.com/jlvdb/astro-stomp3) and
-installed following
-[these](https://github.com/morriscb/the-wizz/wiki/Stomp-Installation)
-instructions.
-
 Additionally, the wrapper scripts in `./KV450` and `./DES` make use of
-external packages that provide convenience functions to handling data table
-files and STOMP pixel maps:
+an external packages that provide convenience functions to handle data tables:
 - [jlvdb/table_tools](https://github.com/jlvdb/table_tools) (script calls
 starting with `data_table_`)
-- [jlvdb/stomp_tools](https://github.com/jlvdb/stomp_tools) (script calls
-starting with `stomp_`)
-The path to `table_tools` must be included in `$PYTHONPATH` and to run the
-provided wrapper scripts both `table_tools` and `stomp_tools` must be included
-in `$PATH`.
+The path to `table_tools` must be included in `$PATH` and `$PYTHONPATH`.
 
 To be able to compute photometric redshifts
 [BPZ](http://www.stsci.edu/~dcoe/BPZ/) is requried.

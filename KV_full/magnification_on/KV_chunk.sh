@@ -2,29 +2,25 @@
 
 ###############################################################################
 #                                                                             #
-#   Create a mock catalogue for KV450 derived from the MICE2 galaxy mock      #
-#   catalogue. The catalogue contains a KiDS like photometry, lensfit         #
-#   weights and BPZ photo-z.                                                  #
+#   Create a mock catalogue for KiDS-VIKING data for a single chunk of        #
+#   MICE2 data.                                                               #
 #                                                                             #
-#   This version of the catalogue applies magnification to the MICE2 model    #
-#   magnitudes based on the convergence.                                      #
+#   ARG1: Data chunk fits file                                                #
+#   ARG2: File name for table with all MICE2 objects                          #
+#   ARG3: File name for table with KiDS-VIKING selected objects               #
 #                                                                             #
 ###############################################################################
 
 # data paths
-DATADIR=${HOME}/DATA/MICE2_KV450/KV450_magnification_on
-mkdir -p ${DATADIR}
+DATADIR=$(dirname $1)
+THREADS=1
 
 # static file names
-MOCKraw=${HOME}/DATA/MICE2_KV450/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL.fits
-MOCKmasked=${DATADIR}/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL_masked.fits
-MOCKoutfull=${DATADIR}/MICE2_all.fits
-MOCKout=${DATADIR}/MICE2_KV450.fits
-# KV450 data table for check plots
-dataKV450=${HOME}/DATA/KV450/KiDS_VIKING/KV450_north.cat
+MOCKmasked=$1
+MOCKoutfull=${DATADIR}/$2
+MOCKout=${DATADIR}/$3
 
 # constant parameters
-BOUNDS="35 55 6 24"  # footprint that is used for mocks: RAmin/max DECmin/max
 RAname=ra_gal_mag
 DECname=dec_gal_mag
 PSFs="    1.0  0.9  0.7  0.8  1.0   1.0  0.9  1.0  0.9"
@@ -34,28 +30,6 @@ MAGsig=1.5  # the original value is 1.0, however a slightly larger values
             # the spec-z vs phot-z distribution between data and mocks
 
 export BPZPATH=~/src/bpz-1.99.3
-
-echo "==> generate base footprint for KV450"
-test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
-# Create bounds of ~343 sqdeg (effective KV450 area). Create a pointing list of
-# 440 pointings (20x22) with ~0.7 sqdeg each (mean pointing area in KV450 CC
-# data).
-mocks_generate_footprint \
-    -b $BOUNDS \
-    --survey KV450 \
-    -f ${DATADIR}/footprint.txt \
-    -p ${DATADIR}/pointings_KV450.txt \
-    --grid 20 22
-echo ""
-
-echo "==> mask MICE2 to KV450 footprint"
-# apply the bounds to the MICE2 catalogue
-data_table_mask_ra_dec \
-    -i ${MOCKraw} \
-    -b $BOUNDS \
-    --ra $RAname --dec $DECname \
-    -o ${MOCKmasked}
-echo ""
 
 echo "==> apply evolution correction"
 # automatically applied to any existing MICE2 filter column
@@ -119,6 +93,7 @@ mocks_extended_object_sn \
         vhs_h \
         vhs_ks \
     --scale 2.5 --flux-frac 0.5 \
+    --threads ${THREADS} \
     -o ${DATADIR}/apertures.fits
 # update the combined data table
 data_table_hstack \
@@ -188,7 +163,7 @@ mocks_draw_property \
         vhs_h_obs_mag \
         vhs_ks_obs_mag \
     --s-prop recal_weight \
-    -d ${HOME}/DATA/KV450/recal_weights.fits \
+    -d /net/home/fohlen11/jlvdb/DATA/KV450/recal_weights.fits \
     --d-attr \
         MAG_GAAP_u \
         MAG_GAAP_g \
@@ -202,7 +177,8 @@ mocks_draw_property \
     --d-prop weight \
     --r-max 1.0 \
     --fallback 0.0 \
-    -t ${HOME}/DATA/KV450/recal_weights.tree.pickle \
+    -t /net/home/fohlen11/jlvdb/DATA/KV450/recal_weights.tree.pickle \
+    --threads ${THREADS} \
     -o ${DATADIR}/recal_weights.fits
 # update the combined data table
 data_table_hstack \
@@ -245,6 +221,7 @@ mocks_bpz_wrapper \
     --templates CWWSB_capak \
     --prior NGVS \
     --prior-filter sdss_i_obs_mag \
+    --threads ${THREADS} \
     -o ${DATADIR}/photoz.fits
 # update the combined data table
 data_table_hstack \
@@ -265,161 +242,4 @@ data_table_filter \
     --rule recal_weight gg 0.0 \
     --rule M_0 ll 90.0 \
     -o ${MOCKout}
-echo ""
-
-echo "==> reduce number of columns"
-# create copies of the output catalogues with a minimal subset of colums
-data_table_copy \
-    -i ${MOCKoutfull} \
-    -c unique_gal_id $RAname $DECname \
-       z_cgal z_cgal_v Z_B \
-       recal_weight flag_central \
-       lmhalo lmstellar \
-       sdss_i_evo_mag \
-       lephare_b_evo_mag \
-       lephare_v_evo_mag \
-       lephare_rc_evo_mag \
-       lephare_ic_evo_mag \
-       sdss_u_obs_mag \
-       sdss_g_obs_mag \
-       sdss_r_obs_mag \
-       sdss_i_obs_mag \
-       sdss_z_obs_mag \
-       des_asahi_full_y_obs_mag \
-       vhs_j_obs_mag \
-       vhs_h_obs_mag \
-       vhs_ks_obs_mag \
-    -o ${MOCKoutfull%.*}_CC.fits
-data_table_copy \
-    -i ${MOCKout} \
-    -c unique_gal_id $RAname $DECname \
-       z_cgal z_cgal_v Z_B \
-       recal_weight flag_central \
-       lmhalo lmstellar \
-       sdss_i_evo_mag \
-       lephare_b_evo_mag \
-       lephare_v_evo_mag \
-       lephare_rc_evo_mag \
-       lephare_ic_evo_mag \
-       sdss_u_obs_mag \
-       sdss_g_obs_mag \
-       sdss_r_obs_mag \
-       sdss_i_obs_mag \
-       sdss_z_obs_mag \
-       des_asahi_full_y_obs_mag \
-       vhs_j_obs_mag \
-       vhs_h_obs_mag \
-       vhs_ks_obs_mag \
-    -o ${MOCKout%.*}_CC.fits
-echo ""
-
-###############################################################################
-# create check plots
-###############################################################################
-
-echo "==> plot aperture statistics"
-plot_extended_object_sn \
-    -i ${MOCKout} \
-    --filters \
-        sdss_u \
-        sdss_g \
-        sdss_r \
-        sdss_i \
-        sdss_z \
-        des_asahi_full_y \
-        vhs_j \
-        vhs_h \
-        vhs_ks
-echo ""
-
-echo "==> plot magnitude statistics"
-plot_photometry_realisation \
-    -s ${MOCKout} \
-    --s-filters \
-        sdss_u_obs_mag \
-        sdss_g_obs_mag \
-        sdss_r_obs_mag \
-        sdss_i_obs_mag \
-        sdss_z_obs_mag \
-        des_asahi_full_y_obs_mag \
-        vhs_j_obs_mag \
-        vhs_h_obs_mag \
-        vhs_ks_obs_mag \
-    --s-errors \
-        sdss_u_obserr_mag \
-        sdss_g_obserr_mag \
-        sdss_r_obserr_mag \
-        sdss_i_obserr_mag \
-        sdss_z_obserr_mag \
-        des_asahi_full_y_obserr_mag \
-        vhs_j_obserr_mag \
-        vhs_h_obserr_mag \
-        vhs_ks_obserr_mag \
-    -d ${dataKV450} \
-    --d-filters \
-        MAG_GAAP_u \
-        MAG_GAAP_g \
-        MAG_GAAP_r \
-        MAG_GAAP_i \
-        MAG_GAAP_Z \
-        MAG_GAAP_Y \
-        MAG_GAAP_J \
-        MAG_GAAP_H \
-        MAG_GAAP_Ks \
-    --d-errors \
-        MAGERR_GAAP_u \
-        MAGERR_GAAP_g \
-        MAGERR_GAAP_r \
-        MAGERR_GAAP_i \
-        MAGERR_GAAP_Z \
-        MAGERR_GAAP_Y \
-        MAGERR_GAAP_J \
-        MAGERR_GAAP_H \
-        MAGERR_GAAP_Ks \
-    --d-extinct \
-        EXTINCTION_u \
-        EXTINCTION_g \
-        EXTINCTION_r \
-        EXTINCTION_i \
-        EXTINCTION_Z \
-        EXTINCTION_Y \
-        EXTINCTION_J \
-        EXTINCTION_H \
-        EXTINCTION_Ks
-echo ""
-
-echo "==> plot weight statistics"
-plot_draw_property \
-    -s ${MOCKout} \
-    --s-prop recal_weight \
-    --s-filters \
-        sdss_u_obs_mag \
-        sdss_g_obs_mag \
-        sdss_r_obs_mag \
-        sdss_i_obs_mag \
-        sdss_z_obs_mag \
-        des_asahi_full_y_obs_mag \
-        vhs_j_obs_mag \
-        vhs_h_obs_mag \
-        vhs_ks_obs_mag \
-    -d ${dataKV450} \
-    --d-prop recal_weight \
-    --d-filters \
-        MAG_GAAP_u \
-        MAG_GAAP_g \
-        MAG_GAAP_r \
-        MAG_GAAP_i \
-        MAG_GAAP_Z \
-        MAG_GAAP_Y \
-        MAG_GAAP_J \
-        MAG_GAAP_H \
-        MAG_GAAP_Ks
-echo ""
-
-echo "==> plot photo-z statistics"
-plot_bpz_wrapper \
-    -s ${MOCKout} \
-    --s-z-true z_cgal_v \
-    -d ${dataKV450} \
-    --d-zb Z_B
 echo ""

@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    setattr(args, "threads", min(cpu_count(), max(0, args.threads)))
+    setattr(args, "threads", min(cpu_count(), max(1, args.threads)))
 
     data = load_table(
         args.input, args.iformat,
