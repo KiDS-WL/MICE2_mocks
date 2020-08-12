@@ -5,6 +5,7 @@ from functools import wraps, partial
 from hashlib import md5
 from inspect import signature
 from itertools import repeat
+from math import ceil
 
 import numpy as np
 
@@ -368,7 +369,8 @@ class ParallelTable(object):
             cpu_util = 0.2  # this may not be optimal
         else:
             cpu_util = min(1.0, max(0.0, self._worker_function._cpu_util))
-        n_threads = max(1, int(self._max_threads * cpu_util))
+        min_threads = min(2, self._max_threads)
+        n_threads = max(min_threads, ceil(self._max_threads * cpu_util))
         return n_threads
 
     def _apply_processes(self, n_threads=None, prefix=None, seed=None):
