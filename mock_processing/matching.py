@@ -68,7 +68,8 @@ class DistributionEstimator(object):
             json.dump(attr_dict, f,indent=2, sort_keys=True)
 
     def add_data(self, data):
-        self._counts += np.histogram(data, bins=self._binning, density=True)[0]
+        self._counts += np.histogram(
+            data, bins=self._binning, density=False)[0]
         self._interpolator = None
 
     @property
@@ -121,7 +122,7 @@ class DistributionEstimator(object):
     def normalisation(self, amp):
         self._normalisation = amp
 
-    def interpolate(self):
+    def interpolate(self, density=False):
         smoothed = np.empty_like(self._counts)
         # compute the rolling sum over the high resolution histogram
         idx_offset = max(1, self._smooth // 2)
@@ -131,7 +132,7 @@ class DistributionEstimator(object):
             smoothed[i] = self._counts[start:end].sum()
         # normalize to unity
         bin_centers = self.bin_centers
-        if smoothed.any():
+        if smoothed.any() and density:
             smoothed = smoothed / np.trapz(smoothed, x=bin_centers)
         # interpolate the values
         kwargs = {"kind": self._kind}

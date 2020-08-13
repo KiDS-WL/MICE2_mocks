@@ -139,16 +139,18 @@ class RedshiftSampler(Sampler):
             pbar.update(end - start)
         pbar.close()
         density.interpolate()
-        density.normalisation = n_mocks / area
+        density.normalisation = 1.0 / area
         return density
 
     @property
     def sample_density(self):
-        return self._sample_dens.normalisation
+        n_objects = self._sample_dens._counts.sum()
+        return n_objects * self._sample_dens.normalisation
 
     @property
     def mock_density(self):
-        return self._mock_dens.normalisation
+        n_objects = self._mock_dens._counts.sum()
+        return n_objects * self._mock_dens.normalisation
 
     def odds(self, redshift):
         mock_density = self._mock_dens(redshift)
