@@ -228,7 +228,6 @@ def apertures_SExtractor(config, filter_key, r_effective, ba_ratio):
             galaxy_major**2 + psf_sigma**2)
         aperture_minor = mag_auto_scale * np.sqrt(
             galaxy_minor**2 + psf_sigma**2)
-    aperture_ba = aperture_minor / aperture_major
     # compute the aperture area
     aperture_area = np.pi * aperture_major * aperture_minor
     psf_area = np.pi * psf_sigma**2
@@ -252,10 +251,11 @@ def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
         np.sqrt(aperture_major**2 + aper_min**2), aper_max)
     gaap_minor = np.minimum(
         np.sqrt(aperture_minor**2 + aper_min**2), aper_max)
-    gaap_ba = gaap_minor / gaap_major
+    gaap_pointsource = np.minimum(
+        np.sqrt(psf_sigma**2 + aper_min**2), aper_max)
     # compute the aperture area
     gaap_area = np.pi * gaap_major * gaap_minor
-    psf_area = np.pi * psf_sigma**2
+    psf_area = np.pi * gaap_pointsource**2
     # compute the S/N correction by comparing the aperture area to the PSF
     snr_correction = np.sqrt(psf_area / gaap_area)
     return gaap_major, gaap_minor, snr_correction
