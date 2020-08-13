@@ -13,6 +13,6 @@ fi
 
 ../../scripts/mocks_effective_radius \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-    --flux-frac 0.6 \
+    -c config/photometry.toml \
     --threads ${2:-64}
 echo

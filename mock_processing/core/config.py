@@ -127,6 +127,9 @@ class ParsePhotometryConfig(object):
         "PSF"}
     # NOTE: register paramters for new algorithms here
     _algorithm_params = {
+        "intrinsic": {
+            "r_effective",
+            "flux_frac"},
         "SExtractor": {
             "phot_autoparams"},
         "GAaP": {

@@ -4,6 +4,8 @@ import os
 import sys
 
 import mock_processing as mocks
+from mock_processing.core.config import (DumpPhotometryConfig,
+                                         load_photometry_config)
 from mock_processing.photometry import find_percentile_wrapped
 
 
@@ -13,9 +15,10 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
 parser.add_argument(
-    "--flux-frac", type=float, default=0.5,
-    help="fraction of the total flux emitted from within computed radius "
-         "(default: %(default)s)")
+    "-c", "--config", required=True,
+    help="parameter file in TOML format that defines the properties of the "
+         "photometry realisation and the method parameters (use --dump to "
+         "obtain a default parameter file)")
 parser.add_argument(
     "--threads", type=int, default=-1,
     help="maximum number of threads to use (default: all)")
@@ -26,13 +29,16 @@ def main():
     args = parser.parse_args()
     logger = mocks.PipeLogger(__file__, args.datastore)
 
+    # check the configuration file
+    config = load_photometry_config(args.config, logger)
+
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
         ds.pool.max_threads = args.threads
 
         ds.pool.set_worker(find_percentile_wrapped)
 
-        ds.pool.add_argument_constant(args.flux_frac)
+        ds.pool.add_argument_constant(config.intrinsic["flux_frac"])
 
         # find disk and bulge component columns
         input_columns = (
@@ -46,12 +52,12 @@ def main():
         r_e_path = "shape/R_effective"
         # create the output column
         ds.add_column(
-            r_e_path, dtype="f4", overwrite=True, attr={
+            config.intrinsic["r_effective"], dtype="f4", overwrite=True, attr={
                 "description":
                 "effective radius (emitting {:.1%} of the flux)".format(
-                    args.flux_frac)})
+                    config.intrinsic["flux_frac"])})
         # add column to call signature
-        ds.pool.add_result_column(r_e_path)
+        ds.pool.add_result_column(config.intrinsic["r_effective"])
 
         # compute and store the corrected magnitudes
         ds.pool.execute()

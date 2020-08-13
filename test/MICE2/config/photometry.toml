@@ -4,6 +4,10 @@ no_detect_value = 99.0
 SN_detect = 1.0
 SN_floor = 0.2
 
+[intrinsic]
+r_effective = "shape/R_effective"
+flux_frac = 0.5
+
 [limits]
 u = 25.5
 g = 26.3

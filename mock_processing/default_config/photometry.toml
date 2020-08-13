@@ -9,6 +9,13 @@ no_detect_value = 99.0  # magnitude value assigned to undetected galaxies
 SN_detect = 1.0         # signal-to-noise ratio detection limit
 SN_floor = 0.2          # numerical lower limit for signal-to-noise ratio
 
+[intrinsic]
+r_effective = "shape/R_effective"
+                        # path of the effective radius column in the data store
+flux_frac = 0.5         # this defines the effective radius by setting the
+                        # fraction of the total flux/luminosity for which the
+                        # radius of the source is computed
+
 [limits]
 # numerical values for the magnitude limits, the keys must be the same as in
 # column map file used for mocks_init_pipeline

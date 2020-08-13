@@ -15,5 +15,6 @@ else
 fi
 
 ../../scripts/mocks_effective_radius $DS \
+    -c config/photometry.toml \
     --threads ${2:-32}
 echo
