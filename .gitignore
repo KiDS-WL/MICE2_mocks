@@ -109,3 +109,5 @@ test/*.fits
 test/*.hdf5
 test/*.pqt
 
+# BPZ transmission curves
+*.res

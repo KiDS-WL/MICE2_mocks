@@ -28,8 +28,6 @@ echo
     -q "${footprint}"' AND samples/KiDS & 1'
 echo
 
-exit 0;
-
 ../../scripts/mocks_datastore_query \
     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
     -o /net/home/fohlen12/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_2dFLenS.fits \

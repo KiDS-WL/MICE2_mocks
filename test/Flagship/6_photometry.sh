@@ -16,7 +16,14 @@ fi
     -c config/photometry.toml \
     --method GAaP \
     --mag mags/lensed \
+    --real mags/K1000new \
+    --threads ${2:-64}
+echo
+../../scripts/mocks_photometry \
+    /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
+    -c config/photometry.toml \
+    --method SExtractor \
+    --mag mags/lensed \
     --real mags/K1000 \
     --threads ${2:-64}
 echo
-

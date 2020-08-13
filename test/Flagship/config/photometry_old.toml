@@ -1,4 +1,4 @@
-legacy = false
+legacy = true
 limit_sigma = 1.5
 no_detect_value = 99.0
 SN_detect = 1.0

@@ -17,3 +17,9 @@ fi
     --method GAaP \
     --threads ${2:-64}
 echo
+../../scripts/mocks_apertures \
+    /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
+    -c config/photometry_old.toml \
+    --method SExtractor \
+    --threads ${2:-64}
+echo

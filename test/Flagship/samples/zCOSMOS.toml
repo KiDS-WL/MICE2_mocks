@@ -7,5 +7,5 @@ bitmask = "samples/zCOSMOS"
 # the data store. Optional arguments can be left blank.
 redshift = "position/z/obs"
                         # (observed) redshifts
-mag_Ic = "mags/lensed/Ic"
+mag_Ic = "mags/lensed/i"
                         # Johnson Ic-band magnitude

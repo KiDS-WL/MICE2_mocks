@@ -53,18 +53,18 @@ echo
     -o /net/home/fohlen13/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_WiggleZ.hdf5 \
     -q "${footprint}"' AND samples/WiggleZ & 1'
 echo
-# ../../scripts/mocks_datastore_query \
-#     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-#     -o /net/home/fohlen13/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_DEEP2.hdf5 \
-#     -q "${footprint}"' AND samples/DEEP2 & 1'
-# echo
-# ../../scripts/mocks_datastore_query \
-#     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-#     -o /net/home/fohlen13/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_VVDSf02.hdf5 \
-#     -q "${footprint}"' AND samples/VVDSf02 & 1'
-# echo
-# ../../scripts/mocks_datastore_query \
-#     /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
-#     -o /net/home/fohlen13/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_zCOSMOS.hdf5 \
-#     -q "${footprint}"' AND samples/zCOSMOS & 1'
-# echo
+../../scripts/mocks_datastore_query \
+    /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
+    -o /net/home/fohlen13/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_DEEP2.hdf5 \
+    -q "${footprint}"' AND samples/DEEP2 & 1'
+echo
+../../scripts/mocks_datastore_query \
+    /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
+    -o /net/home/fohlen13/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_VVDSf02.hdf5 \
+    -q "${footprint}"' AND samples/VVDSf02 & 1'
+echo
+../../scripts/mocks_datastore_query \
+    /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
+    -o /net/home/fohlen13/jlvdb/TEST/MOCK_pipeline/Flagship_query${suffix}_zCOSMOS.hdf5 \
+    -q "${footprint}"' AND samples/zCOSMOS & 1'
+echo

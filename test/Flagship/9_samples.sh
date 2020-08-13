@@ -13,7 +13,7 @@ else
     exit 1;
 fi
 
-for sample in KiDS #2dFLenS GAMA SDSS WiggleZ DEEP2 VVDSf02 zCOSMOS
+for sample in KiDS 2dFLenS GAMA SDSS WiggleZ DEEP2 VVDSf02 zCOSMOS
 do
     ../../scripts/mocks_select_sample \
         /net/home/fohlen13/jlvdb/DATA/Flagship_KiDS${suffix} \
