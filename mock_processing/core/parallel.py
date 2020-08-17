@@ -432,7 +432,7 @@ class ParallelTable(object):
                 info = self._worker_function._description
             else:
                 info = "processing data"
-            message = "{:} (@{:d} processes)".format(info, threads)
+            message = "{:} (with {:d} processes)".format(info, threads)
             if self._logger is not None:
                 self._logger.info(message)
             # create the worker pool
@@ -484,8 +484,8 @@ class ParallelTable(object):
             if hasattr(self._worker_function, "_description"):
                 info = self._worker_function._description
             else:
-                info = "processing data"
-            message = "{:} (@{:d} threads)".format(info, threads)
+                info = "processing datas"
+            message = "{:} (with {:d} threads)".format(info, threads)
             if self._logger is not None:
                 self._logger.info(message)
             _thread_worker(worker_args)

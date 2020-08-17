@@ -156,7 +156,7 @@ class DataStore(MemmapTable):
 
     def close(self):
         if len(self._timestamp) > 0:
-            self._logger.info("computing checksums and updating headers")
+            self._logger.debug("computing checksums and updating attributes")
             self._timestamp.add_checksums()
             self._timestamp.finalize()
         super().close()

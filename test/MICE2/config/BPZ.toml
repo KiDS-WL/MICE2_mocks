@@ -16,15 +16,15 @@ system = "AB"           # photometric system, must be "AB" or "Vega"
 # mapping between filter keys (same as used in the column map file for
 # mocks_init_pipeline) and paths to transmission curve files compatible with
 # BPZ.
-u = "filters/sdss_u_obs.res"
-g = "filters/sdss_g_obs.res"
-r = "filters/sdss_r_obs.res"
-i = "filters/sdss_i_obs.res"
-Z = "filters/sdss_z_obs.res"
-Y = "filters/des_asahi_full_y_obs.res"
-J = "filters/vhs_j_obs.res"
-H = "filters/vhs_h_obs.res"
-Ks = "filters/vhs_ks_obs.res"
+u = "filters/u_SDSS.res"
+g = "filters/g_SDSS.res"
+r = "filters/r_SDSS.res"
+i = "filters/i_SDSS.res"
+Z = "filters/z_SDSS.res"
+Y = "filters/Y_DECam.res"
+J = "filters/J_VISTA.res"
+H = "filters/H_VISTA.res"
+Ks = "filters/Ks_VISTA.res"
                         # transmission files do not need to be in the
                         # bpz_path/FILTER directory
 

@@ -175,7 +175,11 @@ def main():
             logger.debug(message)
 
             # query the table and write to the output fie
-            logger.info("processing input stream ...")
+            if expression is not None:
+                message = "filtering data and writing output file"
+            else:
+                message = "converting data and writing output file"
+            logger.info(message)
             if not to_stdout:
                 pbar = ProgressBar(len(ds))
             n_select = 0

@@ -96,7 +96,7 @@ def main():
                     logger.handleException(e)
 
             # copy the data
-            logger.info("processing input stream ...")
+            logger.info("converting input data")
             pbar_kwargs = {
                 "leave": False, "unit_scale": True, "unit": "row",
                 "dynamic_ncols": True}
