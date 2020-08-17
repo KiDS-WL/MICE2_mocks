@@ -281,6 +281,7 @@ class DataMatcher(object):
         features = self.transform(samples, True)  # apply scaling and weights
         self._tree = cKDTree(features)
 
+    @Schedule.description("deriving features from observables")
     @Schedule.CPUbound
     @Schedule.threads
     def apply(self, threads=-1, **feature_kwargs):

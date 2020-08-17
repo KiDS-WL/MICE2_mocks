@@ -23,6 +23,7 @@ def flux_to_magnitudes(flux):
     return mag
 
 
+@Schedule.description("converting fluxes to magnitudes")
 @Schedule.workload(0.10)
 def flux_to_magnitudes_wrapped(*fluxes):
     """

@@ -168,7 +168,7 @@ class DataStore(MemmapTable):
 
     def expand(self, nrows):
         super().resize(len(self) + nrows)
-        logger.debug("allocated {:,d} additional rows".format(nrows))
+        self._logger.debug("allocated {:,d} additional rows".format(nrows))
 
     def require_column(self, path, description=""):
         """
@@ -229,10 +229,10 @@ class DataStore(MemmapTable):
             checksum = column.attr["SHA-1 checksum"]
             assert(checksum == sha1sum(column.filename))
         except KeyError:
-            logger.warn("no checksum provided: {:}".format(name))
+            self._logger.warn("no checksum provided: {:}".format(name))
         except AssertionError:
             message = "checksums do not match: {:}".format(name)
-            logger.handleException(AssertionError(message))
+            self._logger.handleException(AssertionError(message))
 
     def get_history(self):
         """

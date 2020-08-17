@@ -30,6 +30,7 @@ def magnification_correction(kappa, mag):
     return mag_magnified
 
 
+@Schedule.description("applying flux magnification")
 @Schedule.workload(0.10)
 def magnification_correction_wrapped(kappa, *mags):
     """
@@ -173,6 +174,7 @@ def find_percentile(
     return r_effective
 
 
+@Schedule.description("calculating size from light profile")
 @Schedule.CPUbound
 def find_percentile_wrapped(
         percentile, R_e_Disk, R_e_Bulge, f_B, method="newton"):
@@ -261,6 +263,7 @@ def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
     return gaap_major, gaap_minor, snr_correction
 
 
+@Schedule.description("constructing apertures")
 @Schedule.workload(0.15)
 def apertures_wrapped(method, config, r_effective, ba_ratio):
     # select the photometry method
@@ -316,6 +319,7 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
     return real, real_err
 
 
+@Schedule.description("generating photometery realisation")
 @Schedule.workload(0.33)
 def photometry_realisation_wrapped(config, *mag_mag_lim_snr_correction):
     # iterate through the listing of magnitude columns, magnitude limits and

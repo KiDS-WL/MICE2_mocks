@@ -18,6 +18,13 @@ from .utils import ProgressBar
 class Schedule:
 
     @staticmethod
+    def description(desc):
+        def wrapper(worker):
+            worker._description = desc
+            return worker
+        return wrapper
+
+    @staticmethod
     def threads(worker):
         worker._prefer_threads = True
         return worker
@@ -421,8 +428,11 @@ class ParallelTable(object):
                 repeat(self._return_map), repeat(progress_queue), seeds,
                 repeat(self._allow_modify), threadIDs))
             # notify begin of processing
-            message = "processing column data using {:d} processes ..."
-            message = message.format(threads)
+            if hasattr(self._worker_function, "_description"):
+                info = self._worker_function._description
+            else:
+                info = "processing data"
+            message = "{:} (@{:d} processes)".format(info, threads)
             if self._logger is not None:
                 self._logger.info(message)
             # create the worker pool
@@ -471,8 +481,11 @@ class ParallelTable(object):
                 self._call_args, self._call_kwargs, self._return_map,
                 progress_queue, seed, self._allow_modify,
                 0 if self._parse_thread_id else None]
-            message = "processing column data using {:d} threads ..."
-            message = message.format(threads)
+            if hasattr(self._worker_function, "_description"):
+                info = self._worker_function._description
+            else:
+                info = "processing data"
+            message = "{:} (@{:d} threads)".format(info, threads)
             if self._logger is not None:
                 self._logger.info(message)
             _thread_worker(worker_args)

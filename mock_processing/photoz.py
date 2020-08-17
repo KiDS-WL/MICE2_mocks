@@ -309,6 +309,7 @@ class BpzManager(object):
         bpz_result = tuple(data[col] for col in output_cols)
         return bpz_result
 
+    @Schedule.description("running BPZ")
     @Schedule.CPUbound
     def execute(
             self, *mags_errs, threadID=None, verbose=False,

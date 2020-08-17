@@ -23,6 +23,7 @@ def evolution_correction(redshift, mag):
     return mag - 0.8 * (np.arctan(1.5 * redshift) - 0.1489)
 
 
+@Schedule.description("adding MICE2 evolution correction")
 @Schedule.workload(0.10)
 def evolution_correction_wrapped(redshift, *mags):
     """

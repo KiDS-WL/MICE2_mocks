@@ -24,24 +24,20 @@ SAMPLING_SELECTIONS = OrderedDict()
 REGISTERED_SAMPLES = set()
 
 
-def register(name):
-    def decorator_register(selector):
-        """
-        Register selection function objects.
-        """
-        if issubclass(selector, BaseSelection):
-            PHOTOMETRIC_SELECTIONS[name] = selector
-            REGISTERED_SAMPLES.update(PHOTOMETRIC_SELECTIONS.keys())
-        elif issubclass(selector, Sampler):
-            SAMPLING_SELECTIONS[name] = selector
-            REGISTERED_SAMPLES.update(PHOTOMETRIC_SELECTIONS.keys())
-        else:
-            message = "Object must be subclass of 'BaseSelection' or 'Sampler'"
-            raise TypeError(message)
-        # set the name
-        selector.name = name
-        return selector
-    return decorator_register
+def register(selector):
+    """
+    Register selection function objects.
+    """
+    if issubclass(selector, BaseSelection):
+        PHOTOMETRIC_SELECTIONS[selector.name] = selector
+        REGISTERED_SAMPLES.update(PHOTOMETRIC_SELECTIONS.keys())
+    elif issubclass(selector, Sampler):
+        SAMPLING_SELECTIONS[selector.name] = selector
+        REGISTERED_SAMPLES.update(PHOTOMETRIC_SELECTIONS.keys())
+    else:
+        message = "Object must be subclass of 'BaseSelection' or 'Sampler'"
+        raise TypeError(message)
+    return selector
 
 
 class Sampler(object):
@@ -72,7 +68,7 @@ class DensitySampler(Sampler):
         # selection bit (bit 1)
         n_mocks = 0
         chunksize = 16384
-        pbar = ProgressBar(len(bitmask), "estimate mock density")
+        pbar = ProgressBar(len(bitmask))
         for start in range(0, len(bitmask), chunksize):
             end = min(start + chunksize, len(bitmask))
             is_selected = BMM.check_master(bitmask[start:end])
@@ -97,6 +93,7 @@ class DensitySampler(Sampler):
         mask = random_draw < self.odds()
         return mask
 
+    @Schedule.description("sampling surface density")
     @Schedule.workload(0.10)
     def apply(self, bitmask):
         is_selected = self.mask(len(bitmask))
@@ -130,7 +127,7 @@ class RedshiftSampler(Sampler):
         # distribution considering only objects that pass the selection
         n_mocks = 0
         chunksize = 16384
-        pbar = ProgressBar(len(bitmask), "estimate mock n(z)")
+        pbar = ProgressBar(len(bitmask))
         for start in range(0, len(bitmask), chunksize):
             end = min(start + chunksize, len(bitmask))
             is_selected = BMM.check_master(bitmask[start:end])
@@ -166,6 +163,7 @@ class RedshiftSampler(Sampler):
         mask = random_draw < self.odds(redshift)
         return mask
 
+    @Schedule.description("sampling redshift density")
     @Schedule.workload(0.20)
     def apply(self, bitmask, redshift):
         is_selected = self.draw(redshift)
@@ -187,9 +185,10 @@ class BaseSelection(object):
         return self.__class__.__name__
 
 
-@register("KiDS")
+@register
 class SelectKiDS(BaseSelection):
 
+    name = "KiDS"
     bit_descriptions = ("non-zero lensfit weight", "BPZ prior band detection")
 
     def lensing_selection(self, bitmask, recal_weight, prior_magnitude):
@@ -200,6 +199,7 @@ class SelectKiDS(BaseSelection):
         is_selected = prior_magnitude < 90.0
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.10)
     def apply(self, bitmask, recal_weight, prior_magnitude):
         self.lensing_selection(bitmask, recal_weight, prior_magnitude)
@@ -212,9 +212,10 @@ class SelectKiDS(BaseSelection):
 ###############################################################################
 
 
-@register("2dFLenS")
+@register
 class Select2dFLenS(BaseSelection):
 
+    name = "2dFLenS"
     bit_descriptions = ("LOWZ", "MIDZ", "HIGHZ")
 
     def colour_selection(self, bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks):
@@ -267,6 +268,7 @@ class Select2dFLenS(BaseSelection):
             ((mag_i - mag_Z) > 0.6))
         BMM.set_bit(bitmask, self._bits[2], condition=high_z)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.10)
     def apply(self, bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks):
         self.colour_selection(bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks)
@@ -274,11 +276,13 @@ class Select2dFLenS(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits), bit_join="OR")
 
 
-@register("GAMA")
+@register
 class SelectGAMA(BaseSelection):
 
+    name = "GAMA"
     bit_descriptions = ("r-band cut",)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.10)
     def apply(self, bitmask, mag_r):
         ###############################################################
@@ -290,9 +294,10 @@ class SelectGAMA(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits))
 
 
-@register("SDSS")
+@register
 class SelectSDSS(BaseSelection):
 
+    name = "SDSS"
     bit_descriptions = ("main sample", "BOSS LOWZ", "BOSS CMASS", "QSO")
 
     def MAIN_selection(self, bitmask, mag_r):
@@ -344,6 +349,7 @@ class SelectSDSS(BaseSelection):
         is_selected = is_central & (lmstellar > 11.2) & (lmhalo > 13.3)
         BMM.set_bit(bitmask, self._bits[3], condition=is_selected)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.10)
     def apply(
             self, bitmask, mag_g, mag_r, mag_i, is_central, lmhalo, lmstellar):
@@ -354,9 +360,10 @@ class SelectSDSS(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits), bit_join="OR")
 
 
-@register("WiggleZ")
+@register
 class SelectWiggleZ(BaseSelection):
 
+    name = "WiggleZ"
     bit_descriptions = ("inclusion rules", "exclusion rules")
 
     def colour_selection(self, bitmask, mag_g, mag_r, mag_i, mag_Z):
@@ -383,6 +390,7 @@ class SelectWiggleZ(BaseSelection):
             (mag_r-mag_Z < 0.7 * (mag_g-mag_r)))
         BMM.set_bit(bitmask, self._bits[1], condition=~exclude)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.10)
     def apply(self, bitmask, redshift, mag_g, mag_r, mag_i, mag_Z):
         self.colour_selection(bitmask, mag_g, mag_r, mag_i, mag_Z)
@@ -390,8 +398,10 @@ class SelectWiggleZ(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits), bit_join="AND")
 
 
-@register("WiggleZ")
+@register
 class SampleWiggleZ(RedshiftSampler):
+
+    name = "WiggleZ"
 
     def __init__(self, bit_manager, mock_area, bitmask, redshifts):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
@@ -404,9 +414,10 @@ class SampleWiggleZ(RedshiftSampler):
 ###############################################################################
 
 
-@register("DEEP2")
+@register
 class SelectDEEP2(BaseSelection):
 
+    name = "DEEP2"
     bit_descriptions = ("colour/magnitude selection", "spectroscopic success")
 
     def __init__(self, bitvalues):
@@ -451,6 +462,7 @@ class SelectDEEP2(BaseSelection):
         is_selected = random_draw < self._p_success_R(mag_Rc)
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.25)
     def apply(self, bitmask, mag_B, mag_Rc, mag_Ic):
         self.colour_selection(bitmask, mag_B, mag_Rc, mag_Ic)
@@ -459,17 +471,20 @@ class SelectDEEP2(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits), bit_join="AND")
 
 
-@register("DEEP2")
+@register
 class SampleDEEP2(DensitySampler):
+
+    name = "DEEP2"
 
     def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
         super().__init__(bit_manager, density_file, mock_area, bitmask)
 
 
-@register("VVDSf02")
+@register
 class SelectVVDSf02(BaseSelection):
 
+    name = "VVDSf02"
     bit_descriptions = ("magnitude selection", "spectroscopic success")
 
     def __init__(self, bit_manager):
@@ -527,6 +542,7 @@ class SelectVVDSf02(BaseSelection):
                 random_draw[mask] < p_success_z(redshift[mask])
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.25)
     def apply(self, bitmask, redshift, mag_Ic):
         self.colour_selection(bitmask, mag_Ic)
@@ -535,17 +551,20 @@ class SelectVVDSf02(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits), bit_join="AND")
 
 
-@register("VVDSf02")
+@register
 class SampleVVDSf02(DensitySampler):
+
+    name = "VVDSf02"
 
     def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
         super().__init__(bit_manager, density_file, mock_area, bitmask)
 
 
-@register("zCOSMOS")
+@register
 class SelectzCOSMOS(BaseSelection):
 
+    name = "zCOSMOS"
     bit_descriptions = ("magnitude selection", "spectroscopic success")
 
     def __init__(self, bit_manager):
@@ -583,6 +602,7 @@ class SelectzCOSMOS(BaseSelection):
         is_selected = random_draw < object_rates
         BMM.set_bit(bitmask, self._bits[1], condition=is_selected)
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.CPUbound
     def apply(self, bitmask, redshift, mag_Ic):
         self.colour_selection(bitmask, mag_Ic)
@@ -591,8 +611,10 @@ class SelectzCOSMOS(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits), bit_join="AND")
 
 
-@register("zCOSMOS")
+@register
 class SamplezCOSMOS(DensitySampler):
+
+    name = "zCOSMOS"
 
     def __init__(self, bit_manager, mock_area, bitmask):
         density_file = DENSITY_FILE_TEMPLATE.format(self.name)
@@ -604,12 +626,13 @@ class SamplezCOSMOS(DensitySampler):
 ###############################################################################
 
 
-@register("Sparse24mag")
+@register
 class SelectSparse24mag(BaseSelection):
 
     name = "Sparse24mag"
     bit_descriptions = ("magnitude selection")
 
+    @Schedule.description("selecting {:}".format(name))
     @Schedule.workload(0.10)
     def apply(self, bitmask, mag_r):
         is_selected = mag_r < 24.0
@@ -618,7 +641,7 @@ class SelectSparse24mag(BaseSelection):
         BMM.update_master(bitmask, sum(self._bits))
 
 
-@register("Sparse24mag")
+@register
 class SampleSparse24mag(DensitySampler):
 
     name = "Sparse24mag"
