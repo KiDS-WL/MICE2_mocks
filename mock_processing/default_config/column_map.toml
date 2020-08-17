@@ -39,7 +39,7 @@ r = ""                  # add as many as there are filter required for the
 [lensing]
 gamma1 = ""
 gamma2 = ""
-kappa = ""  # convergence, required to apply flux magnification
+kappa = ""              # convergence, required to apply flux magnification
 
 [environ]
 is_central = ["", "bool"]

@@ -1,15 +1,30 @@
+# This file is required for mocks_init_pipeline and establishes a mapping
+# between column or data set names of the input file and the pipeline data
+# store:
+#     path/in/data/store = "input column name"
+# Data types may be specified using the following syntax:
+#     path/in/data/store = ["input column name", "type code"]
+# where "type code" is a valid python numpy data type identifier (e.g. "bool"
+# for boolean values, "i8" for 64 bit integeres or "f4" for 32-bit floating
+# point values).
+
 index_halo = "halo_id"
 index_galaxy = ["galaxy_id", "i2"]
 
 [position]
+# true galaxy position
 "ra/true" = "ra_gal"
-"ra/obs" = "ra_gal_mag"
 "dec/true" = "dec_gal"
-"dec/obs" = "dec_gal_mag"
 "z/true" = "true_redshift_gal"
+# observed galaxy position (including redshift space distortions and lensing)
+"ra/obs" = "ra_gal_mag"
+"dec/obs" = "dec_gal_mag"
 "z/obs" = "observed_redshift_gal"
 
-["flux/model"]
+["flux/model"]          # This section name is only recommended, if fluxes are
+                        # provided it could be flux/model.
+# photometric filters are identified by keywords (here g, r, i) which are used
+# throughout the pipeline as unique identification.
 u = "kids_u"
 g = "kids_g"
 r = "kids_r"
@@ -19,22 +34,35 @@ Y = "lsst_y"
 H = "2mass_h"
 J = "2mass_j"
 Ks = "2mass_ks"
+                        # add as many as there are filter required for the
+                        # sample selection functions
 
 [shape]
 "axis_ratio" = "bulge_axis_ratio"
-"bulge/angle" = "bulge_angle"
+                        # b/a axis ratio, required for aperture computation
 "bulge/fraction" = "bulge_fraction"
+                        # bulge to total luminosity ratio, required for two-
+                        # component effective radius
 "bulge/size" = "bulge_length"
-"disk/angle" = "disk_angle"
+                        # projected bulge major axis size in arcsec, required
+                        # for two-component effective radius
 "disk/size" = "disk_length"
+                        # projected disk major axis size in arcsec, required
+                        # for two-component effective radius
 
 [lensing]
 gamma1 = "gamma1"
 gamma2 = "gamma2"
-kappa = "kappa"
+kappa = "kappa"         # convergence, required to apply flux magnification
 
 [environ]
 is_satellite = ["kind", "bool"]
-log_M_halo = "halo_lm"
+                        # boolean flag indicating whether a galaxy is the
+                        # centeral galaxy of a given halo, required by SDSS QSO
+                        # spec-z selection
+log_M_halo = "halo_lm"  # logarithmic halo mass, required by SDSS QSO spec-z
+                        # selection
 log_M_stellar = "log_stellar_mass"
+                        # logarithmic stellar mass, required by SDSS QSO spec-z
+                        # selection
 n_sattelites = ["halo_n_sats", "i2"]

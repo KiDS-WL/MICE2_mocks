@@ -1,3 +1,7 @@
+# This configuration file is required for mocks_select_sample. It defines the
+# the output column name of the selection bit mask and the data columns for the
+# selection functions (such as magnitudes or redshift).
+
 bitmask = "samples/VVDSf02"
                         # path at which the sample selection bit mask is saved
                         # in the data store

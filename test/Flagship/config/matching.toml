@@ -1,3 +1,9 @@
+# This configuration file is required for mocks_match_data. It defines the
+# features of the mock data and an external data set to match. Based on the
+# nearest neighbour in feature space, a set of observables from the external
+# data is assigned to the mock data. Additional distance, cut-offs, fallback
+# values and weightes for each feature space dimension can be specified.
+
 input = "/net/home/fohlen12/jlvdb/DATA/KV450_superuser"
                         # path to input table, must be MemmapTable compatible
 normalize = false       # whether each feature space dimension is normalized by
