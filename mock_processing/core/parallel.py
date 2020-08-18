@@ -452,7 +452,7 @@ class ParallelTable(object):
                     else:
                         self._logger.handleException(state)
 
-    def _apply_threads(self, pqueue, n_threads=None, prefix=None, seed=None):
+    def _apply_threads(self, pqueue, n_threads, prefix=None, seed=None):
         """
         Apply the worker function on the input table sequentially and writing
         the results to the output columns. Useful, if most of the worker
@@ -470,7 +470,7 @@ class ParallelTable(object):
         # check if the funtion accepts the 'thread' keyword before passing it
         sign = signature(self._worker_function)
         if "threads" in sign.parameters:
-            self.add_argument_constant(threads, keyword="threads")
+            self.add_argument_constant(n_threads, keyword="threads")
         # collect the call arguments for the worker
         worker_args = [
             ParallelIterator(0, len(self._table), self.chunksize),

@@ -233,9 +233,9 @@ class DataStore(MemmapTable):
             checksum = column.attr["SHA-1 checksum"]
             assert(checksum == sha1sum(column.filename))
         except KeyError:
-            self._logger.warn("no checksum provided: {:}".format(name))
+            self._logger.warn("no checksum provided: {:}".format(path))
         except AssertionError:
-            message = "checksums do not match: {:}".format(name)
+            message = "checksums do not match: {:}".format(path)
             self._logger.handleException(AssertionError(message))
 
     def get_history(self):
