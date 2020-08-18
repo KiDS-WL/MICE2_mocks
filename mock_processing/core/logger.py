@@ -70,12 +70,7 @@ class PipeLogger(object):
             Replace the description message of the exception by this text.
         """
         if message is None:
-            # get the error message from the exception
-            message = ""
-            for arg in exception.args:
-                if type(arg) is str:
-                    message = arg
-                    break
+            message = str(exception)
         self.logger.critical(message)
         raise exception
 

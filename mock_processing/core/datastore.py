@@ -152,12 +152,16 @@ class DataStore(MemmapTable):
         return self
 
     def __exit__(self, *args, **kwargs):
-        self.close()
+        exit_with_error = args[0] is not None
+        self.close(add_checksum=not exit_with_error)
 
-    def close(self):
+    def close(self, add_checksum=True):
         if len(self._timestamp) > 0:
-            self._logger.debug("computing checksums and updating attributes")
-            self._timestamp.add_checksums()
+            message = "updating attributes"
+            if add_checksum:
+                message = "computing checksums and " + message
+                self._timestamp.add_checksums()
+            self._logger.debug(message)
             self._timestamp.finalize()
         super().close()
         self._logger.info("data store closed")

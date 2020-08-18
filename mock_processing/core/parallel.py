@@ -366,6 +366,28 @@ class ParallelTable(object):
         sign = "{:}({:}) -> {:}".format(function.__name__, args, result)
         return sign
 
+    def use_threads(self, preference=None):
+        """
+        Whether the worker function is applied using threads. This information
+        is derived from the worker function attribute _prefer_threads which can
+        be set using the Schedule.threads decorator.
+
+        Parameters:
+        -----------
+        preference : bool
+            This value is returned if it is not None.
+        
+        Returns:
+        --------
+        use_threads : bool
+            Whether to use threads or processes.
+        """
+        if preference is None:  # automatically
+            use_threads = hasattr(self._worker_function, "_prefer_threads")
+        else:
+            use_threads = preference
+        return use_threads
+
     def _n_threads(self):
         """
         Determine the number of threads or processes to use for the worker
@@ -380,71 +402,57 @@ class ParallelTable(object):
         n_threads = max(min_threads, ceil(self._max_threads * cpu_util))
         return n_threads
 
-    def _apply_processes(self, n_threads=None, prefix=None, seed=None):
+    def _apply_processes(self, pqueue, n_threads, prefix=None, seed=None):
         """
         Apply the worker function on the input table using a given number of
         parallel processes and writing the results to the output columns.
 
         Parameters:
         -----------
+        pqueue : multiprocessing.Queue
+            Queue to send the worker progress to the monitoring process.
         n_threads : int
-            Number of parallel processes to use (all by default).
-        prefix : str
-            Prefix for the progressbar (optional).
+            Number of parallel processes to use.
         seed : str
             String to seed the random generator (optional). Each thread appends
             it's index to this string to assure that the random state in each
             thread is differnt.
         """
-        threads = self._n_threads()
-        # assign row subsets to the threads
         n_rows = len(self._table)
+        # assign row subsets to the threads
         index_ranges = self._thread_iterator(
             # there cannot be more threads than table rows
-            n_rows if threads > n_rows else threads)
-        threads = len(index_ranges)
-        # Initialize the monitoring thread that manages a progress bar,
-        # managing the progress over all threads. The row progress is
-        # communicated through a queue.
-        mp_manager = mp.Manager()
-        progress_queue = mp_manager.Queue()
-        progress_monitor = mp.Process(
-            target=_monitor_worker, args=(progress_queue, n_rows, prefix))
-        progress_monitor.start()
-        try:
-            # at the threadID keyword if requested
-            if self._parse_thread_id:
-                threadIDs = range(threads)
-            else:
-                threadIDs = [None] * threads
-            # collect the call arguments for the worker
-            if seed is None:
-                seeds = [None] * threads
-            else:
-                seeds = ["{:}{:d}".format(seed, i) for i in range(threads)]
-            worker_args = list(zip(
-                index_ranges, repeat(self._worker_function),
-                repeat(self._call_args), repeat(self._call_kwargs),
-                repeat(self._return_map), repeat(progress_queue), seeds,
-                repeat(self._allow_modify), threadIDs))
-            # notify begin of processing
-            if hasattr(self._worker_function, "_description"):
-                info = self._worker_function._description
-            else:
-                info = "processing data"
-            message = "{:} (with {:d} processes)".format(info, threads)
-            if self._logger is not None:
-                self._logger.info(message)
-            # create the worker pool
-            with mp.Pool(threads) as pool:
-                pool.map(_thread_worker, worker_args)
-            # send the sentinel object that stops the monitor process from
-            # reading from the queue 
-            progress_queue.put(None)
-        finally:
-            progress_monitor.join()
+            n_rows if n_threads > n_rows else n_threads)
+        n_threads = len(index_ranges)
+        # collect the call arguments for the worker
+        if seed is None:
+            seeds = [None] * n_threads
+        else:
+            seeds = ["{:}{:d}".format(seed, i) for i in range(n_threads)]
+        worker_args = list(zip(
+            index_ranges,
+            repeat(self._worker_function),
+            repeat(self._call_args),
+            repeat(self._call_kwargs),
+            repeat(self._return_map),
+            repeat(pqueue),
+            seeds,
+            repeat(self._allow_modify),
+            range(n_threads) if self._parse_thread_id else repeat(None)))
+        # create and execute in worker pool
+        with mp.Pool(n_threads) as pool:
+            states = pool.map(_process_worker, worker_args)
+            # check for any exceptions that occured in the worker processe
+            for state in states:
+                if state is not None:
+                    #pool.terminate()
+                    # raise the exception
+                    if self._logger is None:
+                        raise state
+                    else:
+                        self._logger.handleException(state)
 
-    def _apply_threads(self, n_threads=None, prefix=None, seed=None):
+    def _apply_threads(self, pqueue, n_threads=None, prefix=None, seed=None):
         """
         Apply the worker function on the input table sequentially and writing
         the results to the output columns. Useful, if most of the worker
@@ -452,59 +460,93 @@ class ParallelTable(object):
 
         Parameters:
         -----------
+        pqueue : multiprocessing.Queue
+            Queue to send the worker progress to the monitoring process.
         n_threads : int
-            Number of parallel processes to use (all by default).
-        prefix : str
-            Prefix for the progressbar (optional).
+            Number of parallel processes to use.
         seed : str
             String to seed the random generator (optional).
         """
-        threads = self._n_threads()
-        n_rows = len(self._table)
         # check if the funtion accepts the 'thread' keyword before passing it
         sign = signature(self._worker_function)
         if "threads" in sign.parameters:
             self.add_argument_constant(threads, keyword="threads")
+        # collect the call arguments for the worker
+        worker_args = [
+            ParallelIterator(0, len(self._table), self.chunksize),
+            self._worker_function,
+            self._call_args,
+            self._call_kwargs,
+            self._return_map,
+            pqueue,
+            seed,
+            self._allow_modify,
+            0 if self._parse_thread_id else None]
+        # apply the main process assuming that the worker code releases the GIL
+        try:
+            _thread_worker(worker_args)
+        except Exception as e:
+            if self._logger is not None:
+                self._logger.handleException(e)
+            else:
+                raise
+
+
+    def execute(self, n_threads=None, threads=None, prefix=None, seed=None):
+        """
+        Apply the worker function on the input table using processes or
+        threads. By default, determines automatically if threads or processes
+        are prefered and how may to run in parallel. This can be controlled by
+        decorating the worker function with the parallel.Schedule decorators.
+
+        Parameters:
+        -----------
+        n_threads : int
+            Number of parallel processes to use (by default determined from
+            worker function).
+        threads : bool
+            Whether threads or processes are used (by default determined from
+            worker function).
+        prefix : str
+            Short message displayed before the for the progressbar (optional).
+        seed : str
+            String to seed the random generator (optional). This assures that
+            randomized computations are reproducible. If processes are used
+            this is only true as long as the number of processes does not
+            change.
+        """
+        if n_threads is None:
+            n_threads = self._n_threads()
+        # log a job notification
+        parallel_type = "threads" if self.use_threads(threads) else "processes"
+        try:
+            message = "{:} (with {:d} {:})".format(
+                self._worker_function._description, n_threads, parallel_type)
+        except AttributeError:
+            message = "processing data (with {:d} {:})".format(
+                n_threads, parallel_type)
+        if self._logger is not None:
+            self._logger.info(message)
         # Initialize the monitoring thread that manages a progress bar,
         # managing the progress over all threads. The row progress is
         # communicated through a queue.
         mp_manager = mp.Manager()
         progress_queue = mp_manager.Queue()
         progress_monitor = mp.Process(
-            target=_monitor_worker, args=(progress_queue, n_rows, prefix))
+            target=_monitor_worker,
+            args=(progress_queue, len(self._table), prefix))
         progress_monitor.start()
+        # apply the worker function with threads or processes
         try:
-            # collect the call arguments for the worker
-            chunk_iter = ParallelIterator(0, n_rows, self.chunksize)
-            worker_args = [
-                chunk_iter, self._worker_function,
-                self._call_args, self._call_kwargs, self._return_map,
-                progress_queue, seed, self._allow_modify,
-                0 if self._parse_thread_id else None]
-            if hasattr(self._worker_function, "_description"):
-                info = self._worker_function._description
+            if self.use_threads(threads):
+                self._apply_threads(progress_queue, n_threads, prefix, seed)
             else:
-                info = "processing datas"
-            message = "{:} (with {:d} threads)".format(info, threads)
-            if self._logger is not None:
-                self._logger.info(message)
-            _thread_worker(worker_args)
+                self._apply_processes(progress_queue, n_threads, prefix, seed)
             # send the sentinel object that stops the monitor process from
             # reading from the queue 
-            progress_queue.put(None)
         finally:
+            progress_queue.put(None)
             progress_monitor.join()
-
-    def execute(self, prefix=None, seed=None):
-        """
-        Apply the worker function using processes or using threads if the
-        worker function is decorated with parallel.noGIL, for reference see
-        ParallelTable._apply_threads and ParallelTable._apply_processes.
-        """
-        if hasattr(self._worker_function, "_prefer_threads"):
-            self._apply_threads(self._n_threads, prefix, seed)
-        else:
-            self._apply_processes(self._n_threads, prefix, seed)
 
 
 def _monitor_worker(progress_queue, table_rows, prefix):
@@ -554,7 +596,7 @@ def _thread_worker(wrap_args):
     """
     # unpack all input arguments
     (iterator, function, args, kwargs, results,
-     progress_queue, seed, modify, threadID) = wrap_args
+    progress_queue, seed, modify, threadID) = wrap_args
     # seed the random state if needed
     if seed is not None:
         hasher = md5(bytes(seed, "utf-8"))
@@ -607,5 +649,38 @@ def _thread_worker(wrap_args):
         elif len(results_expanded) > 1:
             for result, values in zip(results_expanded, return_values):
                 result[start:end] = values
-        # send number of rows processed successfully to the monitoring thread
+        # send number of rows processed to the monitoring thread
         progress_queue.put(end - start)
+
+
+def _process_worker(wrap_args):
+    """
+    Wrapper around _thread_worker that catches exceptions and returns them to
+    the main process. This prevents the pool workers from blocking
+    indefinitely.
+
+    Parameters:
+    -----------
+    wrap_args : list
+        ParallelIterator : manages the chunkwise loading of data
+        callable : the worker function
+        list : the positional function arguments
+        dict : the function keyword arguments
+        list : the column(s) where the function return values are stored
+        seed : seed used to initialize the random state
+        modify : bool controlling if input columns are opened as writable
+        threadID : thread identifier, if not None parsed as threadID keyword
+                   to callable
+
+    Returns:
+    --------
+    state : Exception or None
+        If an exception is raised it is returned instead such that it can be
+        passed to the main processes and raised there properly.
+    """
+    try:
+        _thread_worker(wrap_args)
+    except Exception as exception:
+        return exception
+    else:
+        return None
