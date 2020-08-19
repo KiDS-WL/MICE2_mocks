@@ -8,7 +8,96 @@ from time import sleep
 
 import numpy as np
 
+from .core.config import (Parameter, ParameterCollection, ParameterGroup,
+                          ParameterListing, Parser)
 from .core.parallel import Schedule
+from .core.utils import expand_path
+
+
+class BpzParser(Parser):
+
+    default = ParameterCollection(
+        Parameter(
+            "BPZpath", str, "~/src/bpz-1.99.3",
+            "path of the bpz installation to use",
+            parser=expand_path),
+        Parameter(
+            "BPZenv", str, None,
+            "path to a python2 environment used when calling BPZ (leave blank "
+            "to use the default python2 interpreter)",
+            parser=expand_path),
+        Parameter(
+            "BPZtemp", str, None,
+            "temporary directory to use for bpz (I/O intense, e.g. a ram disk, "
+            "if blank, defaults to data store)",
+            parser=expand_path),
+        Parameter(
+            "flux", bool, False,
+            "whether the input columns are fluxes or magnitudes"),
+        Parameter(
+            "system", str, "AB",
+            "photometric system, must be \"AB\" or \"Vega\""),
+        ParameterListing(
+            "filters", str,
+            header=(
+                "Mapping between filter keys (same as used in the column map "
+                "file for mocks_init_pipeline) and paths to transmission "
+                "curve files compatible with BPZ (do not need to be in the "
+                "BPZpath/FILTER directory)."),
+            parser=expand_path),
+        ParameterGroup(
+            "prior",
+            Parameter(
+                "name", str, "hdfn_gen",
+                "template-magnitude prior module in the bpz_path directory "
+                "(filename: prior_[name].py)"),
+            Parameter(
+                "filter", str, "i",
+                "filter key (one of those listed in the [filters] section) "
+                "based on which the prior is evaluated"),
+            header=None),
+        ParameterGroup(
+            "templates",
+            Parameter(
+                "name", str, "CWWSB4",
+                "name of the template .list file in the bpz_path/SED "
+                "directory"),
+            Parameter(
+                "interpolation", int, 10,
+                "introduces n points of interpolation between the templates "
+                "in the color space"),
+            header=None),
+        ParameterGroup(
+            "likelihood",
+            Parameter(
+                "zmin", float, 0.01,
+                "minimum redshift probed"),
+            Parameter(
+                "zmax", float, 7.00,
+                "maximum redshift probed"),
+            Parameter(
+                "dz", float, 0.01,
+                "redshift resolution, intervals are logarithmic: (1+z)*dz"),
+            Parameter(
+                "odds", float, 0.68,
+                "redshift confidence limits"),
+            Parameter(
+                "min_rms", float, 0.0,
+                "intrinsic scatter of the photo-z in dz/(1+z)"),
+            header=None),
+        header=(
+            "This configuration file is required for mocks_BPZ. It defines "
+            "the transmission curves, galaxy templates and Bayesian prior "
+            "required to run the BPZ photometric reshift code."))
+
+    def _run_checks(self):
+        if self.prior["filter"] not in self.filters:
+            message = "prior filter is not included in the filter list: {:}"
+            raise KeyError(message.format(self.prior["filter"]))
+
+    @property
+    def filter_names(self):
+        return tuple(sorted(self.filters.keys()))
 
 
 class BpzManager(object):

@@ -4,15 +4,15 @@ import os
 import sys
 
 import mock_processing as mocks
-from mock_processing.core.config import Photometry_Parser
-from mock_processing.photometry import find_percentile_wrapped
+from mock_processing.photometry import (PhotometryParser,
+                                        find_percentile_wrapped)
 
 
 parser = argparse.ArgumentParser(
     description="Compute the projected effective galaxy radius from galaxy "
                 "bulge (Sersic n=4) and disk (Sersic n=1) components.",
     add_help=False)
-parser.register("action", "dump", Photometry_Parser.get_dump())
+parser.register("action", "dump", PhotometryParser.get_dump())
 
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
@@ -40,7 +40,7 @@ def main():
     logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
-    config = Photometry_Parser(args.config, logger)
+    config = PhotometryParser(args.config, logger)
 
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:

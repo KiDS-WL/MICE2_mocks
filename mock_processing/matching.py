@@ -7,7 +7,10 @@ from scipy.spatial import cKDTree
 
 from memmap_table import MemmapTable
 
+from .core.config import (Parameter, ParameterCollection, ParameterGroup,
+                          ParameterListing, Parser)
 from .core.parallel import Schedule
+from .core.utils import expand_path
 
 
 class DistributionEstimator(object):
@@ -148,6 +151,87 @@ class DistributionEstimator(object):
             self.interpolate()
             interp = self._interpolator(x)
         return interp * self._normalisation
+
+
+class MatcherParser(Parser):
+
+    default = ParameterCollection(
+        Parameter(
+            "input", str, "...",
+            "path to input table, must be MemmapTable compatible",
+            parser=expand_path),
+        Parameter(
+            "normalize", bool, False,
+            "whether each feature space dimension is normalized by the "
+            "standard deviation of the values in the dimension"),
+        Parameter(
+            "max_dist", float, 1.0,
+            "maximum distance (Euclidean metric) to consider the nearest "
+            "neighbour a match, otherwise the fallback value is assigned"),
+        Parameter(
+            "every_n", int, 1,
+            "take a regular sample of the input data to speed up tree build "
+            "and query times"),
+        ParameterListing(
+            "features", str,
+            header=(
+                "Mapping between columns of the input data table and the "
+                "columns of the mock pipeline data store. The input features "
+                "are used to build the search tree, the data store features "
+                "are matched against tree. Key must be a valid column name in "
+                "the input table, value an existing column name in the data "
+                "store.")),
+        ParameterListing(
+            "observables", str,
+            header=(
+                "Mapping between columns of the input data table and the "
+                "columns of the mock pipeline data store. The observables of "
+                "the input data that are assigned to the nearest neighbour of "
+                "an object in the data store. Key must be a valid column name "
+                "in the input table, value a pair of output column name in "
+                "the data store and fall back value if distance > max_dist.")),
+        ParameterListing(
+            "fallback", str,
+            header=(
+                "Fallback value to assign if the nearest neighbour distance > "
+                "max_dist. If no value is provided the value of the "
+                "observable is assigned instead. Key must match one of the "
+                "keys in observables, value must have the same data type as "
+                "the observables.")),
+        ParameterListing(
+            "weights", str,
+            header=(
+                "Weights are used to scale the feature space along specific "
+                "axes. This is useful to give a higher or lower significance "
+                "to some features when matching. If no weight is provided for "
+                "a feature, no scaling is applied. Key must match one of the "
+                "keys in observables, value must have the same data type as "
+                "the observables.")),
+        header=(
+            "This configuration file is required for mocks_match_data. It "
+            "defines the features of the mock data and an external data set "
+            "to match. Based on the nearest neighbour in feature space, a set "
+            "of observables from the external data is assigned to the mock "
+            "data. Additional distance, cut-offs, fallback values and "
+            "weightes for each feature space dimension can be specified."))
+
+    def _run_checks(self):
+        # check that there are no fallback values with no matching observable
+        if set(self.observables.keys()) < set(self.fallback.keys()):
+            message = "fallback values are provided for undefined observables"
+            raise KeyError(message)
+        # check that there are no weights with no matching observable
+        if set(self.observables.keys()) < set(self.weights.keys()):
+            message = "weights are provided for undefined observables"
+            raise KeyError(message)
+
+    @property
+    def feature_names(self):
+        return tuple(sorted(self.features.keys()))
+
+    @property
+    def observable_names(self):
+        return tuple(sorted(self.observables.keys()))
 
 
 class DataMatcher(object):

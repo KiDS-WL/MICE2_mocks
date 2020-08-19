@@ -4,8 +4,7 @@ import os
 import sys
 
 import mock_processing as mocks
-from mock_processing.core.config import Matching_Parser
-from mock_processing.matching import DataMatcher
+from mock_processing.matching import DataMatcher, MatcherParser
 
 
 parser = argparse.ArgumentParser(
@@ -15,7 +14,7 @@ parser = argparse.ArgumentParser(
            "search tree is not parallelized. Therefore matching against large "
            "data sets may be slow.",
     add_help=False)
-parser.register("action", "dump", Matching_Parser.get_dump())
+parser.register("action", "dump", MatcherParser.get_dump())
 
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
@@ -43,7 +42,7 @@ def main():
     logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
-    config = Matching_Parser(args.config, logger)
+    config = MatcherParser(args.config, logger)
 
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:

@@ -6,7 +6,85 @@ import numpy as np
 from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 
+from .core.config import (Parameter, ParameterCollection, ParameterGroup,
+                          ParameterListing, Parser)
 from .core.parallel import Schedule
+
+
+class PhotometryParser(Parser):
+
+    default = ParameterCollection(
+        Parameter(
+            "legacy", bool, False,
+            "use legacy mode (van den Busch et al. 2020)"),
+        Parameter(
+            "limit_sigma", float, 1.0,
+            "sigma value of the detection (magnitude) limit with respect to "
+            "the sky background"),
+        Parameter(
+            "no_detect_value", float, 99.0,
+            "magnitude value assigned to undetected galaxies"),
+        Parameter(
+            "SN_detect", float, 1.0,
+            "signal-to-noise ratio detection limit"),
+        Parameter(
+            "SN_floor", float, 0.2,
+            "numerical lower limit for signal-to-noise ratio"),
+        ParameterGroup(
+            "intrinsic",
+            Parameter(
+                "r_effective", str, "shape/R_effective",
+                "path of the effective radius column in the data store"),
+            Parameter(
+                "flux_frac", float, 0.5,
+                "this defines the effective radius by setting the fraction of "
+                "the total flux/luminosity for which the radius of the source "
+                "is computed"),
+            header=None),
+        ParameterListing(
+            "limits", float,
+            header=(
+                "numerical values for the magnitude limits, the keys must be "
+                "the same as in column map file used for "
+                "mocks_init_pipeline")),
+        ParameterListing(
+            "PSF", float,
+            header=(
+                "numerical values for the PSF FWHM in arcsec, the keys must "
+                "be the same as in column map file used for "
+                "mocks_init_pipeline")),
+        ParameterGroup(
+            "GAaP",
+            Parameter(
+                "aper_min", float, 0.7,
+                "GAaP lower aperture size limit in arcsec"),
+            Parameter(
+                "aper_max", float, 2.0,
+                "GAaP upper aperture size limit in arcsec"),
+            header=None),
+        ParameterGroup(
+            "SExtractor",
+            Parameter(
+                "phot_autoparams", float, 2.5,
+                "MAG_AUTO-like scaling factor for Petrosian radius, here "
+                "applied to intrinsic galaxy size derived from effective "
+                "radius"),
+            header=None),
+        header=(
+            "This configuration file is required for mocks_apertures and "
+            "mocks_photometry. It defines the free parameters of the aperture "
+            "and photometry methods as well as observational PSF sizes and "
+            "magnitude limits."))
+
+    def _run_checks(self):
+        if set(self.limits.keys()) != set(self.PSF.keys()):
+            message = "some filter(s) do not provide pairs of magnitude limit "
+            message += "and PSF size"
+            raise KeyError(message)
+
+    @property
+    def filter_names(self):
+        return tuple(sorted(self.limits.keys()))
 
 
 def magnification_correction(kappa, mag):
