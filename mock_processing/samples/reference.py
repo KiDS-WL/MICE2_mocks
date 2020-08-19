@@ -92,36 +92,36 @@ class Select_2dFLenS(BaseSelection):
 
     @staticmethod
     def LOWZ(mag_g, mag_r, mag_i, c_p, c_r):
-        low_z1 = (
+        lowz_1 = (
             (mag_r > 16.0) &
             (mag_r < 19.2) &
             (mag_r < (13.1 + c_p / 0.3)) &
             (np.abs(c_r) < 0.2))
-        low_z2 = (
+        lowz_2 = (
             (mag_r > 16.0) &
             (mag_r < 19.5) &
             (mag_g - mag_r > (1.3 + 0.25 * (mag_r - mag_i))) &
             (c_r > 0.45 - (mag_g - mag_r) / 6.0))
-        low_z3 = (
+        lowz_3 = (
             (mag_r > 16.0) &
             (mag_r < 19.6) &
             (mag_r < (13.5 + c_p / 0.3)) &
             (np.abs(c_r) < 0.2))
-        return low_z1 | low_z2 | low_z3
+        return lowz_1 | lowz_2 | lowz_3
 
     @staticmethod
     def MIDZ(mag_r, mag_i, d_r):
-        mid_z = (
+        midz = (
             (mag_i > 17.5) &
             (mag_i < 19.9) &
             ((mag_r - mag_i) < 2.0) &
             (d_r > 0.55) &
             (mag_i < 19.86 + 1.6 * (d_r - 0.8)))
-        return mid_z
+        return midz
 
     @staticmethod
     def HIGHZ(mag_r, mag_i, mag_Z, mag_Ks):
-        high_z = (
+        highz = (
             (mag_Z < 19.95) &
             (mag_i > 19.9) &
             (mag_i < 21.8) &
@@ -129,7 +129,7 @@ class Select_2dFLenS(BaseSelection):
             ((mag_r - mag_Ks) > 1.9 * (mag_r - mag_i)) &
             ((mag_r - mag_i) > 0.98) &
             ((mag_i - mag_Z) > 0.6))
-        return high_z
+        return highz
 
     def colour_selection(self, bitmask, mag_g, mag_r, mag_i, mag_Z, mag_Ks):
         # mask multi-band non-detections
@@ -144,7 +144,7 @@ class Select_2dFLenS(BaseSelection):
         BMM.set_bit(bitmask, self._bits[0], condition=lowz)
         # defining the MIDZ sample
         midz = colour_mask & self.MIDZ(mag_r, mag_i, d_r)
-        BMM.set_bit(bitmask, self._bits[1], condition=mid_z)
+        BMM.set_bit(bitmask, self._bits[1], condition=midz)
         # defining the HIGHZ sample
         highz = colour_mask & self.HIGHZ(mag_r, mag_i, mag_Z, mag_Ks)
         BMM.set_bit(bitmask, self._bits[2], condition=highz)
@@ -234,7 +234,7 @@ class Select_SDSS(BaseSelection):
     @staticmethod
     def LOWZ(mag_r, c_p, c_r):
         # we cannot apply the r_psf - r_cmod cut
-        lowz = colour_mask & (
+        lowz = (
             (mag_r > 16.0) &
             (mag_r < 19.6) &
             (np.abs(c_r) < 0.2) &
@@ -244,7 +244,7 @@ class Select_SDSS(BaseSelection):
     @staticmethod
     def CMASS(mag_r, mag_i, d_r):
         # we cannot apply the i_fib2, i_psf - i_mod and z_psf - z_mod cuts
-        cmass = colour_mask & (
+        cmass = (
             (mag_i > 17.5) &
             (mag_i < 19.9) &
             (d_r > 0.55) &

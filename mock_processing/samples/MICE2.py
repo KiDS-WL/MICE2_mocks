@@ -8,36 +8,36 @@ class Select_2dFLenS(reference.Select_2dFLenS):
 
     @staticmethod
     def LOWZ(mag_g, mag_r, mag_i, c_p, c_r):
-        low_z1 = (
+        lowz_1 = (
             (mag_r > 16.5) &  # 16.0
             (mag_r < 19.2) &
             (mag_r < (13.1 + c_p / 0.32)) &  # 13.1, 0.3
             (np.abs(c_r) < 0.2))
-        low_z2 = (
+        lowz_2 = (
             (mag_r > 16.5) &  # 16.0
             (mag_r < 19.5) &
             (mag_g - mag_r > (1.3 + 0.25 * (mag_r - mag_i))) &
             (c_r > 0.45 - (mag_g - mag_r) / 6.0))
-        low_z3 = (
+        lowz_3 = (
             (mag_r > 16.5) &  # 16.0
             (mag_r < 19.6) &
             (mag_r < (13.5 + c_p / 0.32)) &  # 13.5, 0.3
             (np.abs(c_r) < 0.2))
-        return low_z1 | low_z2 | low_z3
+        return lowz_1 | lowz_2 | lowz_3
 
     @staticmethod
     def MIDZ(mag_r, mag_i, d_r):
-        mid_z = (
+        midz = (
             (mag_i > 17.5) &
             (mag_i < 19.9) &
             ((mag_r - mag_i) < 2.0) &
             (d_r > 0.55) &
             (mag_i < 19.86 + 1.6 * (d_r - 0.9)))  # 19.86, 1.6, 0.8
-        return mid_z
+        return midz
 
     @staticmethod
     def HIGHZ(mag_r, mag_i, mag_Z, mag_Ks):
-        high_z = (
+        highz = (
             (mag_Z < 19.9) &  # 19.95
             (mag_i > 19.9) &
             (mag_i < 21.8) &
@@ -45,7 +45,7 @@ class Select_2dFLenS(reference.Select_2dFLenS):
             ((mag_r - mag_Ks) > 1.9 * (mag_r - mag_i)) &
             ((mag_r - mag_i) > 0.98) &
             ((mag_i - mag_Z) > 0.6))
-        return high_z
+        return highz
 
 
 @SampleManager.register
@@ -58,7 +58,7 @@ class Select_SDSS(reference.Select_SDSS):
     @staticmethod
     def LOWZ(mag_r, c_p, c_r):
         # we cannot apply the r_psf - r_cmod cut
-        lowz = colour_mask & (
+        lowz = (
             (mag_r > 16.0) &
             (mag_r < 20.0) &  # 19.6
             (np.abs(c_r) < 0.2) &
@@ -68,7 +68,7 @@ class Select_SDSS(reference.Select_SDSS):
     @staticmethod
     def CMASS(mag_r, mag_i, d_r):
         # we cannot apply the i_fib2, i_psf - i_mod and z_psf - z_mod cuts
-        cmass = colour_mask & (
+        cmass = (
             (mag_i > 17.5) &
             (mag_i < 20.1) &  # 19.9
             (d_r > 0.55) &
