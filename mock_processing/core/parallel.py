@@ -523,7 +523,7 @@ class ParallelTable(object):
             message = "{:} (@{:d} {:})".format(
                 self._worker_function._description, n_threads, parallel_type)
         except AttributeError:
-            message = "processing data (with {:d} {:})".format(
+            message = "processing data (with {:d} {:}) ...".format(
                 n_threads, parallel_type)
         if self._logger is not None:
             self._logger.info(message)

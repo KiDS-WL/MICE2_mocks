@@ -100,11 +100,11 @@ def main():
 
             # surface density
             if issubclass(selector_class, samples.DensitySampler):
-                logger.info("estimating surface density")
+                logger.info("estimating surface density ...")
                 selector = selector_class(BMM, args.area, bitmask)
             # redshift weighted density
             else:
-                logger.info("estimating redshift density")
+                logger.info("estimating redshift density ...")
                 selector = selector_class(
                     BMM, args.area, bitmask, ds[config.selection["redshift"]])
 
