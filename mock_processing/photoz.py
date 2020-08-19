@@ -139,7 +139,7 @@ class BpzManager(object):
 
     def _write_columns_file(self):
         width = max(
-            len(name) for name in self.config.filter_names)
+            len(name) for name in self.filter_names)
         width = max(width, 8)
         # create the file header
         header = "{:<{width}}  columns  AB/Vega  zp_error  zp_offset\n"
@@ -149,14 +149,14 @@ class BpzManager(object):
         zp_error, zp_offset = 0.01, 0.0
         system = "AB"
         # add a line for each filter (with column for magnitude and error)
-        for idx, name in enumerate(self.config.filter_names):
+        for idx, name in enumerate(self.filter_names):
             mag_col_idx = 2 * idx + 1
             err_col_idx = 2 * idx + 2
             lines += line.format(
                 name, mag_col_idx, err_col_idx, self.config.system,
                 zp_error, zp_offset, width=width)
         # add the prior magnitude column
-        M_0_idx = self.config.filter_names.index(self.config.prior["filter"])
+        M_0_idx = self.filter_names.index(self.config.prior["filter"])
         lines += "{:<{width}}  {:7d}\n".format(
             "M_0", 2 * M_0_idx + 1, width=width)
         # write the file into the temporary directory
@@ -213,7 +213,7 @@ class BpzManager(object):
 
     @property
     def filter_names(self):
-        return self._config.filter_names
+        return sorted(self._config.filters.keys())
 
     @property
     def colnames(self):

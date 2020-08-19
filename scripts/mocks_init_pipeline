@@ -6,7 +6,7 @@ import sys
 from memmap_table import MemmapTable
 
 import mock_processing as mocks
-from mock_processing.core.config import DumpColumnMap, load_column_map
+from mock_processing.core.config import Table_Parser
 from mock_processing.core.readwrite import guess_format, SUPPORTED_READERS
 from mock_processing.core.utils import ProgressBar
 
@@ -14,7 +14,7 @@ from mock_processing.core.utils import ProgressBar
 parser = argparse.ArgumentParser(
     description="Convert a data set to an internal data store.",
     add_help=False)
-parser.register("action", "dump", DumpColumnMap)
+parser.register("action", "dump", Table_Parser.get_dump())
 
 parser.add_argument(
     "datastore", help="directory in which the data store is created")
@@ -52,7 +52,8 @@ def main():
     logger = mocks.PipeLogger(__file__, args.datastore, append=False)
 
     # check the columns file
-    col_map_dict = load_column_map(args.columns, logger)
+    config = Table_Parser(args.columns, logger)
+    col_map_dict = config.column_map
 
     # automatically determine the input file format
     if args.format is None:

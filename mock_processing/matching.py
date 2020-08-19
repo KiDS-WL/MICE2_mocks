@@ -173,11 +173,11 @@ class DataMatcher(object):
 
     @property
     def feature_names(self):
-        return tuple(sorted(self._config.feature_names))
+        return tuple(sorted(self._config.features))
 
     @property
     def observable_names(self):
-        return tuple(sorted(self._config.observable_names))
+        return tuple(sorted(self._config.observables))
 
     def __enter__(self, *args, **kwargs):
         self.initialize()

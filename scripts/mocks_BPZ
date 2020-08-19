@@ -4,7 +4,7 @@ import os
 import sys
 
 import mock_processing as mocks
-from mock_processing.core.config import DumpBpzConfig, load_bpz_config
+from mock_processing.core.config import BPZ_Parser
 from mock_processing.photoz import BpzManager
 
 
@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(
     description="Compute magnitudes corrected for gravitational lensing "
                 "magnification in the limit of weak lensing.",
     add_help=False)
-parser.register("action", "dump", DumpBpzConfig)
+parser.register("action", "dump", BPZ_Parser.get_dump())
 
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
@@ -44,7 +44,7 @@ def main():
     logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
-    config = load_bpz_config(args.config, logger)
+    config = BPZ_Parser(args.config, logger)
 
     # run BPZ on the selected magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:

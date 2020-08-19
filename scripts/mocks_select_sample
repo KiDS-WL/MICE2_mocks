@@ -5,16 +5,15 @@ import sys
 
 import mock_processing as mocks
 from mock_processing.core.bitmask import BitMaskManager
-from mock_processing.core.config import DumpSampleConfig, load_sample_config
 from mock_processing.matching import DistributionEstimator
-from mock_processing import samples
+from mock_processing import samples, sampleconfig
 
 
 parser = argparse.ArgumentParser(
     description="Apply sample selections on to obtain a mock representation "
                 "of a specific photometric or spectroscopic sample.",
     add_help=False)
-parser.register("action", "dump", DumpSampleConfig)
+parser.register("action", "dump", sampleconfig.DumpConfig)
 
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
@@ -55,7 +54,8 @@ def main():
     logger = mocks.PipeLogger(__file__, args.datastore)
 
     # check the configuration file
-    config = load_sample_config(args.config, logger, sample=args.sample)
+    Parser = sampleconfig.REGISTERED_SAMPLES[args.sample]
+    config = Parser(args.config, logger)
 
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:

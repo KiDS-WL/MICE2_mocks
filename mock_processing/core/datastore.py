@@ -32,7 +32,7 @@ class ModificationStamp(object):
         # create a dictionary with all shared entries
         self._attrs = {}
         self._attrs["created by"] = " ".join([call_basename, *call_arguments])
-        self._attrs["version"] = __version__
+        self._attrs["pipeline version"] = __version__
     
     def __len__(self):
         return len(self._columns)
