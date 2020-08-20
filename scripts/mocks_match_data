@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 
-from mock_processing.jobs import match_data
-from mock_processing.matching import MatcherParser
+from galmock.jobs import match_data
+from galmock.matching import MatcherParser
 
 
 parser = argparse.ArgumentParser(

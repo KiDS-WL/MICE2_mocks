@@ -1,8 +1,8 @@
 import numpy as np
 
-from mock_processing.core.bitmask import BitMaskManager as BMM
-from mock_processing.samples import reference
-from mock_processing.samples.base import SampleManager
+from galmock.core.bitmask import BitMaskManager as BMM
+from galmock.samples import reference
+from galmock.samples.base import SampleManager
 
 
 @SampleManager.register

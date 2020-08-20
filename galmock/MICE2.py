@@ -1,6 +1,6 @@
 import numpy as np
 
-from mock_processing.core.parallel import Schedule
+from galmock.core.parallel import Schedule
 
 
 def evolution_correction(redshift, mag):

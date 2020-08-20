@@ -5,8 +5,8 @@ import textwrap
 
 import toml
 
-from mock_processing.core.logger import DummyLogger
-from mock_processing.core.utils import expand_path
+from galmock.core.logger import DummyLogger
+from galmock.core.utils import expand_path
 
 
 _TOML_KEY_CHARACTERS = string.ascii_letters + string.digits + "_-"

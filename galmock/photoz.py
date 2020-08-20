@@ -8,11 +8,11 @@ from time import sleep
 
 import numpy as np
 
-from mock_processing.core.config import (Parameter, ParameterCollection,
+from galmock.core.config import (Parameter, ParameterCollection,
                                          ParameterGroup, ParameterListing,
                                          Parser)
-from mock_processing.core.parallel import Schedule
-from mock_processing.core.utils import expand_path
+from galmock.core.parallel import Schedule
+from galmock.core.utils import expand_path
 
 
 class BpzParser(Parser):

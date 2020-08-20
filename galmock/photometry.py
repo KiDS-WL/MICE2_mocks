@@ -6,10 +6,10 @@ import numpy as np
 from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 
-from mock_processing.core.config import (Parameter, ParameterCollection,
+from galmock.core.config import (Parameter, ParameterCollection,
                                          ParameterGroup, ParameterListing,
                                          Parser)
-from mock_processing.core.parallel import Schedule
+from galmock.core.parallel import Schedule
 
 
 class PhotometryParser(Parser):

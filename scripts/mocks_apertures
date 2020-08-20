@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 
-from mock_processing.jobs import apertures
-from mock_processing.photometry import PhotometryParser
+from galmock.jobs import apertures
+from galmock.photometry import PhotometryParser
 
 
 parser = argparse.ArgumentParser(

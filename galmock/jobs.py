@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 from mmaptable.mathexpression import MathTerm
 
-import mock_processing as mocks
+import galmock as mocks
 
 
 def datastore_create(
@@ -16,9 +16,9 @@ def datastore_create(
         fits_ext=1,
         columns=None,
         purge=False):
-    from mock_processing.core.config import TableParser
-    from mock_processing.core.readwrite import guess_format, SUPPORTED_READERS
-    from mock_processing.core.utils import ProgressBar
+    from galmock.core.config import TableParser
+    from galmock.core.readwrite import guess_format, SUPPORTED_READERS
+    from galmock.core.utils import ProgressBar
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore, append=False)
@@ -114,7 +114,7 @@ def datastore_create(
 
 
 def datastore_verify(datastore):
-    from mock_processing.core.utils import sha1sum
+    from galmock.core.utils import sha1sum
 
     with mocks.DataStore.open(datastore) as ds:
 
@@ -239,9 +239,9 @@ def datastore_query(
         compression=None,
         hdf5_shuffle=False,
         hdf5_checksum=False):
-    from mock_processing.core.readwrite import (BUFFERSIZE, guess_format,
+    from galmock.core.readwrite import (BUFFERSIZE, guess_format,
                                                 SUPPORTED_WRITERS)
-    from mock_processing.core.utils import ProgressBar, bytesize_with_prefix
+    from galmock.core.utils import ProgressBar, bytesize_with_prefix
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -436,7 +436,7 @@ def evolution_correction(
         evo,
         threads=-1,
         **kwargs):
-    from mock_processing.MICE2 import evolution_correction_wrapped
+    from galmock.MICE2 import evolution_correction_wrapped
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -482,7 +482,7 @@ def flux_to_magnitudes(
         mag,
         threads=-1,
         **kwargs):
-    from mock_processing.Flagship import flux_to_magnitudes_wrapped
+    from galmock.Flagship import flux_to_magnitudes_wrapped
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -523,7 +523,7 @@ def magnification(
         lensed,
         threads=-1,
         **kwargs):
-    from mock_processing.photometry import magnification_correction_wrapped
+    from galmock.photometry import magnification_correction_wrapped
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -569,7 +569,7 @@ def effective_radius(
         config,
         threads=-1,
         **kwargs):
-    from mock_processing.photometry import (PhotometryParser,
+    from galmock.photometry import (PhotometryParser,
                                             find_percentile_wrapped)
 
     fname = inspect.currentframe().f_code.co_name
@@ -616,7 +616,7 @@ def apertures(
         method="SExtractor",
         threads=-1,
         **kwargs):
-    from mock_processing.photometry import PhotometryParser, apertures_wrapped
+    from galmock.photometry import PhotometryParser, apertures_wrapped
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -674,7 +674,7 @@ def photometry(
         seed="sapling",
         threads=-1,
         **kwargs):
-    from mock_processing.photometry import (PhotometryParser,
+    from galmock.photometry import (PhotometryParser,
                                             photometry_realisation_wrapped)
 
     fname = inspect.currentframe().f_code.co_name
@@ -748,7 +748,7 @@ def match_data(
         config,
         threads=-1,
         **kwargs):
-    from mock_processing.matching import DataMatcher, MatcherParser
+    from galmock.matching import DataMatcher, MatcherParser
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -799,7 +799,7 @@ def BPZ(
         config,
         threads=-1,
         **kwargs):
-    from mock_processing.photoz import BpzManager, BpzParser
+    from galmock.photoz import BpzManager, BpzParser
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -856,9 +856,9 @@ def select_sample(
         seed="sapling",
         threads=-1,
         **kwargs):
-    from mock_processing.core.bitmask import BitMaskManager
-    from mock_processing.matching import DistributionEstimator
-    from mock_processing.samples import (DensitySampler, DumpConfig,
+    from galmock.core.bitmask import BitMaskManager
+    from galmock.matching import DistributionEstimator
+    from galmock.samples import (DensitySampler, DumpConfig,
                                          RedshiftSampler, SampleManager)
 
     fname = inspect.currentframe().f_code.co_name

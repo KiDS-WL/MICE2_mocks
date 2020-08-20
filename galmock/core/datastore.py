@@ -6,11 +6,11 @@ from time import asctime, strptime
 
 from mmaptable import MmapTable
 
-from mock_processing.core.version import __version__
-from mock_processing.core.utils import (bytesize_with_prefix, expand_path,
+from galmock.core.version import __version__
+from galmock.core.utils import (bytesize_with_prefix, expand_path,
                                         sha1sum)
-from mock_processing.core.logger import DummyLogger
-from mock_processing.core.parallel import ParallelTable
+from galmock.core.logger import DummyLogger
+from galmock.core.parallel import ParallelTable
 
 
 class ModificationStamp(object):

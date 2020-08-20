@@ -3,14 +3,14 @@ import os
 import numpy as np
 from scipy.interpolate import interp1d, interp2d
 
-from mock_processing.core.bitmask import BitMaskManager as BMM
-from mock_processing.core.config import (LineComment, Parameter,
+from galmock.core.bitmask import BitMaskManager as BMM
+from galmock.core.config import (LineComment, Parameter,
                                          ParameterCollection, ParameterGroup,
                                          ParameterListing, Parser)
-from mock_processing.core.parallel import Schedule
+from galmock.core.parallel import Schedule
 
-from mock_processing.samples import config
-from mock_processing.samples.base import (BaseSelection, DensitySampler,
+from galmock.samples import config
+from galmock.samples.base import (BaseSelection, DensitySampler,
                                           RedshiftSampler, SampleManager)
 
 

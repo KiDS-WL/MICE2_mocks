@@ -1,7 +1,7 @@
 from argparse import Action
 
-from mock_processing.core.config import Parameter
-from mock_processing.samples.base import SampleManager
+from galmock.core.config import Parameter
+from galmock.samples.base import SampleManager
 
 
 header = (

@@ -6,7 +6,7 @@ import shlex
 from collections import OrderedDict
 from multiprocessing import cpu_count
 
-from mock_processing import jobs
+from galmock import jobs
 
 
 # mapping between the job ID (see commandline parser) and the script signature

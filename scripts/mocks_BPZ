@@ -3,8 +3,8 @@ import argparse
 import os
 import sys
 
-from mock_processing.jobs import BPZ
-from mock_processing.photoz import BpzParser
+from galmock.jobs import BPZ
+from galmock.photoz import BpzParser
 
 
 parser = argparse.ArgumentParser(

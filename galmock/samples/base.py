@@ -4,10 +4,10 @@ from os.path import join, dirname
 
 import numpy as np
 
-from mock_processing.core.bitmask import BitMaskManager as BMM
-from mock_processing.core.parallel import Schedule
-from mock_processing.core.utils import ProgressBar
-from mock_processing.matching import DistributionEstimator
+from galmock.core.bitmask import BitMaskManager as BMM
+from galmock.core.parallel import Schedule
+from galmock.core.utils import ProgressBar
+from galmock.matching import DistributionEstimator
 
 
 class _SampleManager(object):
