@@ -53,7 +53,7 @@ parser.add_argument(
     "--threads", type=int, default=cpu_count() // 2,
     help="maximum number of threads to use (default: %(default)s)")
 parser.add_argument(
-    "--format", default="fits",
+    "--format", default="hdf5",
     help="file format of output files (default: %(default)s)")
 
 
