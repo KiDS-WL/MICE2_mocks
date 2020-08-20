@@ -4,14 +4,13 @@ import numpy as np
 from scipy.interpolate import interp1d, interp2d
 
 from galmock.core.bitmask import BitMaskManager as BMM
-from galmock.core.config import (LineComment, Parameter,
-                                         ParameterCollection, ParameterGroup,
-                                         ParameterListing, Parser)
+from galmock.core.config import (LineComment, Parameter, ParameterCollection,
+                                 ParameterGroup, ParameterListing, Parser)
 from galmock.core.parallel import Schedule
 
 from galmock.samples import config
 from galmock.samples.base import (BaseSelection, DensitySampler,
-                                          RedshiftSampler, SampleManager)
+                                  RedshiftSampler, SampleManager)
 
 
 ######## KiDS ########

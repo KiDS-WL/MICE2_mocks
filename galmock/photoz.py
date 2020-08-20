@@ -9,8 +9,7 @@ from time import sleep
 import numpy as np
 
 from galmock.core.config import (Parameter, ParameterCollection,
-                                         ParameterGroup, ParameterListing,
-                                         Parser)
+                                 ParameterGroup, ParameterListing, Parser)
 from galmock.core.parallel import Schedule
 from galmock.core.utils import expand_path
 

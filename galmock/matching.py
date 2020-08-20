@@ -8,8 +8,7 @@ from scipy.spatial import cKDTree
 from mmaptable import MmapTable
 
 from galmock.core.config import (Parameter, ParameterCollection,
-                                         ParameterGroup, ParameterListing,
-                                         Parser)
+                                 ParameterGroup, ParameterListing, Parser)
 from galmock.core.parallel import Schedule
 from galmock.core.utils import expand_path
 

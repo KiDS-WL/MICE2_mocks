@@ -7,8 +7,7 @@ from scipy.optimize import root_scalar
 from scipy.special import gamma, gammainc  # Gamma and incomplete Gamma
 
 from galmock.core.config import (Parameter, ParameterCollection,
-                                         ParameterGroup, ParameterListing,
-                                         Parser)
+                                 ParameterGroup, ParameterListing, Parser)
 from galmock.core.parallel import Schedule
 
 

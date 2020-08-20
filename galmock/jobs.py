@@ -240,7 +240,7 @@ def datastore_query(
         hdf5_shuffle=False,
         hdf5_checksum=False):
     from galmock.core.readwrite import (BUFFERSIZE, guess_format,
-                                                SUPPORTED_WRITERS)
+                                        SUPPORTED_WRITERS)
     from galmock.core.utils import ProgressBar, bytesize_with_prefix
 
     fname = inspect.currentframe().f_code.co_name
@@ -569,8 +569,7 @@ def effective_radius(
         config,
         threads=-1,
         **kwargs):
-    from galmock.photometry import (PhotometryParser,
-                                            find_percentile_wrapped)
+    from galmock.photometry import PhotometryParser, find_percentile_wrapped
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -675,7 +674,7 @@ def photometry(
         threads=-1,
         **kwargs):
     from galmock.photometry import (PhotometryParser,
-                                            photometry_realisation_wrapped)
+                                    photometry_realisation_wrapped)
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -858,8 +857,8 @@ def select_sample(
         **kwargs):
     from galmock.core.bitmask import BitMaskManager
     from galmock.matching import DistributionEstimator
-    from galmock.samples import (DensitySampler, DumpConfig,
-                                         RedshiftSampler, SampleManager)
+    from galmock.samples import (DensitySampler, DumpConfig, RedshiftSampler,
+                                 SampleManager)
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)

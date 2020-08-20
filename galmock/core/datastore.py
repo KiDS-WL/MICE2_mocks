@@ -7,8 +7,7 @@ from time import asctime, strptime
 from mmaptable import MmapTable
 
 from galmock.core.version import __version__
-from galmock.core.utils import (bytesize_with_prefix, expand_path,
-                                        sha1sum)
+from galmock.core.utils import bytesize_with_prefix, expand_path, sha1sum
 from galmock.core.logger import DummyLogger
 from galmock.core.parallel import ParallelTable
 
