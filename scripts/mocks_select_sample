@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 
+from mock_processing.core.readwrite import SUPPORTED_WRITERS
 from mock_processing.jobs import select_sample
 from mock_processing.samples import DumpConfig, SampleManager
 
