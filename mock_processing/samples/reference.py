@@ -9,8 +9,9 @@ from mock_processing.core.config import (LineComment, Parameter,
                                          ParameterListing, Parser)
 from mock_processing.core.parallel import Schedule
 
-from . import config
-from .base import BaseSelection, DensitySampler, RedshiftSampler, SampleManager
+from mock_processing.samples import config
+from mock_processing.samples.base import (BaseSelection, DensitySampler,
+                                          RedshiftSampler, SampleManager)
 
 
 ######## KiDS ########

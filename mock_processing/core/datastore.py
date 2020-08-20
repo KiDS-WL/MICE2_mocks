@@ -6,10 +6,11 @@ from time import asctime, strptime
 
 from mmaptable import MmapTable
 
-from .version import __version__
-from .utils import bytesize_with_prefix, expand_path, sha1sum
-from .logger import DummyLogger
-from .parallel import ParallelTable
+from mock_processing.core.version import __version__
+from mock_processing.core.utils import (bytesize_with_prefix, expand_path,
+                                        sha1sum)
+from mock_processing.core.logger import DummyLogger
+from mock_processing.core.parallel import ParallelTable
 
 
 class ModificationStamp(object):

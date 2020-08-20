@@ -1,6 +1,6 @@
 import numpy as np
 
-from .core.parallel import Schedule
+from mock_processing.core.parallel import Schedule
 
 
 def flux_to_magnitudes(flux):

@@ -29,7 +29,8 @@ job_map = {
     "8": "mocks_BPZ {:} "
          "-c {config:} --mag {mag:} --zphot {zphot:} --threads {threads:}",
     "9": "mocks_select_sample {:} "
-         "-c {config:} --area {area:} --sample {sample:} --threads {threads:}",
+         "-c {config:} --area {area:} --sample {sample:} --type MICE2 "
+         "--threads {threads:}",
     "out": "mocks_datastore_query {:} "
            "-o {output:} -q '{query:}' --format {format:}"}
 

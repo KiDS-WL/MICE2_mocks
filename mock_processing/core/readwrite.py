@@ -7,7 +7,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from .utils import expand_path
+from mock_processing.core.utils import expand_path
 
 
 _mega_byte = 1024 * 1024

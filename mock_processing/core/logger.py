@@ -71,6 +71,8 @@ class PipeLogger(object):
         """
         if message is None:
             message = str(exception)
+            if message[0] == message[-1] == "'":
+                message = message[1:-1]
         self.logger.critical(message)
         raise exception
 

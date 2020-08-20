@@ -5,8 +5,8 @@ import textwrap
 
 import toml
 
-from .logger import DummyLogger
-from .utils import expand_path
+from mock_processing.core.logger import DummyLogger
+from mock_processing.core.utils import expand_path
 
 
 _TOML_KEY_CHARACTERS = string.ascii_letters + string.digits + "_-"
@@ -241,9 +241,12 @@ class Parser(object):
                 parsed[name] = self._parse_param(
                     entry, name, reference.type, False, reference.parser)
             else:
-                ref = reference[name]
-                parsed[name] = self._parse_param(
-                    entry, name, ref.type, ref.required, ref.parser)
+                if getattr(reference, "allow_unknown", False):
+                    parsed[name] = entry
+                else:
+                    ref = reference[name]
+                    parsed[name] = self._parse_param(
+                        entry, name, ref.type, ref.required, ref.parser)
         return parsed
 
     def _run_checks(self):

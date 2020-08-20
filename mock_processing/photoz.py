@@ -8,10 +8,11 @@ from time import sleep
 
 import numpy as np
 
-from .core.config import (Parameter, ParameterCollection, ParameterGroup,
-                          ParameterListing, Parser)
-from .core.parallel import Schedule
-from .core.utils import expand_path
+from mock_processing.core.config import (Parameter, ParameterCollection,
+                                         ParameterGroup, ParameterListing,
+                                         Parser)
+from mock_processing.core.parallel import Schedule
+from mock_processing.core.utils import expand_path
 
 
 class BpzParser(Parser):

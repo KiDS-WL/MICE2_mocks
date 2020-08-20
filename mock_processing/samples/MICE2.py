@@ -1,6 +1,8 @@
-from . import reference
+import numpy as np
 
-from .base import SampleManager
+from mock_processing.core.bitmask import BitMaskManager as BMM
+from mock_processing.samples import reference
+from mock_processing.samples.base import SampleManager
 
 
 @SampleManager.register

@@ -12,7 +12,7 @@ import numpy as np
 from mmaptable.column import MmapColumn
 from mmaptable.table import MmapTable
 
-from .utils import ProgressBar
+from mock_processing.core.utils import ProgressBar
 
 
 class Schedule:
