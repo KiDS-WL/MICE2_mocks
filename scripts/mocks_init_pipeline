@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import sys
 
-import mock_processing as mocks
 from mock_processing.core.config import TableParser
-from mock_processing.core.readwrite import guess_format, SUPPORTED_READERS
-from mock_processing.core.utils import ProgressBar
+from mock_processing.core.readwrite import SUPPORTED_READERS
+from mock_processing.jobs import init_pipeline
 
 
 parser = argparse.ArgumentParser(
@@ -45,94 +42,8 @@ help_group.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore, append=False)
-
-    # check the columns file
-    config = TableParser(args.columns, logger)
-    col_map_dict = config.column_map
-
-    # automatically determine the input file format
-    if args.format is None:
-        try:
-            args.format = guess_format(args.input)
-        except NotImplementedError as e:
-            logger.handleException(e)
-    message = "opening input as {:}: {:}".format(
-        args.format.upper(), args.input)
-    logger.info(message)
-
-    # create a standardized input reader
-    reader_class = SUPPORTED_READERS[args.format]
-    try:
-        reader = reader_class(
-            args.input, datasets=set(col_map_dict.values()),
-            ext=args.fits_ext)
-    except Exception as e:
-        logger.handleException(e)
-    message = "buffer size: {:.2f} MB ({:,d} rows)".format(
-        reader.buffersize / 1024**2, reader.bufferlength)
-    logger.debug(message)
-
-    # read the data file and write it to the memmory mapped data store
-    with reader:
-
-        with mocks.DataStore.create(
-                args.datastore, len(reader), args.purge, logger=logger) as ds:
-
-            # create the new data columns
-            logger.debug(
-                "registering {:,d} new columns".format(len(col_map_dict)))
-            for path, (colname, dtype) in col_map_dict.items():
-                try:
-                    if dtype is None:
-                        dtype = reader.dtype[colname].str
-                    ds.add_column(
-                        path, dtype=dtype, attr={
-                            "source file": args.input, "source name": colname})
-                except KeyError as e:
-                    logger.handleException(e)
-
-            # copy the data
-            logger.info("converting input data ...")
-            pbar_kwargs = {
-                "leave": False, "unit_scale": True, "unit": "row",
-                "dynamic_ncols": True}
-            if hasattr(reader, "_guess_length"):
-                pbar = ProgressBar()
-            else:
-                pbar = ProgressBar(n_rows=len(reader))
-            # read the data in chunks and copy them to the data store
-            start = 0
-            for chunk in reader:
-                end = reader.current_row  # index where reading will continue
-                # map column by column onto the output table
-                for path, (colname, dtype) in col_map_dict.items():
-                    # the CSV reader provides a conservative estimate of the
-                    # required number of rows so we need to keep allocating
-                    # more memory if necessary
-                    if end > len(ds):
-                        ds.expand(len(chunk))
-                    ds[path][start:end] = chunk[colname]
-                # update the current row index
-                pbar.update(end - start)
-                start = end
-            pbar.close()
-
-            # if using the CSV reader: truncate any allocated, unused rows
-            if len(ds) > end:
-                ds.resize(end)
-
-            # print a preview of the table as quick check
-            try:
-                preview = str(ds)
-                sys.stdout.write("\n" + preview + "\n\n")
-            except Exception:
-                logger.warn("table preview failed")
-
-            message = "finalized data store with {:,d} rows ({:})"
-            logger.info(message.format(end, ds.filesize))
+    init_pipeline(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import sys
 
-import mock_processing as mocks
-from mock_processing.core.bitmask import BitMaskManager
-from mock_processing.matching import DistributionEstimator
-from mock_processing.samples import (DensitySampler, DumpConfig,
-                                     RedshiftSampler, SampleManager)
+from mock_processing.jobs import select_sample
+from mock_processing.samples import DumpConfig, SampleManager
 
 
 parser = argparse.ArgumentParser(
@@ -53,78 +48,8 @@ help_group.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore)
-
-    # check the configuration file
-    Parser = SampleManager.get_parser(args.type, args.sample)
-    config = Parser(args.config, logger)
-
-    # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
-        ds.pool.max_threads = args.threads
-
-        logger.info("apply selection funcion: {:}".format(args.sample))
-
-        # allow the worker threads to modify the bitmask column directly
-        ds.pool.allow_modify = True
-
-        # make the output column
-        BMM = BitMaskManager(args.sample)
-        bitmask = ds.add_column(
-            config.bitmask, dtype=BMM.dtype, overwrite=True)
-        # initialize the selection bit (bit 1) to true, all subsequent
-        # selections will be joined with AND
-        logger.debug("initializing bit mask")
-        bitmask[:] = 1
-
-        # start with photometric selection
-        selector_class = SampleManager.get_selector(args.type, args.sample)
-        selector = selector_class(BMM)
-
-        ds.pool.set_worker(selector.apply)
-        # select the columns needed for the selection function
-        ds.pool.add_argument_column(config.bitmask)
-        for name, path in config.selection.items():
-            ds.require_column(path)
-            ds.pool.add_argument_column(path, keyword=name)
-
-        # apply selection
-        ds.pool.execute(seed=args.seed, prefix="photometric selection")
-
-        # optional density sampling
-        sampler_class = SampleManager.get_sampler(args.type, args.sample)
-        if sampler_class is not NotImplemented:
-            # surface density
-            if issubclass(sampler_class, DensitySampler):
-                logger.info("estimating surface density ...")
-                sampler = sampler_class(BMM, args.area, bitmask)
-            # redshift weighted density
-            else:
-                logger.info("estimating redshift density ...")
-                sampler = sampler_class(
-                    BMM, args.area, bitmask, ds[config.selection["redshift"]])
-
-            ds.pool.set_worker(sampler.apply)
-            # select the columns needed for the selection function
-            ds.pool.add_argument_column(config.bitmask)
-            # redshift weighted density requires a mock n(z) estimate
-            if isinstance(sampler, RedshiftSampler):
-                ds.pool.add_argument_column(
-                    config.selection["redshift"], keyword="redshift")
-
-            # apply selection
-            ds.pool.execute(seed=args.seed, prefix="density sampling")
-
-        # add the description attribute to the output column
-        bitmask.attr = {"description": BMM.description}
-
-        # show final statistics
-        N_mock = DensitySampler.count_selected(bitmask)
-        density = "{:.3f} / arcmin²".format(N_mock / args.area / 3600.0)
-        logger.info("density of selected objects: " + density)
-        logger.info("computation completed for {:,d} entries".format(len(ds)))
+    select_sample(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

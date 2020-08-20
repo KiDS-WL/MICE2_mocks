@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-import os
 
-import mock_processing as mocks
-from mock_processing.core.utils import sha1sum
+from mock_processing.jobs import datastore_verify
 
 
 parser = argparse.ArgumentParser(
@@ -13,48 +11,8 @@ parser.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    with mocks.DataStore.open(args.datastore) as ds:
-
-        # display the table meta data
-        print("==> META DATA")
-        n_cols, n_rows = ds.shape
-        print("root:     {:}".format(ds.root))
-        print("size:     {:}".format(ds.filesize))
-        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
-
-        # verify the check sums
-        header = "==> COLUMN NAME"
-        width_cols = max(len(header), max(
-            len(colname) for colname in ds.colnames))
-        print("\n{:}    {:}  {:}".format(
-            header.ljust(width_cols), "STATUS ", "HASH"))
-        # compute and verify the store checksums column by column
-        n_good, n_warn, n_error = 0, 0, 0
-        line = "{:<{width}s}    {:<7s}  {:s}"
-        for name in ds.colnames:
-            column = ds[name]
-            try:
-                checksum = column.attr["SHA-1 checksum"]
-                assert(checksum == sha1sum(column.filename))
-                n_good += 1
-            except KeyError:
-                print(line.format(
-                    name, "WARNING", "no checksum provided", width=width_cols))
-                n_warn += 1
-            except AssertionError:
-                print(line.format(
-                    name, "ERROR", "checksums do not match", width=width_cols))
-                n_error += 1
-            else:
-                print(line.format(name, "OK", checksum, width=width_cols))
-        # do a final report
-        if n_good == len(ds.colnames):
-            print("\nAll columns passed")
-        else:
-            print("\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(
-                n_good, n_warn, n_error))
+    datastore_verify(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import sys
 
-import mock_processing as mocks
-from mock_processing.Flagship import flux_to_magnitudes_wrapped
+from mock_processing.jobs import flux_to_magnitudes
 
 
 parser = argparse.ArgumentParser(
@@ -23,38 +20,8 @@ parser.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore)
-
-    # convert model fluxes to model magnitudes
-    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
-        ds.pool.max_threads = args.threads
-
-        ds.pool.set_worker(flux_to_magnitudes_wrapped)
-
-        # find all flux columns
-        try:
-            model_fluxes, _ = ds.load_photometry(args.flux)
-        except KeyError as e:
-            logger.handleException(e)
-
-        # create the output columns
-        for key, flux_path in model_fluxes.items():
-            mag_path = os.path.join(args.mag, key)
-            # create new output columns
-            ds.add_column(
-                mag_path, dtype=ds[flux_path].dtype.str, overwrite=True,
-                attr={
-                    "description":
-                    "{:} converted to AB magnitudes".format(flux_path)})
-            # add columns to call signature
-            ds.pool.add_argument_column(flux_path)
-            ds.pool.add_result_column(mag_path)
-
-        # compute and store the corrected magnitudes in parallel
-        ds.pool.execute()
-        logger.info("computation completed for {:,d} entries".format(len(ds)))
+    flux_to_magnitudes(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

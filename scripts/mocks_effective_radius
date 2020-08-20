@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import sys
 
-import mock_processing as mocks
-from mock_processing.photometry import (PhotometryParser,
-                                        find_percentile_wrapped)
+from mock_processing.jobs import effective_radius
+from mock_processing.photometry import PhotometryParser
 
 
 parser = argparse.ArgumentParser(
@@ -35,43 +32,8 @@ help_group.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore)
-
-    # check the configuration file
-    config = PhotometryParser(args.config, logger)
-
-    # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
-        ds.pool.max_threads = args.threads
-
-        ds.pool.set_worker(find_percentile_wrapped)
-
-        ds.pool.add_argument_constant(config.intrinsic["flux_frac"])
-
-        # find disk and bulge component columns
-        input_columns = (
-            ("disk size", "shape/disk/size"),
-            ("bulge size", "shape/bulge/size"),
-            ("bulge fraction", "shape/bulge/fraction"))
-        for col_desc, path in input_columns:
-            ds.require_column(path, col_desc)
-            ds.pool.add_argument_column(path)
-
-        r_e_path = "shape/R_effective"
-        # create the output column
-        ds.add_column(
-            config.intrinsic["r_effective"], dtype="f4", overwrite=True, attr={
-                "description":
-                "effective radius (emitting {:.1%} of the flux)".format(
-                    config.intrinsic["flux_frac"])})
-        # add column to call signature
-        ds.pool.add_result_column(config.intrinsic["r_effective"])
-
-        # compute and store the corrected magnitudes
-        ds.pool.execute()
-        logger.info("computation completed for {:,d} entries".format(len(ds)))
+    effective_radius(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

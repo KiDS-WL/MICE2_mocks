@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import sys
 
-import mock_processing as mocks
-from mock_processing.matching import DataMatcher, MatcherParser
+from mock_processing.jobs import match_data
+from mock_processing.matching import MatcherParser
 
 
 parser = argparse.ArgumentParser(
@@ -37,47 +35,8 @@ help_group.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore)
-
-    # check the configuration file
-    config = MatcherParser(args.config, logger)
-
-    # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
-        ds.pool.max_threads = args.threads
-
-        with DataMatcher(config, logger) as matcher:
-
-            ds.pool.set_worker(matcher.apply)
-            # increase the default chunksize, larger chunks will be marginally
-            # faster but the progress update will be infrequent
-            ds.pool.chunksize = args.threads * ds.pool.chunksize
-
-            # select the required feature columns
-            for feature_path in config.features.values():
-                ds.require_column(feature_path, "feature")
-                ds.pool.add_argument_column(feature_path, keyword=feature_path)
-            # check that the data types are compatible
-            try:
-                matcher.check_features(ds)
-            except Exception as e:
-                logger.handleException(e)
-
-            # make the output columns for each observable
-            for output_path, dtype, attr in matcher.observable_information():
-                ds.add_column(
-                    output_path, dtype=dtype, attr=attr, overwrite=True)
-                ds.pool.add_result_column(output_path)
-
-            logger.info(
-                "building feature space tree, this may take a while ...")
-            matcher.build_tree()
-
-            # compute and store the corrected magnitudes
-            ds.pool.execute()  # cKDTree implementation releases GIL
-        logger.info("computation completed for {:,d} entries".format(len(ds)))
+    match_data(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

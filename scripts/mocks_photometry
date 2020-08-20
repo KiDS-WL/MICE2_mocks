@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import sys
 
-import mock_processing as mocks
-from mock_processing.photometry import (PhotometryParser,
-                                        photometry_realisation_wrapped)
+from mock_processing.jobs import photometry
+from mock_processing.photometry import PhotometryParser
 
 
 parser = argparse.ArgumentParser(
@@ -54,71 +51,8 @@ help_group.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore)
-
-    # check the configuration file
-    config = PhotometryParser(args.config, logger)
-
-    # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
-        ds.pool.max_threads = args.threads
-
-        # find all magnitude columns
-        try:
-            input_mags, _ = ds.load_photometry(args.mag)
-        except KeyError as e:
-            logger.handleException(e)
-
-        # select the required magnitude columns
-        available = set(input_mags.keys())
-        missing = set(config.filter_names) - available
-        if len(missing) > 0:
-            message = "requested filters not found: {:}".format(
-                ", ".join(missing))
-            logger.handleException(KeyError(message))
-        
-        # initialize the photometry generation
-        ds.pool.set_worker(photometry_realisation_wrapped)
-        ds.pool.add_argument_constant(config)
-
-        # collect the filter-specific arguments
-        for key in config.filter_names:
-            # 1) magnitude column
-            mag_path = input_mags[key]
-            ds.require_column(mag_path, "{:}-band".format(key))
-            ds.pool.add_argument_column(mag_path)
-            # 2) magnitude limit
-            ds.pool.add_argument_constant(config.limits[key])
-            # 3) S/N correction factors
-            if args.no_aper:  # disable aperture correction
-                ds.pool.add_argument_constant(1.0)
-            else:
-                snr_path = "apertures/{:}/snr_correction/{:}".format(
-                    args.method, key)
-                ds.require_column(
-                    mag_path, "{:}-band S/N correction".format(key))
-                ds.pool.add_argument_column(snr_path)
-
-        output_columns = (  # for each filter three output columns are required
-            ("{:}/{:}",
-             "{:} photometry realisation (from {:}, limit: {:.2f} mag)"),
-            ("{:}/{:}_err",
-             "{:} photometric error (from {:}, limit: {:.2f} mag)"))
-        # make the output columns for each filter
-        for key in config.filter_names:
-            for out_path, desc in output_columns:
-                ds.add_column(
-                    out_path.format(args.real, key),
-                    dtype=ds[mag_path].dtype.str, overwrite=True, attr={
-                        "description": desc.format(
-                            args.method, mag_path, config.limits[key])})
-                ds.pool.add_result_column(out_path.format(args.real, key))
-
-        # compute and store the corrected magnitudes
-        ds.pool.execute(seed=args.seed)
-        logger.info("computation completed for {:,d} entries".format(len(ds)))
+    photometry(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

@@ -3,8 +3,8 @@ import argparse
 import os
 import sys
 
-import mock_processing as mocks
-from mock_processing.photoz import BpzManager, BpzParser
+from mock_processing.jobs import BPZ
+from mock_processing.photoz import BpzParser
 
 
 parser = argparse.ArgumentParser(
@@ -38,51 +38,8 @@ help_group.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore)
-
-    # check the configuration file
-    config = BpzParser(args.config, logger)
-
-    # run BPZ on the selected magnitudes
-    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
-        ds.pool.max_threads = args.threads
-
-        # find all magnitude columns
-        try:
-            input_mags, input_errs = ds.load_photometry(args.mag)
-        except KeyError as e:
-            logger.handleException(e)
-
-        # launch the BPZ manager
-        logger.info("initializing BPZ")
-        with BpzManager(config, logger) as bpz:
-
-            ds.pool.set_worker(bpz.execute)
-            ds.pool.parse_thread_id = True
-
-            # add the magnitude and error columns to call signature
-            for key in bpz.filter_names:
-                try:
-                    mag_key, err_key = input_mags[key], input_errs[key]
-                    ds.pool.add_argument_column(mag_key)
-                    ds.pool.add_argument_column(err_key)
-                except KeyError as e:
-                    logger.handleException(e)
-
-            # create the output columns
-            for key, desc in bpz.descriptions.items():
-                zphot_path = os.path.join(args.zphot, key)
-                # create new output columns
-                ds.add_column(
-                    zphot_path, dtype=bpz.dtype[key].str, overwrite=True,
-                    attr={"description": desc})
-                # add columns to call signature
-                ds.pool.add_result_column(zphot_path)
-
-            ds.pool.execute()
-        logger.info("computation completed for {:,d} entries".format(len(ds)))
+    BPZ(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

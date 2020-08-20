@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-import os
-import sys
 
-import mock_processing as mocks
-from mock_processing.photometry import magnification_correction_wrapped
+from mock_processing.jobs import magnification
 
 
 parser = argparse.ArgumentParser(
@@ -25,44 +22,8 @@ parser.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    logger = mocks.PipeLogger(__file__, args.datastore)
-
-    # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(args.datastore, False, logger=logger) as ds:
-        ds.pool.max_threads = args.threads
-
-        ds.pool.set_worker(magnification_correction_wrapped)
-
-        # find convergence column
-        kappa_path = "lensing/kappa"
-        ds.require_column(kappa_path, "convergence")
-        ds.pool.add_argument_column(kappa_path)
-
-        # find all magnitude columns
-        try:
-            input_mags, _ = ds.load_photometry(args.mag)
-        except KeyError as e:
-            logger.handleException(e)
-
-        # create the output columns
-        for key, mag_path in input_mags.items():
-            lensed_path = os.path.join(args.lensed, key)
-            # create new output columns
-            ds.add_column(
-                lensed_path, dtype=ds[mag_path].dtype.str, overwrite=True,
-                attr={
-                    "description":
-                    "{:} with magnification correction applied".format(
-                        lensed_path)})
-            # add columns to call signature
-            ds.pool.add_argument_column(mag_path)
-            ds.pool.add_result_column(lensed_path)
-
-        # compute and store the corrected magnitudes
-        ds.pool.execute()
-        logger.info("computation completed for {:,d} entries".format(len(ds)))
+    magnification(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

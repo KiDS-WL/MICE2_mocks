@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 import argparse
-import os
 
-import mock_processing as mocks
+from mock_processing.jobs import datastore_info
 
 
 parser = argparse.ArgumentParser(
@@ -23,69 +22,8 @@ parser.add_argument(
 
 
 def main():
-
     args = parser.parse_args()
-    with mocks.DataStore.open(args.datastore) as ds:
-
-        # display the table meta data
-        print("==> META DATA")
-        n_cols, n_rows = ds.shape
-        print("root:     {:}".format(ds.root))
-        print("size:     {:}".format(ds.filesize))
-        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
-
-        if args.columns:
-            # list all the column names and data types
-            header = "==> COLUMN NAME"
-            width_cols = max(len(header), max(
-                len(colname) for colname in ds.colnames))
-            print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
-            for name in ds.colnames:
-                colname_padded = name.ljust(width_cols)
-                line = "{:}    {:}".format(
-                    colname_padded, str(ds[name].dtype))
-                print(line)
-
-        if args.attr:
-            # for each column print a summary of the attached attributes
-            print("\n==> ATTRIBUTES")
-            for name in ds.colnames:
-                print()
-                # print the column name indented and then a tree-like listing
-                # of the attributes (drawing connecting lines for better
-                # visibitilty)
-                print("{:}".format(name))
-                attrs = ds[name].attr
-                # all attributes from the pipeline should be dictionaries
-                if type(attrs) is dict:
-                    i_last = len(attrs)
-                    width_key = max(len(key) + 2 for key in attrs)
-                    for i, key in enumerate(sorted(attrs), 1):
-                        print_key = key + " :"
-                        line = "{:}{:} {:}".format(
-                            " └╴ " if i == i_last else " ├╴ ",
-                            print_key.ljust(width_key), str(attrs[key]))
-                        print(line)
-                # fallback
-                else:
-                    print("     └╴ {:}".format(str(attrs)))
-
-        if args.history:
-            # list all pipeline script calls ordered by time
-            print("\n==> HISTORY")
-            date_width = 24
-            for date, call in ds.get_history().items():
-                print("{:} : {:}".format(date.ljust(date_width), call))
-
-        if args.logs:
-            # show the log file
-            print("\n==> LOGS")
-            logpath = ds.root + ".log"
-            if not os.path.exists(logpath):
-                raise OSError("log file not found: {:}".format(logpath))
-            with open(logpath) as f:
-                for line in f.readlines():
-                    print(line.strip())
+    datastore_info(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":
