@@ -57,7 +57,7 @@ class TableColumn(object):
         self._path = os.path.join(tablepath, colname)
         self._name = colname
     
-    def __repr__(self):
+    def __str__(self):
         return "table[{:}]".format(self._name)
 
     @property

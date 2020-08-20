@@ -1,5 +1,6 @@
 from os.path import dirname
 
+
 __version__ = "1.0.3"  # NOTE: keep up-to date with git tag version
 try:
     import subprocess
