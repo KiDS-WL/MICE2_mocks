@@ -160,8 +160,9 @@ class DataStore(MmapTable):
             message = "updating attributes"
             if add_checksum:
                 message = "computing checksums and " + message
-                self._timestamp.add_checksums()
             self._logger.debug(message)
+            if add_checksum:
+                self._timestamp.add_checksums()
             self._timestamp.finalize()
         super().close()
         self._logger.info("data store closed")

@@ -81,7 +81,7 @@ def main():
     query = "{ra:} >= 40 AND {ra:} < 45 AND {dec:} >= 10 AND {dec:} < 15"
     query = query.format(ra="position/ra/obs", dec="position/dec/obs")
     query_sample = query + " AND samples/{:} & {:d}"
-    output_base = "/net/home/fohlen12/jlvdb/TEST/MOCK_pipeline/MICE2_query_{:}{:}" + args.format
+    output_base = "/net/home/fohlen12/jlvdb/TEST/MOCK_pipeline/MICE2_query_{:}{:}." + args.format
 
     if args.type == "all":  # all
         input_file = base_path.format("MICE2_KV_full", "all")

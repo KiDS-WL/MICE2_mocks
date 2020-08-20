@@ -103,7 +103,7 @@ def main():
     if "1" in args.jobID:
         call(
             job_map["1"], datastore, input=input_file,
-            columns="config/MICE2.toml")
+            columns="config/Flagship.toml")
     if "2" in args.jobID:
         call(
             job_map["2"], datastore, flux="flux/model", mag="mags/model",
