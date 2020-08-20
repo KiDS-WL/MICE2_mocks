@@ -3,8 +3,6 @@ import argparse
 import os
 import sys
 
-from memmap_table import MemmapTable
-
 import mock_processing as mocks
 from mock_processing.core.config import TableParser
 from mock_processing.core.readwrite import guess_format, SUPPORTED_READERS

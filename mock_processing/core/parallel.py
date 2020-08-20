@@ -9,8 +9,8 @@ from math import ceil
 
 import numpy as np
 
-from memmap_table.column import MemmapColumn
-from memmap_table.table import MemmapTable
+from mmaptable.column import MmapColumn
+from mmaptable.table import MmapTable
 
 from .utils import ProgressBar
 
@@ -122,19 +122,19 @@ class ParallelIterator(object):
 
 class ParallelTable(object):
     """
-    Wrapper to apply a function to the columns of a MemmapTable with concurrent
+    Wrapper to apply a function to the columns of a MmapTable with concurrent
     threads. For each thread the table rows are divided into equal sized chunks
     to avoid current I/O operations on the same memory.
 
     Parameters:
     -----------
-    table : memmap_table.MemmapTable
+    table : mmaptable.MmapTable
         Data table object to process.
     logger : python logger instance
         Enables optional event logging.
     """
 
-    _chunksize = 16384  # default in current MemmapTable implementation
+    _chunksize = 16384  # default in current MmapTable implementation
     _worker_function = None
     _parse_thread_id = False
     _allow_modify = False
@@ -607,7 +607,7 @@ def _thread_worker(wrap_args):
     args_expanded = []
     for arg in args:
         if type(arg) is TableColumn:
-            column = MemmapColumn(arg.path, mode="r+" if modify else "r")
+            column = MmapColumn(arg.path, mode="r+" if modify else "r")
             args_expanded.append(column)
         else:
             args_expanded.append(arg)
@@ -616,7 +616,7 @@ def _thread_worker(wrap_args):
     for key, arg in kwargs.items():
         # this does not load any data yet
         if type(arg) is TableColumn:
-            column = MemmapColumn(arg.path, mode="r+" if modify else "r")
+            column = MmapColumn(arg.path, mode="r+" if modify else "r")
             kwargs_expanded[key] = column
         else:
             kwargs_expanded[key] = arg
@@ -626,17 +626,17 @@ def _thread_worker(wrap_args):
     results_expanded = []
     if results is not None:
         for result in results:
-            column = MemmapColumn(result.path, mode="r+")
+            column = MmapColumn(result.path, mode="r+")
             results_expanded.append(column)
 
     # apply the worker function
     for start, end in iterator:
         # load the actual values
         call_args = [
-            arg[start:end] if type(arg) is MemmapColumn else arg
+            arg[start:end] if type(arg) is MmapColumn else arg
             for arg in args_expanded]
         call_kwargs = {
-            key: arg[start:end] if type(arg) is MemmapColumn else arg
+            key: arg[start:end] if type(arg) is MmapColumn else arg
             for key, arg in kwargs_expanded.items()}
         # execute worker
         return_values = function(*call_args, **call_kwargs)

@@ -5,7 +5,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.spatial import cKDTree
 
-from memmap_table import MemmapTable
+from mmaptable import MmapTable
 
 from .core.config import (Parameter, ParameterCollection, ParameterGroup,
                           ParameterListing, Parser)
@@ -158,7 +158,7 @@ class MatcherParser(Parser):
     default = ParameterCollection(
         Parameter(
             "input", str, "...",
-            "path to input table, must be MemmapTable compatible",
+            "path to input table, must be MmapTable compatible",
             parser=expand_path),
         Parameter(
             "normalize", bool, False,
@@ -244,7 +244,7 @@ class DataMatcher(object):
         try:
             if logger is not None:
                 logger.info("opening training data: {:}".format(config.input))
-            self._table = MemmapTable(config.input)
+            self._table = MmapTable(config.input)
         except Exception as e:
             if logger is not None:
                 logger.handleException(e)

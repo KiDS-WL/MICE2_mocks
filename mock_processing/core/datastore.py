@@ -4,7 +4,7 @@ import sys
 from collections import OrderedDict
 from time import asctime, strptime
 
-from memmap_table import MemmapTable
+from mmaptable import MmapTable
 
 from .version import __version__
 from .utils import bytesize_with_prefix, expand_path, sha1sum
@@ -60,7 +60,7 @@ class ModificationStamp(object):
 
         Parameters:
         -----------
-        column : memmap_table.Column
+        column : mmaptable.MmapColumn
             Column instance from the data store to update.
         name : string
             Name of the column (path within the data store).
@@ -101,16 +101,16 @@ class ModificationStamp(object):
             self._update_attribute(name, self._attrs)
 
 
-class DataStore(MemmapTable):
+class DataStore(MmapTable):
     """
-    Wrapper to open an existing MemmapTable on disk.
+    Wrapper to open an existing MmapTable on disk.
 
     Parameters:
     -----------
     logger : python logger instance
         Logger instance that logs events.
     path : str
-        Path to MemmapTable storage (must be a directory).
+        Path to MmapTable storage (must be a directory).
     readonly : bool
         Whether the storage is opened as read-only.
     """
@@ -195,19 +195,19 @@ class DataStore(MemmapTable):
 
     def add_column(self, path, *args, **kwargs):
         """
-        Wrapper to create a new column in an existing MemmapTable.
+        Wrapper to create a new column in an existing MmapTable.
 
         Parameters:
         -----------
         path : str
             Column name (path relative to the table root).
 
-        Further arguments are passed to MemmapTable.add_column() and specify
+        Further arguments are passed to MmapTable.add_column() and specify
         the data type, attributes and overwrite permissions.
 
         Returns:
         --------
-        column : memmap_table.Column
+        column : mmaptable.MmapColumn
             Newly created table column instance.
         """
         if path in self:
@@ -221,7 +221,7 @@ class DataStore(MemmapTable):
 
     def verify_column(self, path):
         """
-        Wrapper to create a new column in an existing MemmapTable.
+        Wrapper to create a new column in an existing MmapTable.
 
         Parameters:
         -----------

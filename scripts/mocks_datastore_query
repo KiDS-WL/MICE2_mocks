@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 
-from memmap_table.mathexpression import MathTerm
+from mmaptable.mathexpression import MathTerm
 
 import mock_processing as mocks
 from mock_processing.core.readwrite import (BUFFERSIZE, guess_format,

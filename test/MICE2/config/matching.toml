@@ -5,7 +5,7 @@
 # values and weightes for each feature space dimension can be specified.
 
 input = "/net/home/fohlen12/jlvdb/DATA/KV450_superuser"
-                        # path to input table, must be MemmapTable compatible
+                        # path to input table, must be MmapTable compatible
 normalize = false       # whether each feature space dimension is normalized by
                         # the standard deviation of the values in the dimension
 max_dist = 1.0          # maximum distance (Euclidean metric) to consider the

@@ -1,3 +1,4 @@
+git+https://github.com/jlvdb/mmaptable.git
 fitsio==1.1.2
 h5py==2.10.0
 numpy==1.18.5
@@ -5,4 +6,3 @@ pyarrow==0.17.1
 scipy==1.4.1
 toml==0.10.1
 tqdm==4.48.0
-git+https://github.com/jlvdb/mmaptable.git
