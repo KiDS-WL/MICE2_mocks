@@ -33,7 +33,7 @@ def flux_to_magnitudes_wrapped(*fluxes):
     Parameters
     ----------
     *fluxes : array_like
-        Seroes of input flux data.
+        Series of input flux data.
 
     Returns
     -------
@@ -42,3 +42,22 @@ def flux_to_magnitudes_wrapped(*fluxes):
     """
     mags = tuple(flux_to_magnitudes(flux) for flux in fluxes)
     return mags
+
+
+@Schedule.description("find central halo galaxies")
+@Schedule.IObound
+def find_central_galaxies(galaxy_idx):
+    """
+    Identify the host-halo's central galaxy based on the Flagship galaxy index.
+
+    Parameters
+    ----------
+    galaxy_idx : array_like
+        Index of the galaxy within the halo.
+
+    Returns
+    -------
+    is_central : bool
+        Whether a galaxy is the halo's central galaxy.
+    """
+    return galaxy_idx == 0

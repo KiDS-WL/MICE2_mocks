@@ -430,7 +430,7 @@ def convert_input(
         columns=None, purge=purge)
 
 
-def evolution_correction(
+def prepare_MICE2(
         datastore,
         mag,
         evo,
@@ -476,13 +476,16 @@ def evolution_correction(
         logger.info("computation completed for {:,d} entries".format(len(ds)))
 
 
-def flux_to_magnitudes(
+def prepare_Flagship(
         datastore,
         flux,
         mag,
+        gal_idx=None,
+        is_central=None,
         threads=-1,
         **kwargs):
-    from galmock.Flagship import flux_to_magnitudes_wrapped
+    from galmock.Flagship import (find_central_galaxies,
+                                  flux_to_magnitudes_wrapped)
 
     fname = inspect.currentframe().f_code.co_name
     logger = mocks.PipeLogger(fname, datastore)
@@ -511,6 +514,22 @@ def flux_to_magnitudes(
             # add columns to call signature
             ds.pool.add_argument_column(flux_path)
             ds.pool.add_result_column(mag_path)
+
+        # compute and store the corrected magnitudes in parallel
+        ds.pool.execute()
+
+        # add the central galaxy flag
+        ds.pool.set_worker(find_central_galaxies)
+
+        # find the input column
+        ds.require_column(gal_idx, "galaxy index")
+        ds.pool.add_argument_column(gal_idx)
+
+        # create the output column
+        ds.add_column(
+            is_central, dtype="bool", overwrite=True, attr={
+                "description": "host central galaxy flag"})
+        ds.pool.add_result_column(is_central)
 
         # compute and store the corrected magnitudes in parallel
         ds.pool.execute()
@@ -902,26 +921,32 @@ def select_sample(
         # optional density sampling
         sampler_class = SampleManager.get_sampler(type, sample)
         if sampler_class is not NotImplemented:
-            # surface density
-            if issubclass(sampler_class, DensitySampler):
-                logger.info("estimating surface density ...")
-                sampler = sampler_class(BMM, area, bitmask)
-            # redshift weighted density
-            else:
-                logger.info("estimating redshift density ...")
-                sampler = sampler_class(
-                    BMM, area, bitmask, ds[config.selection["redshift"]])
+            try:
+                # surface density
+                if issubclass(sampler_class, DensitySampler):
+                    logger.info("estimating surface density ...")
+                    sampler = sampler_class(BMM, area, bitmask)
+                # redshift weighted density
+                else:
+                    logger.info("estimating redshift density ...")
+                    sampler = sampler_class(
+                        BMM, area, bitmask, ds[config.selection["redshift"]])
 
-            ds.pool.set_worker(sampler.apply)
-            # select the columns needed for the selection function
-            ds.pool.add_argument_column(config.bitmask)
-            # redshift weighted density requires a mock n(z) estimate
-            if isinstance(sampler, RedshiftSampler):
-                ds.pool.add_argument_column(
-                    config.selection["redshift"], keyword="redshift")
+                ds.pool.set_worker(sampler.apply)
+                # select the columns needed for the selection function
+                ds.pool.add_argument_column(config.bitmask)
+                # redshift weighted density requires a mock n(z) estimate
+                if isinstance(sampler, RedshiftSampler):
+                    ds.pool.add_argument_column(
+                        config.selection["redshift"], keyword="redshift")
 
-            # apply selection
-            ds.pool.execute(seed=seed, prefix="density sampling")
+                # apply selection
+                    ds.pool.execute(seed=seed, prefix="density sampling")
+            except ValueError as e:
+                if str(e).startswith("sample density must be"):
+                    logger.warning("skipping sampling due to low mock density")
+                else:
+                    raise e
 
         # add the description attribute to the output column
         bitmask.attr = {"description": BMM.description}

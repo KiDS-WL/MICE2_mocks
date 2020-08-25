@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 import argparse
 
-from galmock.jobs import flux_to_magnitudes
+from galmock.jobs import prepare_Flagship
 
 
 parser = argparse.ArgumentParser(
-    description="Convert fluxes in Flagship to AB magnitudes.")
+    description="Convert fluxes in Flagship to AB magnitudes and add a flag "
+                "to identify the central halo galaxies.")
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
 parser.add_argument(
-    "--flux",
+    "--flux", required=True,
     help="sub-directory within data store which contains the input fluxes")
 parser.add_argument(
-    "--mag",
+    "--mag", required=True,
     help="sub-directory within data store where the AB magnitudes are stored")
+parser.add_argument(
+    "--gal-idx",
+    help="path within data store which contains the galaxy indices")
+parser.add_argument(
+    "--is-central",
+    help="path within data store where the central galaxy flag is stored")
 parser.add_argument(
     "--threads", type=int, default=-1,
     help="maximum number of threads to use (default: all)")
@@ -21,7 +28,7 @@ parser.add_argument(
 
 def main():
     args = parser.parse_args()
-    flux_to_magnitudes(**{name: getattr(args, name) for name in vars(args)})
+    prepare_Flagship(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":

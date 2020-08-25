@@ -13,8 +13,9 @@ from galmock import jobs
 job_map = {
     "1": "mocks_init_pipeline {:} "
          "-i {input:} -c {columns:} --purge",
-    "2": "Flagship_flux_to_magnitudes {:} "
-         "--flux {flux:} --mag {mag:} --threads {threads:}",
+    "2": "mocks_prepare_Flagship {:} "
+         "--flux {flux:} --mag {mag:} --gal-idx {gal_idx:} "
+         "--is-central {is_central:} --threads {threads:}",
     "3": "mocks_magnification {:} "
          "--mag {mag:} --lensed {lensed:} --threads {threads:}",
     "4": "mocks_effective_radius {:} "
@@ -76,7 +77,9 @@ def main():
 
     # configure the data paths and sample selections
     base_path = "/net/home/fohlen13/jlvdb/DATA/Flagship_HDF5/Flagship_v1-8-4_deep_ugrizYJHKs_shapes_halos_WL{:}.hdf5"
-    samples = ["KiDS", "2dFLenS", "GAMA", "SDSS"]
+    samples = [
+        "KiDS", "2dFLenS", "GAMA", "SDSS", "WiggleZ",
+        "DEEP2", "VVDSf02", "zCOSMOS"]
     # configure the output files and sample selection
     query = "{ra:} >= 40 AND {ra:} < 45 AND {dec:} >= 10 AND {dec:} < 15"
     query = query.format(ra="position/ra/obs", dec="position/dec/obs")
@@ -86,14 +89,13 @@ def main():
     if args.type == "all":  # all
         input_file = base_path.format("")
         datastore = "/net/home/fohlen13/jlvdb/DATA/Flagship_KiDS"
-        samples += ["WiggleZ", "DEEP2", "VVDSf02", "zCOSMOS"]
         area = 5156.6
 
     else:  # test
         input_file = base_path.format("_test")
         datastore = "/net/home/fohlen13/jlvdb/DATA/Flagship_KiDS_test"
         # sample density insufficient for some samples
-        area = 5156.6
+        area = 24.400
 
     # check for unknown jobs
     for jobID in args.jobID - set(job_map.keys()):
@@ -107,6 +109,7 @@ def main():
     if "2" in args.jobID:
         call(
             job_map["2"], datastore, flux="flux/model", mag="mags/model",
+            gal_idx="index_galaxy", is_central="environ/is_central",
             threads=args.threads)
     if "3" in args.jobID:
         call(
@@ -119,11 +122,11 @@ def main():
     if "5" in args.jobID:
         call(
             job_map["5"], datastore, config="config/photometry.toml",
-            method="GAaP", threads=args.threads)
+            method="SExtractro", threads=args.threads)
     if "6" in args.jobID:
         call(
-            job_map["6"], datastore, config="config/photometry.toml",
-            method="GAaP", mag="mags/lensed", real="mags/K1000",
+            job_map["6"], datastore, config="config/photometry_old.toml",
+            method="SExtractro", mag="mags/lensed", real="mags/K1000",
             threads=args.threads)
     if "7" in args.jobID:
         call(

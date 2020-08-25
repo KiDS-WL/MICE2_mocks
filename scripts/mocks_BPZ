@@ -16,10 +16,10 @@ parser.register("action", "dump", BpzParser.get_dump())
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
 parser.add_argument(
-    "--mag",
+    "--mag", required=True,
     help="sub-directory within data store which contains the input magnitudes")
 parser.add_argument(
-    "--zphot",
+    "--zphot", required=True,
     help="sub-directory within data store where the BPZ output is stored")
 parser.add_argument(
     "-c", "--config", required=True,

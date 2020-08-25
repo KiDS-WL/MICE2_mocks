@@ -4,7 +4,7 @@
 
 BPZpath = "~/src/bpz-1.99.3"
                         # path of the bpz installation to use
-BPZenv = "/net/$hostname/home/jlvdb/BPZenv"
+BPZenv = "/net/home/$hostname/jlvdb/BPZenv"
                         # path to a python2 environment used when calling BPZ
                         # (leave blank to use the default python2 interpreter)
 BPZtemp = "/dev/shm"    # temporary directory to use for bpz (I/O intense, e.g.

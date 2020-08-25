@@ -13,7 +13,7 @@ from galmock import jobs
 job_map = {
     "1": "mocks_init_pipeline {:} "
          "-i {input:} -c {columns:} --purge",
-    "2": "MICE2_evolution_correction {:} "
+    "2": "mocks_prepare_MICE2 {:} "
          "--mag {mag:} --evo {evo:} --threads {threads:}",
     "3": "mocks_magnification {:} "
          "--mag {mag:} --lensed {lensed:} --threads {threads:}",

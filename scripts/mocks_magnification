@@ -10,10 +10,10 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "datastore", help="directory in which the data store is located")
 parser.add_argument(
-    "--mag",
+    "--mag", required=True,
     help="sub-directory within data store which contains the input magnitudes")
 parser.add_argument(
-    "--lensed",
+    "--lensed", required=True,
     help="sub-directory within data store where the magnification corrected "
          "magnitudes are stored")
 parser.add_argument(

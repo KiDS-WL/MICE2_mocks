@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 
-from galmock.jobs import evolution_correction
+from galmock.jobs import prepare_MICE2
 
 
 parser = argparse.ArgumentParser(
@@ -23,7 +23,7 @@ parser.add_argument(
 
 def main():
     args = parser.parse_args()
-    evolution_correction(**{name: getattr(args, name) for name in vars(args)})
+    prepare_MICE2(**{name: getattr(args, name) for name in vars(args)})
 
 
 if __name__ == "__main__":
