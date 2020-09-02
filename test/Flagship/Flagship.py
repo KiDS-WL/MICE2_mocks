@@ -47,7 +47,7 @@ parser = argparse.ArgumentParser(
                 "samples from the Flagship galaxy mock catalogue.",
     epilog="Job IDs are automatically ordered numerically.")
 parser.add_argument(
-    "type", choices=("all", "deep", "test"), help="MICE2 data sample type")
+    "type", choices=("all", "test"), help="MICE2 data sample type")
 parser.add_argument(
     "jobID", nargs="*", help=job_help_str)
 parser.add_argument(
