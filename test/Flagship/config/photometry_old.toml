@@ -5,7 +5,7 @@
 method = "SExtractor"   # photometry algorthim to apply (choices: SExtractor,
                         # GAaP)
 legacy = true           # use legacy mode (van den Busch et al. 2020)
-aperture_name = "SExtractor"
+aperture_name = "K1000"
                         # name under with the aperture realisation is stored in
                         # the aperture/ directory of the data store
 
