@@ -15,21 +15,15 @@ class PhotometryParser(Parser):
 
     default = ParameterCollection(
         Parameter(
+            "method", str, "SExtractor",
+            "photometry algorthim to apply (choices: SExtractor, GAaP)"),
+        Parameter(
             "legacy", bool, False,
             "use legacy mode (van den Busch et al. 2020)"),
         Parameter(
-            "limit_sigma", float, 1.0,
-            "sigma value of the detection (magnitude) limit with respect to "
-            "the sky background"),
-        Parameter(
-            "no_detect_value", float, 99.0,
-            "magnitude value assigned to undetected galaxies"),
-        Parameter(
-            "SN_detect", float, 1.0,
-            "signal-to-noise ratio detection limit"),
-        Parameter(
-            "SN_floor", float, 0.2,
-            "numerical lower limit for signal-to-noise ratio"),
+            "aperture_name", str, "SExtractor",
+            "name under with the aperture realisation is stored in the "
+            "aperture/ directory of the data store"),
         ParameterGroup(
             "intrinsic",
             Parameter(
@@ -69,6 +63,25 @@ class PhotometryParser(Parser):
                 "MAG_AUTO-like scaling factor for Petrosian radius, here "
                 "applied to intrinsic galaxy size derived from effective "
                 "radius"),
+            header=None),
+        ParameterGroup(
+            "photometry",
+            Parameter(
+                "apply_apertures", bool, True,
+                "whether to include the aperture size in the SNR computation"),
+            Parameter(
+                "limit_sigma", float, 1.0,
+                "sigma value of the detection (magnitude) limit with respect "
+                "to the sky background"),
+            Parameter(
+                "no_detect_value", float, 99.0,
+                "magnitude value assigned to undetected galaxies"),
+            Parameter(
+                "SN_detect", float, 1.0,
+                "signal-to-noise ratio detection limit"),
+            Parameter(
+                "SN_floor", float, 0.2,
+                "numerical lower limit for signal-to-noise ratio"),
             header=None),
         header=(
             "This configuration file is required for mocks_apertures and "
@@ -363,41 +376,42 @@ def apertures_wrapped(method, config, r_effective, ba_ratio):
 
 def photometry_realisation(config, filter_key, mag, snr_correction):
     mag_lim = config.limits[filter_key]
+    limit_sigma = config.photometry["limit_sigma"]
     if config.legacy:  # computation in magnitudes
         # compute the S/N of the model magnitudes
-        snr = 10 ** (-0.4 * (mag - mag_lim)) * config.limit_sigma
+        snr = 10 ** (-0.4 * (mag - mag_lim)) * limit_sigma
     else:  # computation in fluxes
         # compute model fluxes and the S/N
         flux = 10 ** (-0.4 * mag)
         flux_err = 10 ** (-0.4 * mag_lim)
-        snr = flux / flux_err * config.limit_sigma
+        snr = flux / flux_err * limit_sigma
     snr *= snr_correction  # aperture correction
-    snr = np.maximum(snr, config.SN_floor)  # clip S/N
+    snr = np.maximum(snr, config.photometry["SN_floor"])  # clip S/N
     if config.legacy:  # magnitudes draw incorrectly with Gaussian errors
         mag_err = 2.5 / np.log(10.0) / snr
         # compute the magnitde realisation and S/N
         real = np.random.normal(mag, mag_err, size=len(mag))
-        snr = 10 ** (-0.4 * (real - mag_lim)) * config.limit_sigma
+        snr = 10 ** (-0.4 * (real - mag_lim)) * limit_sigma
     else:  # magnitudes constructed from fluxes with Gaussian errors
         # compute the flux realisation and S/N
         flux = np.random.normal(  # approximation for Poisson error
             flux, flux_err, size=len(flux))
         flux = np.maximum(flux, 1e-3 * flux_err)  # prevent flux <= 0.0
-        snr = flux / flux_err * config.limit_sigma
+        snr = flux / flux_err * limit_sigma
         # convert fluxes to magnitudes
         real = -2.5 * np.log10(flux)
     snr *= snr_correction  # aperture correction
-    snr = np.maximum(snr, config.SN_floor)  # clip S/N
+    snr = np.maximum(snr, config.photometry["SN_floor"])  # clip S/N
     # compute the magnitude error of the realisation
     real_err = 2.5 / np.log(10.0) / snr
     # set magnitudes of undetected objects and mag < 5.0 to 99.0
-    not_detected = (snr < config.SN_detect) | (real < 5.0)
-    real[not_detected] = config.no_detect_value
-    real_err[not_detected] = mag_lim - 2.5 * np.log10(config.limit_sigma)
+    not_detected = (snr < config.photometry["SN_detect"]) | (real < 5.0)
+    real[not_detected] = config.photometry["no_detect_value"]
+    real_err[not_detected] = mag_lim - 2.5 * np.log10(limit_sigma)
     return real, real_err
 
 
-@Schedule.description("generating photometery realisation")
+@Schedule.description("generating photometry realisation")
 @Schedule.workload(0.33)
 def photometry_realisation_wrapped(config, *mag_mag_lim_snr_correction):
     # iterate through the listing of magnitude columns, magnitude limits and

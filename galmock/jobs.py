@@ -613,7 +613,6 @@ def effective_radius(
             ds.require_column(path, col_desc)
             ds.pool.add_argument_column(path)
 
-        r_e_path = "shape/R_effective"
         # create the output column
         ds.add_column(
             config.intrinsic["r_effective"], dtype="f4", overwrite=True, attr={
@@ -631,7 +630,6 @@ def effective_radius(
 def apertures(
         datastore,
         config,
-        method="SExtractor",
         threads=-1,
         **kwargs):
     from galmock.photometry import PhotometryParser, apertures_wrapped
@@ -648,7 +646,7 @@ def apertures(
 
         # initialize the aperture computation
         ds.pool.set_worker(apertures_wrapped)
-        ds.pool.add_argument_constant(method)
+        ds.pool.add_argument_constant(config.method)
         ds.pool.add_argument_constant(config)
 
         # find effective radius and b/a ratio columns
@@ -669,13 +667,13 @@ def apertures(
         # make the output columns for each filter
         for key in config.filter_names:
             for out_path, desc in output_columns:
+                formatted_path = out_path.format(config.aperture_name, key)
                 ds.add_column(
-                    out_path.format(method, key),
-                    dtype="f4", overwrite=True, attr={
+                    formatted_path, dtype="f4", overwrite=True, attr={
                         "description":
-                        desc.format(method, config.PSF[key])})
+                        desc.format(config.method, config.PSF[key])})
                 # collect all new columns as output targets
-                ds.pool.add_result_column(out_path.format(method, key))
+                ds.pool.add_result_column(formatted_path)
 
         # compute and store the apertures
         ds.pool.execute()
@@ -687,8 +685,6 @@ def photometry(
         mag,
         real,
         config,
-        method="SExtractor",
-        no_aper=False,
         seed="sapling",
         threads=-1,
         **kwargs):
@@ -732,14 +728,14 @@ def photometry(
             # 2) magnitude limit
             ds.pool.add_argument_constant(config.limits[key])
             # 3) S/N correction factors
-            if no_aper:  # disable aperture correction
-                ds.pool.add_argument_constant(1.0)
-            else:
+            if config.photometry["apply_apertures"]:
                 snr_path = "apertures/{:}/snr_correction/{:}".format(
-                    method, key)
+                    config.aperture_name, key)
                 ds.require_column(
                     mag_path, "{:}-band S/N correction".format(key))
                 ds.pool.add_argument_column(snr_path)
+            else:  # disable aperture correction
+                ds.pool.add_argument_constant(1.0)
 
         output_columns = (  # for each filter three output columns are required
             ("{:}/{:}",
@@ -753,7 +749,7 @@ def photometry(
                     out_path.format(real, key),
                     dtype=ds[mag_path].dtype.str, overwrite=True, attr={
                         "description": desc.format(
-                            method, mag_path, config.limits[key])})
+                            config.method, mag_path, config.limits[key])})
                 ds.pool.add_result_column(out_path.format(real, key))
 
         # compute and store the corrected magnitudes
