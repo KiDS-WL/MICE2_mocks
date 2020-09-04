@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import argparse
-import logging
+import logging.config
 
+from galmock.core.config import logging_config
+from galmock.core.utils import expand_path
 from galmock.jobs import prepare_MICE2
 
 
@@ -9,7 +11,8 @@ parser = argparse.ArgumentParser(
     description="Apply the evolutionary correction to the MICE2 model "
                 "magnitudes.")
 parser.add_argument(
-    "datastore", help="directory in which the data store is located")
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
 parser.add_argument(
     "--mag",
     help="sub-directory within data store which contains the input magnitudes")
@@ -23,10 +26,9 @@ parser.add_argument(
 
 
 def main():
-    logging.basicConfig(
-        level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S",
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     args = parser.parse_args()
+    logging.config.dictConfig(
+        logging_config(args.datastore + ".log", overwrite=False))
     prepare_MICE2(**{name: getattr(args, name) for name in vars(args)})
 
 

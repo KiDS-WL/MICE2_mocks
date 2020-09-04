@@ -17,6 +17,44 @@ _WRAP = 79
 _INDENT = 24
 
 
+def logging_config(logpath, overwrite=False):
+    logconfig = {
+        "version": 1,
+        "disable_existing_loggers": False,
+
+        "loggers": {
+            "": {
+                "handlers": ["console", "file"],
+                "level": "DEBUG",
+            },
+        },
+
+        "formatters": {
+            "default": {
+                "format": \
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+
+        "handlers": {
+            "console": {
+                "level": "DEBUG",
+                "formatter": "default",
+                "class": "logging.StreamHandler",
+            },
+            "file": {
+                "level": "DEBUG",
+                "formatter": "default",
+                "class": "logging.FileHandler",
+                "filename": logpath,
+                "mode": "w" if overwrite else "a",
+            },
+        },
+    }
+    return logconfig
+
+
 class LineComment(object):
 
     def __init__(self, comment):

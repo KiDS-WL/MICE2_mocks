@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 import argparse
-import logging
+import logging.config
 
+from galmock.core.utils import expand_path
 from galmock.jobs import datastore_verify
 
 
 parser = argparse.ArgumentParser(
     description="Verify the data integrity by using SHA-1 checksums")
 parser.add_argument(
-    "datastore", help="directory in which the data store is created")
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
 
 
 def main():
-    logging.basicConfig(
-        level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S",
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     args = parser.parse_args()
     datastore_verify(**{name: getattr(args, name) for name in vars(args)})
 

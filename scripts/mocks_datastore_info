@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import logging
+import logging.config
 
+from galmock.core.utils import expand_path
 from galmock.jobs import datastore_info
 
 
@@ -10,7 +11,8 @@ parser = argparse.ArgumentParser(
                 "shape, column names, descriptions, attributes and pipeline "
                 "logs and processing history.")
 parser.add_argument(
-    "datastore", help="directory in which the data store is created")
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
 parser.add_argument(
     "-c", "--columns", action="store_true", help="show the column data types")
 parser.add_argument(
@@ -23,9 +25,6 @@ parser.add_argument(
 
 
 def main():
-    logging.basicConfig(
-        level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S",
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     args = parser.parse_args()
     datastore_info(**{name: getattr(args, name) for name in vars(args)})
 
