@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import os
 import sys
@@ -8,8 +9,11 @@ from mmaptable import MmapTable
 
 from galmock.core.version import __version__
 from galmock.core.utils import bytesize_with_prefix, expand_path, sha1sum
-from galmock.core.logger import DummyLogger
 from galmock.core.parallel import ParallelTable
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class ModificationStamp(object):
@@ -107,27 +111,25 @@ class DataStore(MmapTable):
 
     Parameters:
     -----------
-    logger : python logger instance
-        Logger instance that logs events.
     path : str
         Path to MmapTable storage (must be a directory).
     readonly : bool
         Whether the storage is opened as read-only.
     """
 
-    def __init__(self, path, nrows=None, mode="r", logger=DummyLogger()):
-        self._logger = logger
+    def __init__(self, path, nrows=None, mode="r"):
         # open the data store
         try:
             super().__init__(path, nrows, mode)
         except Exception as e:
-            self._logger.handleException(e)
+            logger.exception(str(e))
+            raise
         self._filesize = bytesize_with_prefix(self.nbytes)
         self._timestamp = ModificationStamp(sys.argv)
-        self.pool = ParallelTable(self, logger)
+        self.pool = ParallelTable(self)
 
     @classmethod
-    def create(cls, path, nrows, overwrite=False, logger=DummyLogger()):
+    def create(cls, path, nrows, overwrite=False):
         full_path = expand_path(path)
         exists = os.path.exists(full_path)
         if not overwrite and exists:
@@ -135,17 +137,18 @@ class DataStore(MmapTable):
             # erased completely
             message = "ouput path exists but overwriting is not permitted: {:}"
             message = message.format(full_path)
-            logger.handleException(OSError(message))
+            logger.error(message)
+            raise OSError(message)
         logger.info("creating data store: {:}".format(full_path))
-        instance = cls(full_path, nrows, mode="w+", logger=logger)
+        instance = cls(full_path, nrows, mode="w+")
         logger.debug("allocating {:,d} table rows".format(len(instance)))
         return instance
 
     @classmethod
-    def open(cls, path, readonly=True, logger=DummyLogger()):
+    def open(cls, path, readonly=True):
         logger.info("opening data store: {:}".format(path))
         mode = "r" if readonly else "r+"
-        instance = cls(expand_path(path), mode=mode, logger=logger)
+        instance = cls(expand_path(path), mode=mode)
         return instance
 
     def __enter__(self, *args, **kwargs):
@@ -160,12 +163,12 @@ class DataStore(MmapTable):
             message = "updating attributes"
             if add_checksum:
                 message = "computing checksums and " + message
-            self._logger.debug(message)
+            logger.debug(message)
             if add_checksum:
                 self._timestamp.add_checksums()
             self._timestamp.finalize()
         super().close()
-        self._logger.info("data store closed")
+        logger.info("data store closed")
 
     @property
     def filesize(self):
@@ -173,7 +176,7 @@ class DataStore(MmapTable):
 
     def expand(self, nrows):
         super().resize(len(self) + nrows)
-        self._logger.debug("allocated {:,d} additional rows".format(nrows))
+        logger.debug("allocated {:,d} additional rows".format(nrows))
 
     def require_column(self, path, description=""):
         """
@@ -192,7 +195,8 @@ class DataStore(MmapTable):
             if len(description) > 0:
                 description += " "
             message = "{:}column not found: {:}".format(description, path)
-            self._logger.handleException(KeyError(message))
+            logger.error(message)
+            raise KeyError(message)
 
     def add_column(self, path, *args, **kwargs):
         """
@@ -212,9 +216,9 @@ class DataStore(MmapTable):
             Newly created table column instance.
         """
         if path in self:
-            self._logger.warn("overwriting column: {:}".format(path))
+            logger.warn("overwriting column: {:}".format(path))
         else:
-            self._logger.debug("creating column: {:}".format(path))
+            logger.debug("creating column: {:}".format(path))
         column = super().add_column(path, *args, **kwargs)
         self._timestamp.register(column, path)
         self._filesize = bytesize_with_prefix(self.nbytes)
@@ -234,10 +238,11 @@ class DataStore(MmapTable):
             checksum = column.attr["SHA-1 checksum"]
             assert(checksum == sha1sum(column.filename))
         except KeyError:
-            self._logger.warn("no checksum provided: {:}".format(path))
+            logger.warn("no checksum provided: {:}".format(path))
         except AssertionError:
             message = "checksums do not match: {:}".format(path)
-            self._logger.handleException(AssertionError(message))
+            logger.exception(message)
+            raise
 
     def get_history(self):
         """
@@ -258,7 +263,7 @@ class DataStore(MmapTable):
                 calls[timestamp] = attrs["created by"]
             except KeyError:
                 message = "column has no creation time stamp: {:}"
-                self._logger.warn(message.format(column))
+                logger.warn(message.format(column))
             except TypeError:
                 continue  # no attribute exists
         # return history ordered time and convert time stamps back to strings
@@ -310,11 +315,13 @@ class DataStore(MmapTable):
                     error_columns[key] = column
                 elif key in photometry_columns:
                     message = "found multiple matches for filter: {:}"
-                    self._logger.handleException(
-                        ValueError(message.format(key)))
+                    message = message.format(key)
+                    logger.error(message)
+                    ValueError(message)
                 else:
                     photometry_columns[key] = column
         if len(photometry_columns) == 0:
             message = "photometry not found: {:}".format(photometry_path)
-            self._logger.handleException(KeyError(message))
+            logger.error(message)
+            raise KeyError(message)
         return photometry_columns, error_columns

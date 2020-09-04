@@ -1,4 +1,5 @@
 import inspect
+import logging
 import os
 import sys
 import warnings
@@ -20,12 +21,13 @@ def datastore_create(
     from galmock.core.readwrite import guess_format, SUPPORTED_READERS
     from galmock.core.utils import ProgressBar
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore, append=False)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # check the columns file
     if columns is not None:
-        config = TableParser(columns, logger)
+        config = TableParser(columns)
         col_map_dict = config.column_map
 
     # automatically determine the input file format
@@ -33,7 +35,8 @@ def datastore_create(
         try:
             format = guess_format(input)
         except NotImplementedError as e:
-            logger.handleException(e)
+            logger.exception(str(e))
+            raise
     message = "opening input as {:}: {:}".format(format.upper(), input)
     logger.info(message)
 
@@ -48,7 +51,8 @@ def datastore_create(
         if col_map_dict is None:
             col_map_dict = {name: name for name in reader.colnames}
     except Exception as e:
-        logger.handleException(e)
+        logger.exception(str(e))
+        raise
     message = "buffer size: {:.2f} MB ({:,d} rows)".format(
         reader.buffersize / 1024**2, reader.bufferlength)
     logger.debug(message)
@@ -56,8 +60,7 @@ def datastore_create(
     # read the data file and write it to the memmory mapped data store
     with reader:
 
-        with mocks.DataStore.create(
-                datastore, len(reader), purge, logger=logger) as ds:
+        with mocks.DataStore.create(datastore, len(reader), purge) as ds:
 
             # create the new data columns
             logger.debug(
@@ -70,7 +73,8 @@ def datastore_create(
                         path, dtype=dtype, attr={
                             "source file": input, "source name": colname})
                 except KeyError as e:
-                    logger.handleException(e)
+                    logger.exception(str(e))
+                    raise
 
             # copy the data
             logger.info("converting input data ...")
@@ -243,15 +247,14 @@ def datastore_query(
                                         SUPPORTED_WRITERS)
     from galmock.core.utils import ProgressBar, bytesize_with_prefix
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
-    # determine if output goes to stdout in CSV format (allows redirecting)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
+
     to_stdout = output is None
-    if to_stdout:  # only print in case of error
-        logger.setTermLevel("error")
 
     # read the input table and write the selected entries to the output file
-    with mocks.DataStore.open(datastore, logger=logger) as ds:
+    with mocks.DataStore.open(datastore) as ds:
 
         # parse the math expression
         if query is not None:
@@ -276,9 +279,11 @@ def datastore_query(
                 logger.info(message)
             except SyntaxError as e:
                 message = e.args[0].replace(substitute, "/")
-                logger.handleException(SyntaxError(message))
+                logger.exception(message)
+                raise SyntaxError(message)
             except Exception as e:
-                logger.handleException(e)
+                logger.exception(str(e))
+                raise
             # create a sub-table with the data needed for the selection
             selection_table = ds[sorted(selection_columns)]
         else:
@@ -292,7 +297,8 @@ def datastore_query(
             for colname in columns:
                 if colname in requested_columns:
                     message = "duplicate column: {:}".format(colname)
-                    logger.handleException(KeyError(message))
+                    logger.error(message)
+                    raise KeyError(message)
                 requested_columns.add(colname)
             # find requested columns that do not exist in the table
             missing_cols = requested_columns - set(ds.colnames)
@@ -300,7 +306,8 @@ def datastore_query(
                 message = "column {:} not found: {:}".format(
                     "name" if len(missing_cols) == 1 else "names",
                     ", ".join(sorted(missing_cols)))
-                logger.handleException(KeyError(message))
+                logger.error(message)
+                raise KeyError(message)
             # establish the requried data type
             n_cols = len(requested_columns)
             message = "select a subset of {:d} column".format(n_cols)
@@ -338,7 +345,8 @@ def datastore_query(
             try:
                 format = guess_format(output)
             except NotImplementedError as e:
-                logger.handleException(e)
+                logger.exception(str(e))
+                raise
         message = "writing output as {:}: {:}".format(format.upper(), output)
         logger.info(message)
 
@@ -352,7 +360,8 @@ def datastore_query(
                 hdf5_shuffle=hdf5_shuffle,
                 hdf5_checksum=hdf5_checksum)
         except Exception as e:
-            logger.handleException(e)
+            logger.exception(str(e))
+            raise
 
         with writer:
 
@@ -385,7 +394,8 @@ def datastore_query(
                             e.args[0])
                         message += "the query expression for spelling "
                         message += "mistakes or undefined columns"
-                        logger.handleException(KeyError(message))
+                        logger.exception(message)
+                        raise KeyError(message)
                     selection = request_table[start:end][mask]
                 # read all entries in the range without applying the selection
                 else:
@@ -438,11 +448,12 @@ def prepare_MICE2(
         **kwargs):
     from galmock.MICE2 import evolution_correction_wrapped
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # apply the evolution correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(evolution_correction_wrapped)
@@ -456,7 +467,8 @@ def prepare_MICE2(
         try:
             model_mags, _ = ds.load_photometry(mag)
         except KeyError as e:
-            logger.handleException(e)
+            logger.exception(str(e))
+            raise
 
         # create the output columns
         for key, mag_path in model_mags.items():
@@ -487,11 +499,12 @@ def prepare_Flagship(
     from galmock.Flagship import (find_central_galaxies,
                                   flux_to_magnitudes_wrapped)
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # convert model fluxes to model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(flux_to_magnitudes_wrapped)
@@ -500,7 +513,8 @@ def prepare_Flagship(
         try:
             model_fluxes, _ = ds.load_photometry(flux)
         except KeyError as e:
-            logger.handleException(e)
+            logger.exception(str(e))
+            raise
 
         # create the output columns
         for key, flux_path in model_fluxes.items():
@@ -544,11 +558,12 @@ def magnification(
         **kwargs):
     from galmock.photometry import magnification_correction_wrapped
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(magnification_correction_wrapped)
@@ -562,7 +577,8 @@ def magnification(
         try:
             input_mags, _ = ds.load_photometry(mag)
         except KeyError as e:
-            logger.handleException(e)
+            logger.exception(str(e))
+            raise
 
         # create the output columns
         for key, mag_path in input_mags.items():
@@ -590,14 +606,15 @@ def effective_radius(
         **kwargs):
     from galmock.photometry import PhotometryParser, find_percentile_wrapped
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # check the configuration file
-    config = PhotometryParser(config, logger)
+    config = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(find_percentile_wrapped)
@@ -634,14 +651,15 @@ def apertures(
         **kwargs):
     from galmock.photometry import PhotometryParser, apertures_wrapped
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # check the configuration file
-    config = PhotometryParser(config, logger)
+    config = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         # initialize the aperture computation
@@ -691,21 +709,23 @@ def photometry(
     from galmock.photometry import (PhotometryParser,
                                     photometry_realisation_wrapped)
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # check the configuration file
-    config = PhotometryParser(config, logger)
+    config = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         # find all magnitude columns
         try:
             input_mags, _ = ds.load_photometry(mag)
         except KeyError as e:
-            logger.handleException(e)
+            logger.exception(str(e))
+            raise
 
         # select the required magnitude columns
         available = set(input_mags.keys())
@@ -713,7 +733,8 @@ def photometry(
         if len(missing) > 0:
             message = "requested filters not found: {:}".format(
                 ", ".join(missing))
-            logger.handleException(KeyError(message))
+            logger.error(message)
+            raise KeyError(message)
         
         # initialize the photometry generation
         ds.pool.set_worker(photometry_realisation_wrapped)
@@ -764,17 +785,18 @@ def match_data(
         **kwargs):
     from galmock.matching import DataMatcher, MatcherParser
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # check the configuration file
-    config = MatcherParser(config, logger)
+    config = MatcherParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
-        with DataMatcher(config, logger) as matcher:
+        with DataMatcher(config) as matcher:
 
             ds.pool.set_worker(matcher.apply)
             # increase the default chunksize, larger chunks will be marginally
@@ -789,7 +811,8 @@ def match_data(
             try:
                 matcher.check_features(ds)
             except Exception as e:
-                logger.handleException(e)
+                logger.exception(str(e))
+                raise
 
             # make the output columns for each observable
             for output_path, dtype, attr in matcher.observable_information():
@@ -797,8 +820,6 @@ def match_data(
                     output_path, dtype=dtype, attr=attr, overwrite=True)
                 ds.pool.add_result_column(output_path)
 
-            logger.info(
-                "building feature space tree, this may take a while ...")
             matcher.build_tree()
 
             # compute and store the corrected magnitudes
@@ -815,25 +836,26 @@ def BPZ(
         **kwargs):
     from galmock.photoz import BpzManager, BpzParser
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # check the configuration file
-    config = BpzParser(config, logger)
+    config = BpzParser(config)
 
     # run BPZ on the selected magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         # find all magnitude columns
         try:
             input_mags, input_errs = ds.load_photometry(mag)
         except KeyError as e:
-            logger.handleException(e)
+            logger.exception(str(e))
+            raise
 
         # launch the BPZ manager
-        logger.info("initializing BPZ")
-        with BpzManager(config, logger) as bpz:
+        with BpzManager(config) as bpz:
 
             ds.pool.set_worker(bpz.execute)
             ds.pool.parse_thread_id = True
@@ -845,7 +867,8 @@ def BPZ(
                     ds.pool.add_argument_column(mag_key)
                     ds.pool.add_argument_column(err_key)
                 except KeyError as e:
-                    logger.handleException(e)
+                    logger.exception(str(e))
+                    raise
 
             # create the output columns
             for key, desc in bpz.descriptions.items():
@@ -875,15 +898,16 @@ def select_sample(
     from galmock.samples import (DensitySampler, DumpConfig, RedshiftSampler,
                                  SampleManager)
 
-    fname = inspect.currentframe().f_code.co_name
-    logger = mocks.PipeLogger(fname, datastore)
+    jobname = inspect.currentframe().f_code.co_name
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
 
     # check the configuration file
     Parser = SampleManager.get_parser(type, sample)
-    config = Parser(config, logger)
+    config = Parser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False, logger=logger) as ds:
+    with mocks.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         logger.info("apply selection funcion: {:}".format(sample))

@@ -1,5 +1,6 @@
-import os
 import json
+import logging
+import os
 
 import numpy as np
 from scipy.interpolate import interp1d
@@ -11,6 +12,10 @@ from galmock.core.config import (Parameter, ParameterCollection,
                                  ParameterGroup, ParameterListing, Parser)
 from galmock.core.parallel import Schedule
 from galmock.core.utils import expand_path
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class DistributionEstimator(object):
@@ -239,17 +244,14 @@ class DataMatcher(object):
     _feature_dtype = "f8"  # default to full precision for feature space
     _tree = None
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
         self._config = config
         try:
-            if logger is not None:
-                logger.info("opening training data: {:}".format(config.input))
+            logger.info("opening training data: {:}".format(config.input))
             self._table = MmapTable(config.input)
         except Exception as e:
-            if logger is not None:
-                logger.handleException(e)
-            else:
-                raise e
+            logger.exception(str(e))
+            raise
 
     @property
     def config(self):
@@ -361,6 +363,8 @@ class DataMatcher(object):
                 raise TypeError(message.format(lookup_path))
 
     def build_tree(self):
+        logger.info(
+            "building feature space tree, this may take a while ...")
         samples = self._table[::self._config.every_n]  # apply the thinning
         features = self.transform(samples, True)  # apply scaling and weights
         self._tree = cKDTree(features)

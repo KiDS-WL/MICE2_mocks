@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import logging
 
 from galmock.core.readwrite import SUPPORTED_WRITERS
 from galmock.jobs import select_sample
@@ -49,6 +50,9 @@ help_group.add_argument(
 
 
 def main():
+    logging.basicConfig(
+        level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S",
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     args = parser.parse_args()
     select_sample(**{name: getattr(args, name) for name in vars(args)})
 

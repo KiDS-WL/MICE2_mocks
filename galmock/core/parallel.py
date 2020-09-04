@@ -1,3 +1,4 @@
+import logging
 import multiprocessing as mp
 import os
 import sys
@@ -13,6 +14,10 @@ from mmaptable.column import MmapColumn
 from mmaptable.table import MmapTable
 
 from galmock.core.utils import ProgressBar
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class Schedule:
@@ -130,8 +135,6 @@ class ParallelTable(object):
     -----------
     table : mmaptable.MmapTable
         Data table object to process.
-    logger : python logger instance
-        Enables optional event logging.
     """
 
     _chunksize = 16384  # default in current MmapTable implementation
@@ -140,10 +143,9 @@ class ParallelTable(object):
     _allow_modify = False
     _max_threads = mp.cpu_count()
 
-    def __init__(self, table, logger=None):
+    def __init__(self, table):
         # keep the table reference for later use
         self._table = table
-        self._logger = logger
         self._call_args = []
         self._call_kwargs = {}
         self._return_map = []
@@ -445,12 +447,9 @@ class ParallelTable(object):
             # check for any exceptions that occured in the worker processe
             for state in states:
                 if state is not None:
-                    #pool.terminate()
                     # raise the exception
-                    if self._logger is None:
-                        raise state
-                    else:
-                        self._logger.handleException(state)
+                    logger.error(state)
+                    raise
 
     def _apply_threads(self, pqueue, n_threads, prefix=None, seed=None):
         """
@@ -486,10 +485,8 @@ class ParallelTable(object):
         try:
             _thread_worker(worker_args)
         except Exception as e:
-            if self._logger is not None:
-                self._logger.handleException(e)
-            else:
-                raise
+            logger.exception(str(e))
+            raise
 
 
     def execute(self, n_threads=None, threads=None, prefix=None, seed=None):
@@ -525,8 +522,7 @@ class ParallelTable(object):
         except AttributeError:
             message = "processing data (with {:d} {:}) ...".format(
                 n_threads, parallel_type)
-        if self._logger is not None:
-            self._logger.info(message)
+        logger.info(message)
         # Initialize the monitoring thread that manages a progress bar,
         # managing the progress over all threads. The row progress is
         # communicated through a queue.

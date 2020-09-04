@@ -1,4 +1,5 @@
 import csv
+import logging
 import os
 import sys
 import warnings
@@ -9,6 +10,9 @@ import numpy as np
 
 from galmock.core.utils import expand_path
 
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 _mega_byte = 1024 * 1024
 BUFFERSIZE = 100 * _mega_byte
@@ -440,7 +444,8 @@ class CSVreader(Reader):
             self._guess_length()
         except Exception as e:
             self._file.close()
-            raise e
+            logger.exception(str(e))
+            raise
 
     def _guess_dialect(self):
         """
@@ -531,6 +536,7 @@ class CSVreader(Reader):
             except AttributeError:
                 message = "data type hints must be numpy type strings or "
                 message += "dtype instances"
+                logger.exception(message)
                 raise TypeError(message)
         # check if there are hints which do not match any of the file's columns
         if len(dtype_hints) > 0:
@@ -598,7 +604,9 @@ class CSVreader(Reader):
             # CSV is not safe against on evolution of the table schema
             message = "row {:d} with length {:d} does not match header "
             message += "schema with length {:d}"
-            raise ValueError(message.format(i, len(row), len(self.dtype)))
+            message = message.format(i, len(row), len(self.dtype))
+            logger.exception(message)
+            raise ValueError(message)
         self._current_row += i
         return buffer
 

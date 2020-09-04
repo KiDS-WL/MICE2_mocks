@@ -1,13 +1,16 @@
 import argparse
+import logging
 import os
 import string
 import textwrap
 
 import toml
 
-from galmock.core.logger import DummyLogger
 from galmock.core.utils import expand_path
 
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 _TOML_KEY_CHARACTERS = string.ascii_letters + string.digits + "_-"
 _WRAP = 79
@@ -189,7 +192,7 @@ class Parser(object):
 
     default = ParameterCollection()
 
-    def __init__(self, path, logger=DummyLogger()):
+    def __init__(self, path):
         full_path = expand_path(path)
         message = "reading configuration file: {:}".format(full_path)
         logger.info(message)
@@ -199,11 +202,11 @@ class Parser(object):
                 config = toml.load(f)
             self._config = self._parse_group(config, self.default)
         except OSError as e:
-            message = "configuration file not found"
-            logger.handleException(e, message)
+            logger.exception("configuration file not found")
+            raise
         except Exception as e:
-            message = "malformed configuration file"
-            logger.handleException(e, message)
+            logger.exception("malformed configuration file")
+            raise
         # bind the top level entries to the Parser instance
         for name, value in self._config.items():
             setattr(self, name, value)

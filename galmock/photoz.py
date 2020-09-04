@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import subprocess
@@ -12,6 +13,10 @@ from galmock.core.config import (Parameter, ParameterCollection,
                                  ParameterGroup, ParameterListing, Parser)
 from galmock.core.parallel import Schedule
 from galmock.core.utils import expand_path
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class BpzParser(Parser):
@@ -102,7 +107,8 @@ class BpzParser(Parser):
 
 class BpzManager(object):
 
-    def __init__(self, config, logger=None):
+    def __init__(self, config):
+        logger.info("initializing BPZ")
         self._config = config
         # create a temporary directory
         self._tempdir = TemporaryDirectory(
@@ -138,14 +144,12 @@ class BpzManager(object):
             ("CHI-SQUARED", "{:} chi squared".format(prefix)),
             ("M_0", "reference magnitude of the PBZ prior")])
         # run the initialization
-        if logger is not None:
-            message = "setting up working directory: {:}"
-            logger.debug(message.format(self.tempdir))
+        message = "setting up working directory: {:}"
+        logger.debug(message.format(self.tempdir))
         self._init_environment()
         self._init_tempdir()
         self._check_prior_template()
-        if logger is not None:
-            logger.debug("installing transmission profiles")
+        logger.debug("installing transmission profiles")
         self._install_filters()
         self._write_columns_file()
         self._create_AB_files()

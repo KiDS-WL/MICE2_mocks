@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import logging
 
 from galmock.core.readwrite import SUPPORTED_READERS
 from galmock.jobs import convert_input
@@ -26,6 +27,9 @@ input_group.add_argument(
 
 
 def main():
+    logging.basicConfig(
+        level=logging.DEBUG, datefmt="%Y-%m-%d %H:%M:%S",
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     args = parser.parse_args()
     convert_input(**{name: getattr(args, name) for name in vars(args)})
 
