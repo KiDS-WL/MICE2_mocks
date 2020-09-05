@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
+def preview(datastore):
+    preview_lines = []
+    for line in str(datastore).split("\n"):
+        if line.strip():
+            preview_lines.append(line)
+    linelength = max(len(l) for l in preview_lines)
+    header = "{ preview }".center(linelength, "-")
+    footer = "-" * linelength
+    preview = "\n".join(preview_lines[1:-2])
+    sys.stdout.write("{:}\n{:}\n{:}\n".format(header, preview, footer))
+
+
 class ModificationStamp(object):
     """
     Write attributes which indicate by which pipeline scipt (including command

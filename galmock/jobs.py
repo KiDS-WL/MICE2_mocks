@@ -7,13 +7,15 @@ import warnings
 import numpy as np
 from mmaptable.mathexpression import MathTerm
 
-import galmock as mocks
+import galmock
+from galmock.core.datastore import preview as datastore_preview 
 
 
 def _create_job_logger():
     jobname = inspect.stack()[1][3]
     logger = logging.getLogger(".".join([__name__, jobname]))
     logger.setLevel(logging.DEBUG)
+    logger.info("initialising job: {:}".format(jobname))
     return logger
 
 
@@ -65,7 +67,7 @@ def datastore_create(
     # read the data file and write it to the memmory mapped data store
     with reader:
 
-        with mocks.DataStore.create(datastore, len(reader), purge) as ds:
+        with galmock.DataStore.create(datastore, len(reader), purge) as ds:
 
             # create the new data columns
             logger.debug(
@@ -113,8 +115,7 @@ def datastore_create(
 
             # print a preview of the table as quick check
             try:
-                preview = str(ds)
-                sys.stdout.write("\n" + preview + "\n\n")
+                datastore_preview(ds)
             except Exception:
                 logger.warn("table preview failed")
 
@@ -125,7 +126,7 @@ def datastore_create(
 def datastore_verify(datastore):
     from galmock.core.utils import sha1sum
 
-    with mocks.DataStore.open(datastore) as ds:
+    with galmock.DataStore.open(datastore) as ds:
 
         # display the table meta data
         print("==> META DATA")
@@ -175,7 +176,7 @@ def datastore_info(
         logs=False,
         **kwargs):
 
-    with mocks.DataStore.open(datastore) as ds:
+    with galmock.DataStore.open(datastore) as ds:
 
         # display the table meta data
         print("==> META DATA")
@@ -257,7 +258,7 @@ def datastore_query(
     to_stdout = output is None
 
     # read the input table and write the selected entries to the output file
-    with mocks.DataStore.open(datastore) as ds:
+    with galmock.DataStore.open(datastore) as ds:
 
         # parse the math expression
         if query is not None:
@@ -454,7 +455,7 @@ def prepare_MICE2(
     logger = _create_job_logger()
 
     # apply the evolution correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(evolution_correction_wrapped)
@@ -503,7 +504,7 @@ def prepare_Flagship(
     logger = _create_job_logger()
 
     # convert model fluxes to model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(flux_to_magnitudes_wrapped)
@@ -560,7 +561,7 @@ def magnification(
     logger = _create_job_logger()
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(magnification_correction_wrapped)
@@ -609,7 +610,7 @@ def effective_radius(
     config = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(find_percentile_wrapped)
@@ -652,7 +653,7 @@ def apertures(
     config = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         # initialize the aperture computation
@@ -708,7 +709,7 @@ def photometry(
     config = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         # find all magnitude columns
@@ -782,7 +783,7 @@ def match_data(
     config = MatcherParser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         with DataMatcher(config) as matcher:
@@ -831,7 +832,7 @@ def BPZ(
     config = BpzParser(config)
 
     # run BPZ on the selected magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         # find all magnitude columns
@@ -892,7 +893,7 @@ def select_sample(
     config = Parser(config)
 
     # apply the magnification correction to the model magnitudes
-    with mocks.DataStore.open(datastore, False) as ds:
+    with galmock.DataStore.open(datastore, False) as ds:
         ds.pool.max_threads = threads
 
         logger.info("apply selection funcion: {:}".format(sample))
