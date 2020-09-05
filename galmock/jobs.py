@@ -248,7 +248,8 @@ def datastore_query(
         columns=None,
         compression=None,
         hdf5_shuffle=False,
-        hdf5_checksum=False):
+        hdf5_checksum=False,
+        **kwargs):
     from galmock.core.readwrite import (BUFFERSIZE, guess_format,
                                         SUPPORTED_WRITERS)
     from galmock.core.utils import ProgressBar, bytesize_with_prefix
