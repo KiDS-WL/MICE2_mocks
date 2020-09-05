@@ -19,9 +19,6 @@ parser.add_argument(
     help="directory in which the data store is located")
 
 parser.add_argument(
-    "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
-    help="photometry algorthim to apply (default: %(default)s)")
-parser.add_argument(
     "-c", "--config", type=expand_path, required=True,
     help="parameter file in TOML format that defines the properties of the "
          "photometry realisation and the method parameters (use --dump to "

@@ -20,9 +20,9 @@ job_map = {
     "4": "mocks_effective_radius {:} "
          "-c {config:} --threads {threads:} {verbose:}",
     "5": "mocks_apertures {:} "
-         "-c {config:} --method SExtractor --threads {threads:} {verbose:}",
+         "-c {config:} --threads {threads:} {verbose:}",
     "6": "mocks_photometry {:} "
-         "-c {config:} --method SExtractor --mag {mag:} --real {real:} "
+         "-c {config:} --mag {mag:} --real {real:} "
          "--threads {threads:} {verbose:}",
     "7": "mocks_match_data {:} "
          "-c {config:} --threads {threads:} {verbose:}",
@@ -39,7 +39,7 @@ job_map = {
 job_help_str = "select a set of job IDs to process the mock data, "
 job_help_str += "options are: {{{:}}} or 'all' to run all jobs".format(
     ", ".join(
-    "{:}:{:}".format(ID, job_map[ID].split()[0])
+    "{:}:{:}".format(ID, job_map[ID].split()[0][6:])
     for ID in sorted(job_map.keys())))
 
 

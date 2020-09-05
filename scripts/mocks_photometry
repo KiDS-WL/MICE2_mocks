@@ -26,17 +26,10 @@ parser.add_argument(
     help="sub-directory within data store where the photometry realisations "
          "are stored")
 parser.add_argument(
-    "--method", choices=("SExtractor", "GAaP"), default="SExtractor",
-    help="photometry algorthim to apply (default: %(default)s)")
-parser.add_argument(
     "-c", "--config", type=expand_path, required=True,
     help="parameter file in TOML format that defines the properties of the "
          "photometry realisation and the method parameters (use --dump to "
          "obtain a default parameter file)")
-parser.add_argument(
-    "--no-aper", action="store_true",
-    help="do not apply the aperture size depending signal-to-noise "
-         "correction, running 'mocks_apertures' is no longer required")
 parser.add_argument(
     "--seed", default="sapling",
     help="string to seed the random generator (default: %(default)s, results "
