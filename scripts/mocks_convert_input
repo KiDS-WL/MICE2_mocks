@@ -28,12 +28,15 @@ input_group.add_argument(
 input_group.add_argument(
     "--fits-ext", type=int, default=1,
     help="FITS table extension to read (default: %(default)s)")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
 
 
 def main():
     args = parser.parse_args()
     logging.config.dictConfig(
-        logging_config(args.datastore + ".log", overwrite=True))
+        logging_config(args.datastore + ".log",
+        overwrite=True, verbose=args.verbose))
     convert_input(**{name: getattr(args, name) for name in vars(args)})
 
 

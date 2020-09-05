@@ -12,27 +12,29 @@ from galmock import jobs
 # mapping between the job ID (see commandline parser) and the script signature
 job_map = {
     "1": "mocks_init_pipeline {:} "
-         "-i {input:} -c {columns:} --purge",
+         "-i {input:} -c {columns:} --purge {verbose:}",
     "2": "mocks_prepare_Flagship {:} "
          "--flux {flux:} --mag {mag:} --gal-idx {gal_idx:} "
-         "--is-central {is_central:} --threads {threads:}",
+         "--is-central {is_central:} --threads {threads:} {verbose:}",
     "3": "mocks_magnification {:} "
-         "--mag {mag:} --lensed {lensed:} --threads {threads:}",
+         "--mag {mag:} --lensed {lensed:} --threads {threads:} {verbose:}",
     "4": "mocks_effective_radius {:} "
-         "-c {config:} --threads {threads:}",
+         "-c {config:} --threads {threads:} {verbose:}",
     "5": "mocks_apertures {:} "
-         "-c {config:} --method SExtractor --threads {threads:}",
+         "-c {config:} --method SExtractor --threads {threads:} {verbose:}",
     "6": "mocks_photometry {:} "
          "-c {config:} --method SExtractor --mag {mag:} --real {real:} "
-         "--threads {threads:}",
+         "--threads {threads:} {verbose:}",
     "7": "mocks_match_data {:} "
-         "-c {config:} --threads {threads:}",
+         "-c {config:} --threads {threads:} {verbose:}",
     "8": "mocks_BPZ {:} "
-         "-c {config:} --mag {mag:} --zphot {zphot:} --threads {threads:}",
+         "-c {config:} --mag {mag:} --zphot {zphot:} "
+         "--threads {threads:} {verbose:}",
     "9": "mocks_select_sample {:} "
-         "-c {config:} --area {area:} --sample {sample:} --threads {threads:}",
+         "-c {config:} --area {area:} --sample {sample:} "
+         "--threads {threads:} {verbose:}",
     "out": "mocks_datastore_query {:} "
-           "-o {output:} -q '{query:}' --format {format:}"}
+           "-o {output:} -q '{query:}' --format {format:} {verbose:}"}
 
 # generate a help message for the commandline parser
 job_help_str = "select a set of job IDs to process the mock data, "
@@ -56,6 +58,8 @@ parser.add_argument(
 parser.add_argument(
     "--format", default="hdf5",
     help="file format of output files (default: %(default)s)")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
 
 
 def call(schema, *args, **kwargs):
@@ -74,6 +78,7 @@ def main():
     if "all" in args.jobID:
         args.jobID = job_map.keys()
     args.jobID = set(args.jobID)
+    args.verbose = "-v" if args.verbose else ""
 
     # configure the data paths and sample selections
     base_path = "/net/home/fohlen13/jlvdb/DATA/Flagship_HDF5/Flagship_v1-8-4_deep_ugrizYJHKs_shapes_halos_WL{:}.hdf5"
@@ -105,60 +110,63 @@ def main():
     if "1" in args.jobID:
         call(
             job_map["1"], datastore, input=input_file,
-            columns="config/Flagship.toml")
+            columns="config/Flagship.toml", verbose=args.verbose)
     if "2" in args.jobID:
         call(
             job_map["2"], datastore, flux="flux/model", mag="mags/model",
             gal_idx="index_galaxy", is_central="environ/is_central",
-            threads=args.threads)
+            threads=args.threads, verbose=args.verbose)
     if "3" in args.jobID:
         call(
             job_map["3"], datastore, mag="mags/model", lensed="mags/lensed",
-            threads=args.threads)
+            threads=args.threads, verbose=args.verbose)
     if "4" in args.jobID:
         call(
             job_map["4"], datastore, config="config/photometry.toml",
-            threads=args.threads)
+            threads=args.threads, verbose=args.verbose)
     if "5" in args.jobID:
         call(
             job_map["5"], datastore, config="config/photometry.toml",
-            method="SExtractro", threads=args.threads)
+            method="SExtractro", threads=args.threads, verbose=args.verbose)
     if "6" in args.jobID:
         call(
             job_map["6"], datastore, config="config/photometry_old.toml",
             method="SExtractro", mag="mags/lensed", real="mags/K1000",
-            threads=args.threads)
+            threads=args.threads, verbose=args.verbose)
     if "7" in args.jobID:
         call(
             job_map["7"], datastore, config="config/matching.toml",
-            threads=args.threads)
+            threads=args.threads, verbose=args.verbose)
     if "8" in args.jobID:
         os.environ["hostname"] = os.uname()[1]
         call(
             job_map["8"], datastore, config="config/BPZ.toml",
-            mag="mags/K1000", zphot="BPZ/K1000", threads=args.threads)
+            mag="mags/K1000", zphot="BPZ/K1000", threads=args.threads,
+            verbose=args.verbose)
     if "9" in args.jobID:
         for sample in samples:
             call(
                 job_map["9"], datastore, sample=sample, area=area,
                 config="samples/{:}.toml".format(sample),
-                threads=args.threads)
+                threads=args.threads, verbose=args.verbose)
     if "out" in args.jobID:
         call(
             job_map["out"] + " --verify", datastore,
             output=output_base.format(args.type, ""),
-            format=args.format, query=query)
+            format=args.format, query=query, verbose=args.verbose)
         # get the remaining samples
         for sample in samples:
             call(
                 job_map["out"], datastore,
                 output=output_base.format(args.type, "_" + sample),
-                format=args.format, query=query_sample.format(sample, 1))
+                format=args.format, query=query_sample.format(sample, 1),
+                verbose=args.verbose)
         # get the BOSS sample
         call(
             job_map["out"], datastore,
             output=output_base.format(args.type, "_BOSS"),
-            format=args.format, query=query_sample.format("SDSS", 12))
+            format=args.format, query=query_sample.format("SDSS", 12),
+            verbose=args.verbose)
 
 
 if __name__ == "__main__":

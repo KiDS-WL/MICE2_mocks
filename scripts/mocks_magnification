@@ -23,12 +23,15 @@ parser.add_argument(
 parser.add_argument(
     "--threads", type=int, default=-1,
     help="maximum number of threads to use (default: all)")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
 
 
 def main():
     args = parser.parse_args()
     logging.config.dictConfig(
-        logging_config(args.datastore + ".log", overwrite=False))
+        logging_config(args.datastore + ".log",
+        overwrite=False, verbose=args.verbose))
     magnification(**{name: getattr(args, name) for name in vars(args)})
 
 

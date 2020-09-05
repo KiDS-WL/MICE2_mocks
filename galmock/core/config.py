@@ -17,7 +17,7 @@ _WRAP = 79
 _INDENT = 24
 
 
-def logging_config(logpath, overwrite=False):
+def logging_config(logpath, overwrite=False, verbose=False):
     logconfig = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -30,7 +30,11 @@ def logging_config(logpath, overwrite=False):
         },
 
         "formatters": {
-            "default": {
+            "console": {
+                "format": "%(asctime)s | %(levelname)-7s | %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+            "file": {
                 "format": \
                     "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
@@ -39,13 +43,13 @@ def logging_config(logpath, overwrite=False):
 
         "handlers": {
             "console": {
-                "level": "DEBUG",
-                "formatter": "default",
+                "level": "DEBUG" if verbose else "INFO",
+                "formatter": "console",
                 "class": "logging.StreamHandler",
             },
             "file": {
                 "level": "DEBUG",
-                "formatter": "default",
+                "formatter": "file",
                 "class": "logging.FileHandler",
                 "filename": logpath,
                 "mode": "w" if overwrite else "a",

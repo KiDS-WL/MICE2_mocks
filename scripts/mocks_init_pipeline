@@ -36,6 +36,8 @@ input_group.add_argument(
 input_group.add_argument(
     "--fits-ext", type=int, default=1,
     help="FITS table extension to read (default: %(default)s)")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
 
 help_group = parser.add_argument_group("help and documentation")
 help_group.add_argument(
@@ -49,7 +51,8 @@ help_group.add_argument(
 def main():
     args = parser.parse_args()
     logging.config.dictConfig(
-        logging_config(args.datastore + ".log", overwrite=True))
+        logging_config(args.datastore + ".log",
+        overwrite=True, verbose=args.verbose))
     init_pipeline(**{name: getattr(args, name) for name in vars(args)})
 
 

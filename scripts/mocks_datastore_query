@@ -45,12 +45,15 @@ output_group.add_argument(
 output_group.add_argument(
     "--hdf5-checksum", action="store_true",
     help="write fletcher32 check sums to HDF5 file data blocks")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
 
 
 def main():
     args = parser.parse_args()
     logging.config.dictConfig(
-        logging_config(args.datastore + ".log", overwrite=False))
+        logging_config(args.datastore + ".log",
+        overwrite=False, verbose=args.verbose))
     datastore_query(**{name: getattr(args, name) for name in vars(args)})
 
 
