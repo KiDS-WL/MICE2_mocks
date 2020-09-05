@@ -10,6 +10,13 @@ from mmaptable.mathexpression import MathTerm
 import galmock as mocks
 
 
+def _create_job_logger():
+    jobname = inspect.stack()[1][3]
+    logger = logging.getLogger(".".join([__name__, jobname]))
+    logger.setLevel(logging.DEBUG)
+    return logger
+
+
 def datastore_create(
         datastore,
         input,
@@ -21,9 +28,7 @@ def datastore_create(
     from galmock.core.readwrite import guess_format, SUPPORTED_READERS
     from galmock.core.utils import ProgressBar
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # check the columns file
     if columns is not None:
@@ -247,9 +252,7 @@ def datastore_query(
                                         SUPPORTED_WRITERS)
     from galmock.core.utils import ProgressBar, bytesize_with_prefix
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     to_stdout = output is None
 
@@ -448,9 +451,7 @@ def prepare_MICE2(
         **kwargs):
     from galmock.MICE2 import evolution_correction_wrapped
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # apply the evolution correction to the model magnitudes
     with mocks.DataStore.open(datastore, False) as ds:
@@ -499,9 +500,7 @@ def prepare_Flagship(
     from galmock.Flagship import (find_central_galaxies,
                                   flux_to_magnitudes_wrapped)
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # convert model fluxes to model magnitudes
     with mocks.DataStore.open(datastore, False) as ds:
@@ -558,9 +557,7 @@ def magnification(
         **kwargs):
     from galmock.photometry import magnification_correction_wrapped
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # apply the magnification correction to the model magnitudes
     with mocks.DataStore.open(datastore, False) as ds:
@@ -606,9 +603,7 @@ def effective_radius(
         **kwargs):
     from galmock.photometry import PhotometryParser, find_percentile_wrapped
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # check the configuration file
     config = PhotometryParser(config)
@@ -651,9 +646,7 @@ def apertures(
         **kwargs):
     from galmock.photometry import PhotometryParser, apertures_wrapped
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # check the configuration file
     config = PhotometryParser(config)
@@ -709,9 +702,7 @@ def photometry(
     from galmock.photometry import (PhotometryParser,
                                     photometry_realisation_wrapped)
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # check the configuration file
     config = PhotometryParser(config)
@@ -785,9 +776,7 @@ def match_data(
         **kwargs):
     from galmock.matching import DataMatcher, MatcherParser
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # check the configuration file
     config = MatcherParser(config)
@@ -836,9 +825,7 @@ def BPZ(
         **kwargs):
     from galmock.photoz import BpzManager, BpzParser
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # check the configuration file
     config = BpzParser(config)
@@ -898,9 +885,7 @@ def select_sample(
     from galmock.samples import (DensitySampler, DumpConfig, RedshiftSampler,
                                  SampleManager)
 
-    jobname = inspect.currentframe().f_code.co_name
-    logger = logging.getLogger(".".join([__name__, jobname]))
-    logger.setLevel(logging.DEBUG)
+    logger = _create_job_logger()
 
     # check the configuration file
     Parser = SampleManager.get_parser(type, sample)
