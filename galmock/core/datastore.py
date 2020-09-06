@@ -30,12 +30,14 @@ class ModificationStamp(object):
 
     def __init__(self, sys_argv):
         self._columns = OrderedDict()
-        # store the script call that created/modified this column
-        call_basename = os.path.basename(sys_argv[0])
-        call_arguments = sys_argv[1:]
+        # get the function call signature
+        caller = sys_argv[0]
+        caller += "("
+        caller += ", ".join(sys_argv[1:])
+        caller += ")"
         # create a dictionary with all shared entries
         self._attrs = {}
-        self._attrs["created by"] = " ".join([call_basename, *call_arguments])
+        self._attrs["created by"] = caller
         self._attrs["pipeline version"] = __version__
     
     def __len__(self):

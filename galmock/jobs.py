@@ -3,12 +3,14 @@ import logging
 import os
 import sys
 import warnings
+from collections import OrderedDict
 
 import numpy as np
 
 import galmock
 from galmock.core.bitmask import BitMaskManager
 from galmock.core.config import TableParser
+from galmock.core.datastore import ModificationStamp
 from galmock.core.readwrite import create_reader, create_writer
 from galmock.core.utils import (ProgressBar, bytesize_with_prefix,
                                 check_query_columns, sha1sum,
@@ -33,14 +35,28 @@ def _create_job_logger():
     return logger
 
 
-def _get_datastore(datastore):
-    if type(datastore) is str:
-        ds = galmock.DataStore.open(datastore)
-    elif isinstance(datastore, DataStore): 
-        ds = datastore
-    else:
-        raise TypeError("datastore must be file path or DataStore instance")
-    return ds
+def _get_pseudo_sys_argv():
+    caller_frame = inspect.stack()[1][0]
+    # list the positional, variable and named arguments
+    params = OrderedDict()
+    arginfo = inspect.getargvalues(caller_frame)
+    # positional
+    for key in arginfo.args:
+        params[key] = arginfo.locals[key]
+    # varaible
+    if arginfo.varargs is not None:
+        for i, arg in enumerate(arginfo.locals[arginfo.varargs]):
+            key = "{:}[{:d}]".format(arginfo.varargs, i)
+            params[key] = arg
+    # keyword
+    if arginfo.keywords is not None:
+        for key, arg in arginfo.locals[arginfo.keywords].items():
+            params[key] = arg
+    # create a sys.argv style list
+    sys_argv = [caller_frame.f_code.co_name]
+    for key, val in params.items():
+        sys_argv.append("{:}={:}".format(key, str(val)))
+    return sys_argv
 
 
 def datastore_create(
@@ -54,8 +70,8 @@ def datastore_create(
 
     # check the columns file
     if columns is not None:
-        config = TableParser(columns)
-        col_map_dict = config.column_map
+        configuration = TableParser(columns)
+        col_map_dict = configuration.column_map
     else:
         col_map_dict = None
 
@@ -63,6 +79,7 @@ def datastore_create(
     with create_reader(input, format, col_map_dict, fits_ext) as reader:
 
         with galmock.DataStore.create(datastore, len(reader), purge) as ds:
+            ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
 
             # create the new data columns
             logger.debug(
@@ -115,7 +132,8 @@ def datastore_create(
 
 
 def datastore_verify(
-        datastore):
+        datastore,
+        **kwargs):
     with galmock.DataStore.open(datastore) as ds:
         ds.show_metadata()
         ds.verify()
@@ -156,6 +174,7 @@ def datastore_query(
 
     # read the input table and write the selected entries to the output file
     with galmock.DataStore.open(datastore) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
 
         # parse the math expression
         selection_columns, expression = substitute_division_symbol(query, ds)
@@ -263,6 +282,7 @@ def prepare_MICE2(
 
     # apply the evolution correction to the model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(evolution_correction_wrapped)
@@ -309,6 +329,7 @@ def prepare_Flagship(
 
     # convert model fluxes to model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(flux_to_magnitudes_wrapped)
@@ -364,6 +385,7 @@ def magnification(
 
     # apply the magnification correction to the model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(magnification_correction_wrapped)
@@ -407,15 +429,16 @@ def effective_radius(
     logger = _create_job_logger()
 
     # check the configuration file
-    config = PhotometryParser(config)
+    configuration = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         ds.pool.set_worker(find_percentile_wrapped)
 
-        ds.pool.add_argument_constant(config.intrinsic["flux_frac"])
+        ds.pool.add_argument_constant(configuration.intrinsic["flux_frac"])
 
         # find disk and bulge component columns
         input_columns = (
@@ -428,12 +451,13 @@ def effective_radius(
 
         # create the output column
         ds.add_column(
-            config.intrinsic["r_effective"], dtype="f4", overwrite=True, attr={
+            configuration.intrinsic["r_effective"], dtype="f4", attr={
                 "description":
                 "effective radius (emitting {:.1%} of the flux)".format(
-                    config.intrinsic["flux_frac"])})
+                    configuration.intrinsic["flux_frac"])},
+            overwrite=True)
         # add column to call signature
-        ds.pool.add_result_column(config.intrinsic["r_effective"])
+        ds.pool.add_result_column(configuration.intrinsic["r_effective"])
 
         # compute and store the corrected magnitudes
         ds.pool.execute()
@@ -448,16 +472,17 @@ def apertures(
     logger = _create_job_logger()
 
     # check the configuration file
-    config = PhotometryParser(config)
+    configuration = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         # initialize the aperture computation
         ds.pool.set_worker(apertures_wrapped)
-        ds.pool.add_argument_constant(config.method)
-        ds.pool.add_argument_constant(config)
+        ds.pool.add_argument_constant(configuration.method)
+        ds.pool.add_argument_constant(configuration)
 
         # find effective radius and b/a ratio columns
         input_columns = (
@@ -475,13 +500,15 @@ def apertures(
             ("apertures/{:}/snr_correction/{:}",
                 "{:} aperture S/N correction (PSF size: {:.2f}\")"))
         # make the output columns for each filter
-        for key in config.filter_names:
+        for key in configuration.filter_names:
             for out_path, desc in output_columns:
-                formatted_path = out_path.format(config.aperture_name, key)
+                formatted_path = out_path.format(
+                    configuration.aperture_name, key)
                 ds.add_column(
                     formatted_path, dtype="f4", overwrite=True, attr={
                         "description":
-                        desc.format(config.method, config.PSF[key])})
+                        desc.format(
+                            configuration.method, configuration.PSF[key])})
                 # collect all new columns as output targets
                 ds.pool.add_result_column(formatted_path)
 
@@ -501,10 +528,11 @@ def photometry(
     logger = _create_job_logger()
 
     # check the configuration file
-    config = PhotometryParser(config)
+    configuration = PhotometryParser(config)
 
     # apply the magnification correction to the model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         # find all magnitude columns
@@ -516,7 +544,7 @@ def photometry(
 
         # select the required magnitude columns
         available = set(input_mags.keys())
-        missing = set(config.filter_names) - available
+        missing = set(configuration.filter_names) - available
         if len(missing) > 0:
             message = "requested filters not found: {:}".format(
                 ", ".join(missing))
@@ -525,20 +553,20 @@ def photometry(
         
         # initialize the photometry generation
         ds.pool.set_worker(photometry_realisation_wrapped)
-        ds.pool.add_argument_constant(config)
+        ds.pool.add_argument_constant(configuration)
 
         # collect the filter-specific arguments
-        for key in config.filter_names:
+        for key in configuration.filter_names:
             # 1) magnitude column
             mag_path = input_mags[key]
             ds.require_column(mag_path, "{:}-band".format(key))
             ds.pool.add_argument_column(mag_path)
             # 2) magnitude limit
-            ds.pool.add_argument_constant(config.limits[key])
+            ds.pool.add_argument_constant(configuration.limits[key])
             # 3) S/N correction factors
-            if config.photometry["apply_apertures"]:
+            if configuration.photometry["apply_apertures"]:
                 snr_path = "apertures/{:}/snr_correction/{:}".format(
-                    config.aperture_name, key)
+                    configuration.aperture_name, key)
                 ds.require_column(
                     mag_path, "{:}-band S/N correction".format(key))
                 ds.pool.add_argument_column(snr_path)
@@ -551,13 +579,14 @@ def photometry(
             ("{:}/{:}_err",
              "{:} photometric error (from {:}, limit: {:.2f} mag)"))
         # make the output columns for each filter
-        for key in config.filter_names:
+        for key in configuration.filter_names:
             for out_path, desc in output_columns:
                 ds.add_column(
                     out_path.format(real, key),
                     dtype=ds[mag_path].dtype.str, overwrite=True, attr={
                         "description": desc.format(
-                            config.method, mag_path, config.limits[key])})
+                            configuration.method, mag_path,
+                            configuration.limits[key])})
                 ds.pool.add_result_column(out_path.format(real, key))
 
         # compute and store the corrected magnitudes
@@ -573,13 +602,14 @@ def match_data(
     logger = _create_job_logger()
 
     # check the configuration file
-    config = MatcherParser(config)
+    configuration = MatcherParser(config)
 
     # apply the magnification correction to the model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
-        with DataMatcher(config) as matcher:
+        with DataMatcher(configuration) as matcher:
 
             ds.pool.set_worker(matcher.apply)
             # increase the default chunksize, larger chunks will be marginally
@@ -587,7 +617,7 @@ def match_data(
             ds.pool.chunksize = threads * ds.pool.chunksize
 
             # select the required feature columns
-            for feature_path in config.features.values():
+            for feature_path in configuration.features.values():
                 ds.require_column(feature_path, "feature")
                 ds.pool.add_argument_column(feature_path, keyword=feature_path)
             # check that the data types are compatible
@@ -620,10 +650,11 @@ def BPZ(
     logger = _create_job_logger()
 
     # check the configuration file
-    config = BpzParser(config)
+    configuration = BpzParser(config)
 
     # run BPZ on the selected magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         # find all magnitude columns
@@ -634,7 +665,7 @@ def BPZ(
             raise
 
         # launch the BPZ manager
-        with BpzManager(config) as bpz:
+        with BpzManager(configuration) as bpz:
 
             ds.pool.set_worker(bpz.execute)
             ds.pool.parse_thread_id = True
@@ -676,10 +707,11 @@ def select_sample(
 
     # check the configuration file
     Parser = SampleManager.get_parser(type, sample)
-    config = Parser(config)
+    configuration = Parser(config)
 
     # apply the magnification correction to the model magnitudes
     with galmock.DataStore.open(datastore, False) as ds:
+        ds._timestamp = ModificationStamp(_get_pseudo_sys_argv())
         ds.pool.max_threads = threads
 
         logger.info("apply selection funcion: {:}".format(sample))
@@ -690,7 +722,7 @@ def select_sample(
         # make the output column
         BMM = BitMaskManager(sample)
         bitmask = ds.add_column(
-            config.bitmask, dtype=BMM.dtype, overwrite=True)
+            configuration.bitmask, dtype=BMM.dtype, overwrite=True)
         # initialize the selection bit (bit 1) to true, all subsequent
         # selections will be joined with AND
         logger.debug("initializing bit mask")
@@ -702,8 +734,8 @@ def select_sample(
 
         ds.pool.set_worker(selector.apply)
         # select the columns needed for the selection function
-        ds.pool.add_argument_column(config.bitmask)
-        for name, path in config.selection.items():
+        ds.pool.add_argument_column(configuration.bitmask)
+        for name, path in configuration.selection.items():
             ds.require_column(path)
             ds.pool.add_argument_column(path, keyword=name)
 
@@ -722,15 +754,17 @@ def select_sample(
                 else:
                     logger.info("estimating redshift density ...")
                     sampler = sampler_class(
-                        BMM, area, bitmask, ds[config.selection["redshift"]])
+                        BMM, area, bitmask,
+                        ds[configuration.selection["redshift"]])
 
                 ds.pool.set_worker(sampler.apply)
                 # select the columns needed for the selection function
-                ds.pool.add_argument_column(config.bitmask)
+                ds.pool.add_argument_column(configuration.bitmask)
                 # redshift weighted density requires a mock n(z) estimate
                 if isinstance(sampler, RedshiftSampler):
                     ds.pool.add_argument_column(
-                        config.selection["redshift"], keyword="redshift")
+                        configuration.selection["redshift"],
+                        keyword="redshift")
 
                 # apply selection
                     ds.pool.execute(seed=seed, prefix="density sampling")
