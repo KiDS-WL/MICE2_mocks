@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from galmock.core.utils import expand_path
+from galmock.core.utils import bytesize_with_prefix, expand_path
 
 
 logger = logging.getLogger(__name__)
@@ -1253,3 +1253,67 @@ try:
 
 except ImportError:
     pass
+
+
+############################  convenience functions  ##########################
+
+def create_reader(input, format, col_map_dict, fits_ext):
+    # automatically determine the input file format
+    if format is None:
+        try:
+            format = guess_format(input)
+        except NotImplementedError as e:
+            logger.exception(str(e))
+            raise
+    message = "opening input as {:}: {:}".format(format.upper(), input)
+    logger.info(message)
+    # create a standardized input reader
+    reader_class = SUPPORTED_READERS[format]
+    try:
+        kwargs = {"ext": fits_ext}
+        if col_map_dict is not None:
+            kwargs["datasets"] = set(col_map_dict.values())
+        reader = reader_class(input, **kwargs)
+        # create a dummy for col_map_dict
+        if col_map_dict is None:
+            col_map_dict = {name: name for name in reader.colnames}
+    except Exception as e:
+        logger.exception(str(e))
+        raise
+    # notify about buffer size
+    message = "buffer size: {:.2f} MB ({:,d} rows)".format(
+        reader.buffersize / 1024**2, reader.bufferlength)
+    logger.debug(message)
+    return reader
+
+
+def create_writer(
+        output, format, dtype, compression, hdf5_shuffle, hdf5_checksum):
+    # automatically determine the output file format
+    if output is None:  # write to stdout in csv format
+        format = "csv"
+    if format is None:
+        try:
+            format = guess_format(output)
+        except NotImplementedError as e:
+            logger.exception(str(e))
+            raise
+    message = "writing output as {:}: {:}".format(format.upper(), output)
+    logger.info(message)
+    # create a standardized output writer
+    writer_class = SUPPORTED_WRITERS[format]
+    try:
+        writer = writer_class(
+            dtype, output, overwrite=True,
+            # format specific parameters
+            compression=compression,
+            hdf5_shuffle=hdf5_shuffle,
+            hdf5_checksum=hdf5_checksum)
+    except Exception as e:
+        logger.exception(str(e))
+        raise
+    # determine an automatic buffer/chunk size
+    message = "buffer size: {:} ({:,d} rows)".format(
+        bytesize_with_prefix(writer.buffersize), writer.bufferlength)
+    logger.debug(message)
+    return writer

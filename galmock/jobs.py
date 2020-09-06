@@ -5,10 +5,24 @@ import sys
 import warnings
 
 import numpy as np
-from mmaptable.mathexpression import MathTerm
 
 import galmock
-from galmock.core.datastore import preview as datastore_preview 
+from galmock.core.bitmask import BitMaskManager
+from galmock.core.config import TableParser
+from galmock.core.readwrite import create_reader, create_writer
+from galmock.core.utils import (ProgressBar, bytesize_with_prefix,
+                                check_query_columns, sha1sum,
+                                substitute_division_symbol)
+from galmock.Flagship import find_central_galaxies, flux_to_magnitudes_wrapped
+from galmock.matching import DataMatcher, DistributionEstimator, MatcherParser
+from galmock.MICE2 import evolution_correction_wrapped
+from galmock.photometry import (PhotometryParser, apertures_wrapped,
+                                find_percentile_wrapped,
+                                magnification_correction_wrapped,
+                                photometry_realisation_wrapped)
+from galmock.photoz import BpzManager, BpzParser
+from galmock.samples import (DensitySampler, DumpConfig, RedshiftSampler,
+                             SampleManager)
 
 
 def _create_job_logger():
@@ -19,6 +33,16 @@ def _create_job_logger():
     return logger
 
 
+def _get_datastore(datastore):
+    if type(datastore) is str:
+        ds = galmock.DataStore.open(datastore)
+    elif isinstance(datastore, DataStore): 
+        ds = datastore
+    else:
+        raise TypeError("datastore must be file path or DataStore instance")
+    return ds
+
+
 def datastore_create(
         datastore,
         input,
@@ -26,46 +50,17 @@ def datastore_create(
         fits_ext=1,
         columns=None,
         purge=False):
-    from galmock.core.config import TableParser
-    from galmock.core.readwrite import guess_format, SUPPORTED_READERS
-    from galmock.core.utils import ProgressBar
-
     logger = _create_job_logger()
 
     # check the columns file
     if columns is not None:
         config = TableParser(columns)
         col_map_dict = config.column_map
-
-    # automatically determine the input file format
-    if format is None:
-        try:
-            format = guess_format(input)
-        except NotImplementedError as e:
-            logger.exception(str(e))
-            raise
-    message = "opening input as {:}: {:}".format(format.upper(), input)
-    logger.info(message)
-
-    # create a standardized input reader
-    reader_class = SUPPORTED_READERS[format]
-    try:
-        kwargs = {"ext": fits_ext}
-        if col_map_dict is not None:
-            kwargs["datasets"] = set(col_map_dict.values())
-        reader = reader_class(input, **kwargs)
-        # create a dummy for col_map_dict
-        if col_map_dict is None:
-            col_map_dict = {name: name for name in reader.colnames}
-    except Exception as e:
-        logger.exception(str(e))
-        raise
-    message = "buffer size: {:.2f} MB ({:,d} rows)".format(
-        reader.buffersize / 1024**2, reader.bufferlength)
-    logger.debug(message)
+    else:
+        col_map_dict = None
 
     # read the data file and write it to the memmory mapped data store
-    with reader:
+    with create_reader(input, format, col_map_dict, fits_ext) as reader:
 
         with galmock.DataStore.create(datastore, len(reader), purge) as ds:
 
@@ -112,60 +107,18 @@ def datastore_create(
             # if using the CSV reader: truncate any allocated, unused rows
             if len(ds) > end:
                 ds.resize(end)
-
             # print a preview of the table as quick check
-            try:
-                datastore_preview(ds)
-            except Exception:
-                logger.warn("table preview failed")
+            ds.show_preview()
 
             message = "finalized data store with {:,d} rows ({:})"
             logger.info(message.format(end, ds.filesize))
 
 
-def datastore_verify(datastore):
-    from galmock.core.utils import sha1sum
-
+def datastore_verify(
+        datastore):
     with galmock.DataStore.open(datastore) as ds:
-
-        # display the table meta data
-        print("==> META DATA")
-        n_cols, n_rows = ds.shape
-        print("root:     {:}".format(ds.root))
-        print("size:     {:}".format(ds.filesize))
-        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
-
-        # verify the check sums
-        header = "==> COLUMN NAME"
-        width_cols = max(len(header), max(
-            len(colname) for colname in ds.colnames))
-        print("\n{:}    {:}  {:}".format(
-            header.ljust(width_cols), "STATUS ", "HASH"))
-        # compute and verify the store checksums column by column
-        n_good, n_warn, n_error = 0, 0, 0
-        line = "{:<{width}s}    {:<7s}  {:s}"
-        for name in ds.colnames:
-            column = ds[name]
-            try:
-                checksum = column.attr["SHA-1 checksum"]
-                assert(checksum == sha1sum(column.filename))
-                n_good += 1
-            except KeyError:
-                print(line.format(
-                    name, "WARNING", "no checksum provided", width=width_cols))
-                n_warn += 1
-            except AssertionError:
-                print(line.format(
-                    name, "ERROR", "checksums do not match", width=width_cols))
-                n_error += 1
-            else:
-                print(line.format(name, "OK", checksum, width=width_cols))
-        # do a final report
-        if n_good == len(ds.colnames):
-            print("\nAll columns passed")
-        else:
-            print("\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(
-                n_good, n_warn, n_error))
+        ds.show_metadata()
+        ds.verify()
 
 
 def datastore_info(
@@ -175,68 +128,16 @@ def datastore_info(
         history=False,
         logs=False,
         **kwargs):
-
     with galmock.DataStore.open(datastore) as ds:
-
-        # display the table meta data
-        print("==> META DATA")
-        n_cols, n_rows = ds.shape
-        print("root:     {:}".format(ds.root))
-        print("size:     {:}".format(ds.filesize))
-        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
-
+        ds.show_metadata()
         if columns:
-            # list all the column names and data types
-            header = "==> COLUMN NAME"
-            width_cols = max(len(header), max(
-                len(colname) for colname in ds.colnames))
-            print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
-            for name in ds.colnames:
-                colname_padded = name.ljust(width_cols)
-                line = "{:}    {:}".format(
-                    colname_padded, str(ds[name].dtype))
-                print(line)
-
+            ds.show_columns()
         if attr:
-            # for each column print a summary of the attached attributes
-            print("\n==> ATTRIBUTES")
-            for name in ds.colnames:
-                print()
-                # print the column name indented and then a tree-like listing
-                # of the attributes (drawing connecting lines for better
-                # visibitilty)
-                print("{:}".format(name))
-                attrs = ds[name].attr
-                # all attributes from the pipeline should be dictionaries
-                if type(attrs) is dict:
-                    i_last = len(attrs)
-                    width_key = max(len(key) + 2 for key in attrs)
-                    for i, key in enumerate(sorted(attrs), 1):
-                        print_key = key + " :"
-                        line = "{:}{:} {:}".format(
-                            " └╴ " if i == i_last else " ├╴ ",
-                            print_key.ljust(width_key), str(attrs[key]))
-                        print(line)
-                # fallback
-                else:
-                    print("     └╴ {:}".format(str(attrs)))
-
+            ds.show_attributes()
         if history:
-            # list all pipeline script calls ordered by time
-            print("\n==> HISTORY")
-            date_width = 24
-            for date, call in ds.get_history().items():
-                print("{:} : {:}".format(date.ljust(date_width), call))
-
+            ds.show_history()
         if logs:
-            # show the log file
-            print("\n==> LOGS")
-            logpath = ds.root + ".log"
-            if not os.path.exists(logpath):
-                raise OSError("log file not found: {:}".format(logpath))
-            with open(logpath) as f:
-                for line in f.readlines():
-                    print(line.strip())
+            ds.show_logs()
 
 
 def datastore_query(
@@ -250,82 +151,18 @@ def datastore_query(
         hdf5_shuffle=False,
         hdf5_checksum=False,
         **kwargs):
-    from galmock.core.readwrite import (BUFFERSIZE, guess_format,
-                                        SUPPORTED_WRITERS)
-    from galmock.core.utils import ProgressBar, bytesize_with_prefix
-
     logger = _create_job_logger()
-
     to_stdout = output is None
 
     # read the input table and write the selected entries to the output file
     with galmock.DataStore.open(datastore) as ds:
 
         # parse the math expression
-        if query is not None:
-            selection_columns = set()
-            # Since the symbol / can be used as column name and division
-            # symbol, we need to temporarily substitute the symbol before
-            # parsing the expression.
-            substitute = "#"
-            try:
-                # apply the substitutions to all valid column names apperaing
-                # in the math expression to avoid substitute intended divisions
-                for colname in ds.colnames:
-                    substitue = colname.replace("/", substitute)
-                    while colname in query:
-                        query = query.replace(colname, substitue)
-                        selection_columns.add(colname)
-                expression = MathTerm.from_string(query)
-                # recursively undo the substitution
-                expression._substitute_characters(substitute, "/")
-                # display the interpreted expression
-                message = "apply selection: {:}".format(expression.expression)
-                logger.info(message)
-            except SyntaxError as e:
-                message = e.args[0].replace(substitute, "/")
-                logger.exception(message)
-                raise SyntaxError(message)
-            except Exception as e:
-                logger.exception(str(e))
-                raise
-            # create a sub-table with the data needed for the selection
+        selection_columns, expression = substitute_division_symbol(query, ds)
+        if selection_columns is not None:
             selection_table = ds[sorted(selection_columns)]
-        else:
-            expression = None
-            selection_columns = None
-
         # check the requested columns
-        if columns is not None:
-            # check for duplicates
-            requested_columns = set()
-            for colname in columns:
-                if colname in requested_columns:
-                    message = "duplicate column: {:}".format(colname)
-                    logger.error(message)
-                    raise KeyError(message)
-                requested_columns.add(colname)
-            # find requested columns that do not exist in the table
-            missing_cols = requested_columns - set(ds.colnames)
-            if len(missing_cols) > 0:
-                message = "column {:} not found: {:}".format(
-                    "name" if len(missing_cols) == 1 else "names",
-                    ", ".join(sorted(missing_cols)))
-                logger.error(message)
-                raise KeyError(message)
-            # establish the requried data type
-            n_cols = len(requested_columns)
-            message = "select a subset of {:d} column".format(n_cols)
-            if n_cols > 1:
-                message += "s"
-            logger.info(message)
-            dtype = np.dtype([
-                (colname, ds.dtype[colname]) for colname in columns])
-            # create a table view with only the requested columns
-            request_table = ds[columns]
-        else:
-            dtype = ds.dtype
-            request_table = ds
+        request_table, dtype = check_query_columns(columns, ds)
         
         # verify the data if requested
         if verify:
@@ -343,38 +180,9 @@ def datastore_query(
                 sys.stdout.flush()
                 ds.verify_column(name)
 
-        # automatically determine the format file format
-        if output is None:  # write to stdout in csv format
-            format = "csv"
-        if format is None:
-            try:
-                format = guess_format(output)
-            except NotImplementedError as e:
-                logger.exception(str(e))
-                raise
-        message = "writing output as {:}: {:}".format(format.upper(), output)
-        logger.info(message)
-
-        # create a standardized output writer
-        writer_class = SUPPORTED_WRITERS[format]
-        try:
-            writer = writer_class(
-                dtype, output, overwrite=True,
-                # format specific parameters
-                compression=compression,
-                hdf5_shuffle=hdf5_shuffle,
-                hdf5_checksum=hdf5_checksum)
-        except Exception as e:
-            logger.exception(str(e))
-            raise
-
-        with writer:
-
-            # determine an automatic buffer/chunk size
-            chunksize = BUFFERSIZE // ds.itemsize
-            message = "buffer size: {:} ({:,d} rows)".format(
-                bytesize_with_prefix(writer.buffersize), writer.bufferlength)
-            logger.debug(message)
+        with create_writer(
+                output, format, dtype, compression,
+                hdf5_shuffle, hdf5_checksum) as writer:
 
             # query the table and write to the output fie
             if expression is not None:
@@ -385,7 +193,7 @@ def datastore_query(
             if not to_stdout:
                 pbar = ProgressBar(len(ds))
             n_select = 0
-            for start, end in ds.row_iter(chunksize):
+            for start, end in ds.row_iter(writer.buffersize // dtype.itemsize):
 
                 # apply optional selection, read only minimal amount of data
                 if expression is not None:
@@ -451,8 +259,6 @@ def prepare_MICE2(
         evo,
         threads=-1,
         **kwargs):
-    from galmock.MICE2 import evolution_correction_wrapped
-
     logger = _create_job_logger()
 
     # apply the evolution correction to the model magnitudes
@@ -499,9 +305,6 @@ def prepare_Flagship(
         is_central=None,
         threads=-1,
         **kwargs):
-    from galmock.Flagship import (find_central_galaxies,
-                                  flux_to_magnitudes_wrapped)
-
     logger = _create_job_logger()
 
     # convert model fluxes to model magnitudes
@@ -557,8 +360,6 @@ def magnification(
         lensed,
         threads=-1,
         **kwargs):
-    from galmock.photometry import magnification_correction_wrapped
-
     logger = _create_job_logger()
 
     # apply the magnification correction to the model magnitudes
@@ -603,8 +404,6 @@ def effective_radius(
         config,
         threads=-1,
         **kwargs):
-    from galmock.photometry import PhotometryParser, find_percentile_wrapped
-
     logger = _create_job_logger()
 
     # check the configuration file
@@ -646,8 +445,6 @@ def apertures(
         config,
         threads=-1,
         **kwargs):
-    from galmock.photometry import PhotometryParser, apertures_wrapped
-
     logger = _create_job_logger()
 
     # check the configuration file
@@ -701,9 +498,6 @@ def photometry(
         seed="sapling",
         threads=-1,
         **kwargs):
-    from galmock.photometry import (PhotometryParser,
-                                    photometry_realisation_wrapped)
-
     logger = _create_job_logger()
 
     # check the configuration file
@@ -776,8 +570,6 @@ def match_data(
         config,
         threads=-1,
         **kwargs):
-    from galmock.matching import DataMatcher, MatcherParser
-
     logger = _create_job_logger()
 
     # check the configuration file
@@ -825,8 +617,6 @@ def BPZ(
         config,
         threads=-1,
         **kwargs):
-    from galmock.photoz import BpzManager, BpzParser
-
     logger = _create_job_logger()
 
     # check the configuration file
@@ -882,11 +672,6 @@ def select_sample(
         seed="sapling",
         threads=-1,
         **kwargs):
-    from galmock.core.bitmask import BitMaskManager
-    from galmock.matching import DistributionEstimator
-    from galmock.samples import (DensitySampler, DumpConfig, RedshiftSampler,
-                                 SampleManager)
-
     logger = _create_job_logger()
 
     # check the configuration file

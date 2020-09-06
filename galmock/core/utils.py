@@ -1,8 +1,14 @@
+import logging
 import os
 from hashlib import sha1
 
 import numpy as np
+from mmaptable.mathexpression import MathTerm
 from tqdm import tqdm
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def expand_path(path):
@@ -134,3 +140,69 @@ def footprint_area(RAmin, RAmax, DECmin, DECmax):
         dRA += 360.0
     area = dRA * np.degrees(sin_DEC_max - sin_DEC_min)
     return area
+
+
+def substitute_division_symbol(query, datastore, subst_smyb="#"):
+    if query is not None:
+        selection_columns = set()
+        # Since the symbol / can be used as column name and division
+        # symbol, we need to temporarily substitute the symbol before
+        # parsing the expression.
+        try:
+            # apply the substitutions to all valid column names apperaing
+            # in the math expression to avoid substitute intended divisions
+            for colname in datastore.colnames:
+                substitue = colname.replace("/", subst_smyb)
+                while colname in query:
+                    query = query.replace(colname, substitue)
+                    selection_columns.add(colname)
+            expression = MathTerm.from_string(query)
+            # recursively undo the substitution
+            expression._substitute_characters(subst_smyb, "/")
+            # display the interpreted expression
+            message = "apply selection: {:}".format(expression.expression)
+            logger.info(message)
+        except SyntaxError as e:
+            message = e.args[0].replace(subst_smyb, "/")
+            logger.exception(message)
+            raise SyntaxError(message)
+        except Exception as e:
+            logger.exception(str(e))
+            raise
+    else:
+        selection_columns, expression = None, None
+    return selection_columns, expression
+
+
+def check_query_columns(columns, datastore):
+    if columns is not None:
+        # check for duplicates
+        requested_columns = set()
+        for colname in columns:
+            if colname in requested_columns:
+                message = "duplicate column: {:}".format(colname)
+                logger.error(message)
+                raise KeyError(message)
+            requested_columns.add(colname)
+        # find requested columns that do not exist in the table
+        missing_cols = requested_columns - set(datastore.colnames)
+        if len(missing_cols) > 0:
+            message = "column {:} not found: {:}".format(
+                "name" if len(missing_cols) == 1 else "names",
+                ", ".join(sorted(missing_cols)))
+            logger.error(message)
+            raise KeyError(message)
+        # establish the requried data type
+        n_cols = len(requested_columns)
+        message = "select a subset of {:d} column".format(n_cols)
+        if n_cols > 1:
+            message += "s"
+        logger.info(message)
+        dtype = np.dtype([
+            (colname, datastore.dtype[colname]) for colname in columns])
+        # create a table view with only the requested columns
+        request_table = datastore[columns]
+    else:
+        dtype = datastore.dtype
+        request_table = datastore
+    return request_table, dtype
