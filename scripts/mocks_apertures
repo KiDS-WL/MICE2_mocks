@@ -2,9 +2,9 @@
 import argparse
 import logging.config
 
+from galmock import GalaxyMock
 from galmock.core.config import logging_config
 from galmock.core.utils import expand_path
-from galmock.jobs import apertures
 from galmock.photometry import PhotometryParser
 
 
@@ -43,7 +43,8 @@ def main():
     logging.config.dictConfig(
         logging_config(args.datastore + ".log",
         overwrite=False, verbose=args.verbose))
-    apertures(**{name: getattr(args, name) for name in vars(args)})
+    with GalaxyMock(args.datastore, False, args.threads) as mocks:
+        mocks.apertures(args.config)
 
 
 if __name__ == "__main__":

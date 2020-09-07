@@ -2,10 +2,10 @@
 import argparse
 import logging.config
 
+from galmock import GalaxyMock
 from galmock.core.config import logging_config
 from galmock.core.readwrite import SUPPORTED_WRITERS
 from galmock.core.utils import expand_path
-from galmock.jobs import datastore_query
 
 
 parser = argparse.ArgumentParser(
@@ -54,7 +54,10 @@ def main():
     logging.config.dictConfig(
         logging_config(args.datastore + ".log",
         overwrite=False, verbose=args.verbose))
-    datastore_query(**{name: getattr(args, name) for name in vars(args)})
+    with GalaxyMock(args.datastore, True) as mocks:
+        mocks.query(
+            args.output, args.query, args.verify, args.format, args.columns,
+            args.compression, args.hdf5_shuffle, args.hdf5_checksum)
 
 
 if __name__ == "__main__":

@@ -6,42 +6,28 @@ import shlex
 from collections import OrderedDict
 from multiprocessing import cpu_count
 
-from galmock import jobs
+from galmock import GalaxyMock
+from galmock.core.config import logging_config
 
 
 # mapping between the job ID (see commandline parser) and the script signature
 job_map = {
-    "1": "mocks_init_pipeline {:} "
-         "-i {input:} -c {columns:} --purge {verbose:}",
-    "2": "mocks_prepare_Flagship {:} "
-         "--flux {flux:} --mag {mag:} --gal-idx {gal_idx:} "
-         "--is-central {is_central:} --threads {threads:} {verbose:}",
-    "3": "mocks_magnification {:} "
-         "--mag {mag:} --lensed {lensed:} --threads {threads:} {verbose:}",
-    "4": "mocks_effective_radius {:} "
-         "-c {config:} --threads {threads:} {verbose:}",
-    "5": "mocks_apertures {:} "
-         "-c {config:} --method SExtractor --threads {threads:} {verbose:}",
-    "6": "mocks_photometry {:} "
-         "-c {config:} --method SExtractor --mag {mag:} --real {real:} "
-         "--threads {threads:} {verbose:}",
-    "7": "mocks_match_data {:} "
-         "-c {config:} --threads {threads:} {verbose:}",
-    "8": "mocks_BPZ {:} "
-         "-c {config:} --mag {mag:} --zphot {zphot:} "
-         "--threads {threads:} {verbose:}",
-    "9": "mocks_select_sample {:} "
-         "-c {config:} --area {area:} --sample {sample:} "
-         "--threads {threads:} {verbose:}",
-    "out": "mocks_datastore_query {:} "
-           "-o {output:} -q '{query:}' --format {format:} {verbose:}"}
+    "1": "create",
+    "2": "prepare_Flagship",
+    "3": "magnification",
+    "4": "effective_radius",
+    "5": "apertures",
+    "6": "photometry",
+    "7": "match_data",
+    "8": "BPZ",
+    "9": "select_sample",
+    "out": "query"}
 
 # generate a help message for the commandline parser
 job_help_str = "select a set of job IDs to process the mock data, "
 job_help_str += "options are: {{{:}}} or 'all' to run all jobs".format(
     ", ".join(
-    "{:}:{:}".format(ID, job_map[ID].split()[0])
-    for ID in sorted(job_map.keys())))
+        "{:}:{:}".format(ID, job_map[ID]) for ID in sorted(job_map.keys())))
 
 
 parser = argparse.ArgumentParser(
@@ -60,17 +46,6 @@ parser.add_argument(
     help="file format of output files (default: %(default)s)")
 parser.add_argument(
     "-v", "--verbose", action="store_true", help="display debugging messages")
-
-
-def call(schema, *args, **kwargs):
-    # get the script directory and combine it with the script schema
-    command = os.path.normpath(
-        os.path.join(jobs.__file__, "..", "..", "scripts", schema))
-    # format the schema with the provided arguments and keyword arguments
-    command = command.format(*args, **kwargs)
-    # execute the command
-    subprocess.call(shlex.split(command))
-    print()
 
 
 def main():
@@ -102,71 +77,67 @@ def main():
         # sample density insufficient for some samples
         area = 24.400
 
+    # create a logger for the pipeline
+    overwrite = "1" in args.jobID
+    logging.config.dictConfig(
+        logging_config(datastore + ".log", overwrite=overwrite,
+        verbose=args.verbose))
+
     # check for unknown jobs
     for jobID in args.jobID - set(job_map.keys()):
         raise parser.error("invalid job ID: {:}".format(jobID))
 
     # run the jobs
     if "1" in args.jobID:
-        call(
-            job_map["1"], datastore, input=input_file,
-            columns="config/Flagship.toml", verbose=args.verbose)
-    if "2" in args.jobID:
-        call(
-            job_map["2"], datastore, flux="flux/model", mag="mags/model",
-            gal_idx="index_galaxy", is_central="environ/is_central",
-            threads=args.threads, verbose=args.verbose)
-    if "3" in args.jobID:
-        call(
-            job_map["3"], datastore, mag="mags/model", lensed="mags/lensed",
-            threads=args.threads, verbose=args.verbose)
-    if "4" in args.jobID:
-        call(
-            job_map["4"], datastore, config="config/photometry.toml",
-            threads=args.threads, verbose=args.verbose)
-    if "5" in args.jobID:
-        call(
-            job_map["5"], datastore, config="config/photometry.toml",
-            method="SExtractro", threads=args.threads, verbose=args.verbose)
-    if "6" in args.jobID:
-        call(
-            job_map["6"], datastore, config="config/photometry_old.toml",
-            method="SExtractro", mag="mags/lensed", real="mags/K1000",
-            threads=args.threads, verbose=args.verbose)
-    if "7" in args.jobID:
-        call(
-            job_map["7"], datastore, config="config/matching.toml",
-            threads=args.threads, verbose=args.verbose)
-    if "8" in args.jobID:
-        os.environ["hostname"] = os.uname()[1]
-        call(
-            job_map["8"], datastore, config="config/BPZ.toml",
-            mag="mags/K1000", zphot="BPZ/K1000", threads=args.threads,
-            verbose=args.verbose)
-    if "9" in args.jobID:
-        for sample in samples:
-            call(
-                job_map["9"], datastore, sample=sample, area=area,
-                config="samples/{:}.toml".format(sample),
-                threads=args.threads, verbose=args.verbose)
-    if "out" in args.jobID:
-        call(
-            job_map["out"] + " --verify", datastore,
-            output=output_base.format(args.type, ""),
-            format=args.format, query=query, verbose=args.verbose)
-        # get the remaining samples
-        for sample in samples:
-            call(
-                job_map["out"], datastore,
-                output=output_base.format(args.type, "_" + sample),
-                format=args.format, query=query_sample.format(sample, 1),
-                verbose=args.verbose)
-        # get the BOSS sample
-        call(
-            job_map["out"], datastore,
-            output=output_base.format(args.type, "_BOSS"),
-            format=args.format, query=query_sample.format("SDSS", 12),
-            verbose=args.verbose)
+        mocks = GalaxyMock.create(
+            datastore, input=input_file, purge=True,
+            columns="config/Flagship.toml", threads=args.threads)
+    else:
+        mocks = GalaxyMock(datastore, readonly=False, threads=args.threads)
+
+    with mocks:
+        if "2" in args.jobID:
+            getattr(mocks, job_map["2"])(
+                flux="flux/model", mag="mags/model", gal_idx="index_galaxy",
+                is_central="environ/is_central")
+        if "3" in args.jobID:
+            getattr(mocks, job_map["3"])(
+                mag="mags/model", lensed="mags/lensed")
+        if "4" in args.jobID:
+            getattr(mocks, job_map["4"])(
+                config="config/photometry.toml")
+        if "5" in args.jobID:
+            getattr(mocks, job_map["5"])(
+                config="config/photometry.toml")
+        if "6" in args.jobID:
+            getattr(mocks, job_map["6"])(
+                config="config/photometry_old.toml", mag="mags/lensed",
+                real="mags/K1000")
+        if "7" in args.jobID:
+            getattr(mocks, job_map["7"])(
+                config="config/matching.toml")
+        if "8" in args.jobID:
+            os.environ["hostname"] = os.uname()[1]
+            getattr(mocks, job_map["8"])(
+                config="config/BPZ.toml", mag="mags/K1000", zphot="BPZ/K1000")
+        if "9" in args.jobID:
+            for sample in samples:
+                getattr(mocks, job_map["9"])(
+                    config="samples/{:}.toml".format(sample),
+                    sample=sample, area=area)
+        if "out" in args.jobID:
+            getattr(mocks, job_map["out"])(
+                output=output_base.format(args.type, ""), verify=True,
+                format=args.format, query=query)
+            # get the remaining samples
+            for sample in samples:
+                getattr(mocks, job_map["out"])(
+                    output=output_base.format(args.type, "_" + sample),
+                    format=args.format, query=query_sample.format(sample, 1))
+            # get the BOSS sample
+            getattr(mocks, job_map["out"])(
+                output=output_base.format(args.type, "_BOSS"),
+                format=args.format, query=query_sample.format("SDSS", 12))
 
 
 if __name__ == "__main__":

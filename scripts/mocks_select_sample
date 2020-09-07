@@ -2,10 +2,10 @@
 import argparse
 import logging.config
 
+from galmock import GalaxyMock
 from galmock.core.config import logging_config
 from galmock.core.readwrite import SUPPORTED_WRITERS
 from galmock.core.utils import expand_path
-from galmock.jobs import select_sample
 from galmock.samples import DumpConfig, SampleManager
 
 
@@ -59,7 +59,9 @@ def main():
     logging.config.dictConfig(
         logging_config(args.datastore + ".log",
         overwrite=False, verbose=args.verbose))
-    select_sample(**{name: getattr(args, name) for name in vars(args)})
+    with GalaxyMock(args.datastore, True, args.threads) as mocks:
+        mocks.select_sample(
+            args.config, args.sample, args.area, args.type, args.seed)
 
 
 if __name__ == "__main__":

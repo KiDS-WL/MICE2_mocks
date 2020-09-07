@@ -2,8 +2,8 @@
 import argparse
 import logging.config
 
+from galmock import GalaxyMock
 from galmock.core.utils import expand_path
-from galmock.jobs import datastore_info
 
 
 parser = argparse.ArgumentParser(
@@ -26,7 +26,8 @@ parser.add_argument(
 
 def main():
     args = parser.parse_args()
-    datastore_info(**{name: getattr(args, name) for name in vars(args)})
+    with GalaxyMock(args.datastore, True) as mocks:
+        mocks.info(args.columns, args.attr, args.history, args.logs)
 
 
 if __name__ == "__main__":

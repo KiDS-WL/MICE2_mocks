@@ -3,10 +3,10 @@ import argparse
 import logging.config
 from os import path
 
+from galmock import GalaxyMock
 from galmock.core.config import TableParser, logging_config
 from galmock.core.readwrite import SUPPORTED_READERS
 from galmock.core.utils import expand_path
-from galmock.jobs import init_pipeline
 
 
 parser = argparse.ArgumentParser(
@@ -53,7 +53,10 @@ def main():
     logging.config.dictConfig(
         logging_config(args.datastore + ".log",
         overwrite=True, verbose=args.verbose))
-    init_pipeline(**{name: getattr(args, name) for name in vars(args)})
+    with GalaxyMock.create(
+            args.datastore, args.input, args.format, args.fits_ext,
+            args.columns, args.purge) as mocks:
+        pass
 
 
 if __name__ == "__main__":
