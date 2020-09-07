@@ -449,7 +449,7 @@ class ParallelTable(object):
                 if state is not None:
                     # raise the exception
                     logger.error(state)
-                    raise
+                    raise state
 
     def _apply_threads(self, pqueue, n_threads, prefix=None, seed=None):
         """

@@ -3,7 +3,7 @@ import multiprocessing
 import os
 import sys
 from collections import OrderedDict
-from time import asctime, strptime
+from datetime import datetime
 
 from mmaptable import MmapTable
 
@@ -14,6 +14,8 @@ from galmock.core.parallel import ParallelTable
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+TIMEFORMAT = "%a %b %d %Y %H:%M:%S,%f"
 
 
 class ModificationStamp(object):
@@ -99,9 +101,8 @@ class ModificationStamp(object):
         """
         # store the current time if none is provided
         if timestamp is None:
-            self._attrs["created at"] = asctime()
-        else:
-            self._attrs["created at"] = timestamp
+            timestamp = datetime.now().strftime(TIMEFORMAT)
+        self._attrs["created at"] = timestamp
         # update the columns attributes
         for name in self._columns:
             self._update_attribute(name, self._attrs)
@@ -261,7 +262,7 @@ class DataStore(MmapTable):
         for column in self.colnames:
             attrs = self[column].attr
             try:
-                timestamp = strptime(attrs["created at"])
+                timestamp = datetime.strptime(attrs["created at"], TIMEFORMAT)
                 calls[timestamp] = attrs["created by"]
             except KeyError:
                 message = "column has no creation time stamp: {:}"
@@ -271,7 +272,7 @@ class DataStore(MmapTable):
         # return history ordered time and convert time stamps back to strings
         history = OrderedDict()
         for key in sorted(calls):
-            history[asctime(key)] = calls[key]
+            history[key.strftime(TIMEFORMAT)] = calls[key]
         return history
 
     def load_photometry(self, photometry_path, filter_selection=None):
@@ -328,13 +329,6 @@ class DataStore(MmapTable):
             raise KeyError(message)
         return photometry_columns, error_columns
 
-    def show_metadata(self):
-        print("==> META DATA")
-        n_cols, n_rows = self.shape
-        print("root:     {:}".format(self.root))
-        print("size:     {:}".format(self.filesize))
-        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
-
     def show_preview(self):
         preview_lines = []
         for line in str(self).split("\n"):
@@ -345,85 +339,3 @@ class DataStore(MmapTable):
         footer = "-" * linelength
         preview = "\n".join(preview_lines[1:-2])
         sys.stdout.write("{:}\n{:}\n{:}\n".format(header, preview, footer))
-
-    def show_columns(self):
-        header = "==> COLUMN NAME"
-        width_cols = max(len(header), max(
-            len(colname) for colname in self.colnames))
-        print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
-        for name in self.colnames:
-            colname_padded = name.ljust(width_cols)
-            line = "{:}    {:}".format(
-                colname_padded, str(self[name].dtype))
-            print(line)
-
-    def show_attributes(self):
-        print("\n==> ATTRIBUTES")
-        for name in self.colnames:
-            print()
-            # print the column name indented and then a tree-like listing
-            # of the attributes (drawing connecting lines for better
-            # visibitilty)
-            print("{:}".format(name))
-            attrs = self[name].attr
-            # all attributes from the pipeline should be dictionaries
-            if type(attrs) is dict:
-                i_last = len(attrs)
-                width_key = max(len(key) + 2 for key in attrs)
-                for i, key in enumerate(sorted(attrs), 1):
-                    print_key = key + " :"
-                    line = "{:}{:} {:}".format(
-                        " └╴ " if i == i_last else " ├╴ ",
-                        print_key.ljust(width_key), str(attrs[key]))
-                    print(line)
-            # fallback
-            else:
-                print("     └╴ {:}".format(str(attrs)))
-
-    def show_history(self):
-        print("\n==> HISTORY")
-        date_width = 24
-        for date, call in self.get_history().items():
-            print("{:} : {:}".format(date.ljust(date_width), call))
-
-    def show_logs(self):
-        print("\n==> LOGS")
-        logpath = self.root + ".log"
-        if not os.path.exists(logpath):
-            raise OSError("log file not found: {:}".format(logpath))
-        with open(logpath) as f:
-            for line in f.readlines():
-                print(line.strip())
-
-    def verify(self):
-        # verify the check sums
-        header = "==> COLUMN NAME"
-        width_cols = max(len(header), max(
-            len(colname) for colname in self.colnames))
-        print("\n{:}    {:}  {:}".format(
-            header.ljust(width_cols), "STATUS ", "HASH"))
-        # compute and verify the store checksums column by column
-        n_good, n_warn, n_error = 0, 0, 0
-        line = "{:<{width}s}    {:<7s}  {:s}"
-        for name in self.colnames:
-            column = self[name]
-            try:
-                checksum = column.attr["SHA-1 checksum"]
-                assert(checksum == sha1sum(column.filename))
-                n_good += 1
-            except KeyError:
-                print(line.format(
-                    name, "WARNING", "no checksum provided", width=width_cols))
-                n_warn += 1
-            except AssertionError:
-                print(line.format(
-                    name, "ERROR", "checksums do not match", width=width_cols))
-                n_error += 1
-            else:
-                print(line.format(name, "OK", checksum, width=width_cols))
-        # do a final report
-        if n_good == len(self.colnames):
-            print("\nAll columns passed")
-        else:
-            print("\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(
-                n_good, n_warn, n_error))
