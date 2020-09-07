@@ -6,9 +6,6 @@ import sys
 import warnings
 from collections import OrderedDict
 
-import numpy as np
-
-import galmock
 from galmock.core.bitmask import BitMaskManager
 from galmock.core.config import TableParser
 from galmock.core.datastore import DataStore, ModificationStamp
@@ -17,15 +14,14 @@ from galmock.core.utils import (ProgressBar, bytesize_with_prefix,
                                 check_query_columns, sha1sum,
                                 substitute_division_symbol)
 from galmock.Flagship import find_central_galaxies, flux_to_magnitudes_wrapped
-from galmock.matching import DataMatcher, DistributionEstimator, MatcherParser
+from galmock.matching import DataMatcher, MatcherParser
 from galmock.MICE2 import evolution_correction_wrapped
 from galmock.photometry import (PhotometryParser, apertures_wrapped,
                                 find_percentile_wrapped,
                                 magnification_correction_wrapped,
                                 photometry_realisation_wrapped)
 from galmock.photoz import BpzManager, BpzParser
-from galmock.samples import (DensitySampler, DumpConfig, RedshiftSampler,
-                             SampleManager)
+from galmock.samples import DensitySampler, RedshiftSampler, SampleManager
 
 
 def get_pseudo_sys_argv(func, args, kwargs):
