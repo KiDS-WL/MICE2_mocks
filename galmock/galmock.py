@@ -629,7 +629,6 @@ class GalaxyMock(object):
         # launch the BPZ manager
         with BpzManager(configuration) as bpz:
             self.datastore.pool.set_worker(bpz.execute)
-            self.datastore.pool.parse_thread_id = True
             # add the magnitude and error columns to call signature
             for key in bpz.filter_names:
                 try:
@@ -648,7 +647,9 @@ class GalaxyMock(object):
                     attr={"description": desc})
                 # add columns to call signature
                 self.datastore.pool.add_result_column(zphot_path)
+            self.datastore.pool.parse_thread_id = True
             self.datastore.pool.execute()
+            self.datastore.pool.parse_thread_id = False
 
     @job
     def select_sample(
@@ -706,7 +707,8 @@ class GalaxyMock(object):
                     seed=seed, prefix="density sampling")
             except ValueError as e:
                 if str(e).startswith("sample density must be"):
-                    self.logger.warning("skipping sampling due to low mock density")
+                    message = "skipping sampling due to low mock density"
+                    self.logger.warning(message)
                 else:
                     raise e
         # add the description attribute to the output column
