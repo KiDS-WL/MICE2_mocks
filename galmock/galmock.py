@@ -64,7 +64,8 @@ def job(method):
         # reset the timestamp handler
         classinst.datastore._timestamp = ModificationStamp(sys_argv)
         # create a temorary logger for the class method
-        classinst.logger = logging.getLogger(".".join([__name__, sys_argv[0]]))
+        classinst.logger = logging.getLogger(
+            ".".join([__name__.split(".")[0], sys_argv[0]]))
         classinst.logger.setLevel(logging.DEBUG)
         classinst.logger.info("initialising job: {:}".format(
             sys_argv[0].split(".")[-1]))
@@ -89,7 +90,7 @@ class GalaxyMock(object):
         self.datastore = DataStore.open(datastore, readonly=readonly)
         self.datastore.pool.max_threads = threads
         self.logger = logging.getLogger(
-            ".".join([__name__, self.__class__.__name__]))
+            ".".join([__name__.split(".")[0], self.__class__.__name__]))
         self.logger.setLevel(logging.DEBUG)
 
     def __enter__(self, *args, **kwargs):
