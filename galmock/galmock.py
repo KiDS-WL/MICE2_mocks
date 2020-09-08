@@ -41,7 +41,7 @@ def get_pseudo_sys_argv(func, args, kwargs):
                     params[key] = arg
                     unnamed_idx += 1
     # finally show the named varargs
-    if argspec.keywords:
+    if kwargs:
         params.update(kwargs)
     # create a sys.argv style list
     try:

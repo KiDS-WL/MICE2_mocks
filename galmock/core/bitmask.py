@@ -7,7 +7,7 @@ class BitMaskManager(object):
 
     _bit_type_map = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
     _base_description = "{:} sample selection bit mask, select (sub-)samples "
-    _base_description += "by (mask & bit), where the bits represent: "
+    _base_description += "by (mask & bit), where the bit represents: "
 
     def __init__(self, sample, nbits=8):
         if nbits not in self._bit_type_map.keys():
