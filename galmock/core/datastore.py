@@ -40,6 +40,7 @@ class ModificationStamp(object):
         # create a dictionary with all shared entries
         self._attrs = {}
         self._attrs["created by"] = caller
+        self._attrs["working directory"] = os.getcwd()
         self._attrs["pipeline version"] = __version__
     
     def __len__(self):

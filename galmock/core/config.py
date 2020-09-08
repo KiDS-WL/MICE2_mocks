@@ -17,43 +17,32 @@ _WRAP = 79
 _INDENT = 24
 
 
-def logging_config(logpath, overwrite=False, verbose=False):
+def logging_config(logpath=None, overwrite=False, verbose=False):
     logconfig = {
         "version": 1,
         "disable_existing_loggers": False,
-
         "loggers": {
             "": {
-                "handlers": ["console", "file"],
-                "level": "DEBUG",
-            },
-        },
-
+                "handlers": ["console",],
+                "level": "DEBUG"}},
         "formatters": {
             "console": {
-                "format": "%(asctime)s | %(levelname)-7s | %(message)s",
-            },
-            "file": {
-                "format": \
-                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            },
-        },
-
+                "format": "%(asctime)s | %(levelname)-7s | %(message)s"}},
         "handlers": {
             "console": {
                 "level": "DEBUG" if verbose else "INFO",
                 "formatter": "console",
-                "class": "logging.StreamHandler",
-            },
-            "file": {
-                "level": "DEBUG",
-                "formatter": "file",
-                "class": "logging.FileHandler",
-                "filename": logpath,
-                "mode": "w" if overwrite else "a",
-            },
-        },
-    }
+                "class": "logging.StreamHandler"}}}
+    if logpath is not None:
+        logconfig["loggers"][""]["handlers"].append("file")
+        logconfig["formatters"]["file"] = {
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"}
+        logconfig["handlers"]["file"] = {
+            "level": "DEBUG",
+            "formatter": "file",
+            "class": "logging.FileHandler",
+            "filename": logpath,
+            "mode": "w" if overwrite else "a"}
     return logconfig
 
 
@@ -294,6 +283,11 @@ class Parser(object):
 
     def _run_checks(self):
         pass
+
+    def __setattr__(self, name, value):
+        if hasattr(self, name):
+            self._run_checks()
+        super().__setattr__(name, value)
 
     def __str__(self):
         formatted = ""

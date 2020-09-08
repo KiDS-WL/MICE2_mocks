@@ -40,7 +40,7 @@ parser.add_argument(
 parser.add_argument(
     "jobID", nargs="*", help=job_help_str)
 parser.add_argument(
-    "--threads", type=int, default=cpu_count() // 2,
+    "--threads", type=int, default=cpu_count(),
     help="maximum number of threads to use (default: %(default)s)")
 parser.add_argument(
     "--format", default="fits",

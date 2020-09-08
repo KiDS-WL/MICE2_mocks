@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import logging.config
 import os
 import subprocess
 import shlex
@@ -39,7 +40,7 @@ parser.add_argument(
 parser.add_argument(
     "jobID", nargs="*", help=job_help_str)
 parser.add_argument(
-    "--threads", type=int, default=cpu_count() // 2,
+    "--threads", type=int, default=cpu_count(),
     help="maximum number of threads to use (default: %(default)s)")
 parser.add_argument(
     "--format", default="hdf5",
@@ -108,10 +109,10 @@ def main():
                 config="config/photometry.toml")
         if "5" in args.jobID:
             getattr(mocks, job_map["5"])(
-                config="config/photometry.toml")
+                config="config/photometry_old.toml")
         if "6" in args.jobID:
             getattr(mocks, job_map["6"])(
-                config="config/photometry_old.toml", mag="mags/lensed",
+                config="config/photometry.toml", mag="mags/lensed",
                 real="mags/K1000")
         if "7" in args.jobID:
             getattr(mocks, job_map["7"])(
