@@ -32,12 +32,10 @@ def logging_config(logpath, overwrite=False, verbose=False):
         "formatters": {
             "console": {
                 "format": "%(asctime)s | %(levelname)-7s | %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
             },
             "file": {
                 "format": \
                     "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
             },
         },
 
