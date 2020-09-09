@@ -305,25 +305,28 @@ def FWHM_to_sigma(FWHM):
 
 def apertures_SExtractor(config, filter_key, r_effective, ba_ratio):
     # compute the intrinsic galaxy major and minor axes and area
-    psf_sigma = config.PSF[filter_key]
     mag_auto_scale = config.SExtractor["phot_autoparams"]
     if config.legacy:
         galaxy_major = r_effective * mag_auto_scale
         galaxy_minor = galaxy_major * ba_ratio
         # "convolution" with the PSF
+        psf_sigma = config.PSF[filter_key]
         aperture_major = np.sqrt(galaxy_major**2 + psf_sigma**2)
         aperture_minor = np.sqrt(galaxy_minor**2 + psf_sigma**2)
-    else:  # mag auto: scaling the Petrosian radius by 2.5 (default)
+        # compute the aperture area
+        psf_area = np.pi * psf_sigma**2
+    else:
         galaxy_major = r_effective
         galaxy_minor = galaxy_major * ba_ratio
         # "convolution" with the PSF
+        psf_sigma = FWHM_to_sigma(config.PSF[filter_key])
         aperture_major = mag_auto_scale * np.sqrt(
             galaxy_major**2 + psf_sigma**2)
         aperture_minor = mag_auto_scale * np.sqrt(
             galaxy_minor**2 + psf_sigma**2)
-    # compute the aperture area
+        # compute the aperture area
+        psf_area = np.pi * (mag_auto_scale * psf_sigma)**2
     aperture_area = np.pi * aperture_major * aperture_minor
-    psf_area = np.pi * psf_sigma**2
     # compute the S/N correction by comparing the aperture area to the PSF
     snr_correction = np.sqrt(psf_area / aperture_area)
     return aperture_major, aperture_minor, snr_correction
