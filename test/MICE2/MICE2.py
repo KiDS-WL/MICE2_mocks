@@ -130,7 +130,7 @@ def main():
         if "9" in args.jobID:
             for sample in samples:
                 getattr(mocks, job_map["9"])(
-                    config="samples/{:}.toml".format(sample),
+                    config="samples/{:}.toml".format(sample), type="MICE2",
                     sample=sample, area=area)
         if "out" in args.jobID:
             getattr(mocks, job_map["out"])(
