@@ -40,9 +40,15 @@ def get_pseudo_sys_argv(func, args, kwargs):
                     key = "{:}[{:d}]".format(argspec.varargs, unnamed_idx)
                     params[key] = arg
                     unnamed_idx += 1
-    # finally show the named varargs
+    # add the named varargs
     if kwargs:
         params.update(kwargs)
+    # fill up with arguments that have default values
+    if argspec.defaults:
+        n_defaults = len(argspec.defaults)
+        for arg, default in zip(argspec.args[-n_defaults:], argspec.defaults):
+            if arg not in params:
+                params[arg] = default
     # create a sys.argv style list
     try:
         classinst = params.pop("self")
@@ -659,7 +665,8 @@ class GalaxyMock(object):
         Parser = SampleManager.get_parser(type, sample)
         configuration = Parser(config)
         # apply the magnification correction to the model magnitudes
-        self.logger.info("apply selection funcion: {:}".format(sample))
+        message = "apply selection funcion: {:} (type: {:})"
+        self.logger.info(message.format(sample, type))
         # allow the worker threads to modify the bitmask column directly
         self.datastore.pool.allow_modify = True
         # make the output column
@@ -712,6 +719,7 @@ class GalaxyMock(object):
                     self.logger.warning(message)
                 else:
                     raise e
+        self.datastore.pool.allow_modify = False
         # add the description attribute to the output column
         bitmask.attr = {"description": BMM.description}
         # show final statistics
