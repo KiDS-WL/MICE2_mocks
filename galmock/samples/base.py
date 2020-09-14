@@ -1,4 +1,5 @@
 import json
+import logging
 from collections import defaultdict
 from os.path import join, dirname
 
@@ -8,6 +9,10 @@ from galmock.core.bitmask import BitMaskManager as BMM
 from galmock.core.parallel import Schedule
 from galmock.core.utils import ProgressBar
 from galmock.matching import DistributionEstimator
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class _SampleManager(object):
@@ -72,7 +77,7 @@ class _SampleManager(object):
             raise NotImplementedError(message.format(sample))
 
     def get_parser(self, flavour, sample):
-        self._check(flavour, sample)
+        # self._check(flavour, sample)
         try:
             return self._parsers[flavour][sample]
         except KeyError:
@@ -83,6 +88,9 @@ class _SampleManager(object):
         try:
             return self._selectors[flavour][sample]
         except KeyError:
+            message = "no selection implemented for flavour '{:}', "
+            message += "falling back to 'reference'"
+            logger.warn(message.format(flavour))
             return self._selectors["reference"].get(sample, NotImplemented)
 
     def get_sampler(self, flavour, sample):
@@ -90,6 +98,9 @@ class _SampleManager(object):
         try:
             return self._samplers[flavour][sample]
         except KeyError:
+            message = "no sampler implemented for flavour '{:}', "
+            message += "falling back to 'reference'"
+            logger.warn(message.format(flavour))
             return self._samplers["reference"].get(sample, NotImplemented)
 
 
