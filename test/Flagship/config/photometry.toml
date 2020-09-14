@@ -51,7 +51,7 @@ phot_autoparams = 2.5   # MAG_AUTO-like scaling factor for Petrosian radius,
 [photometry]
 apply_apertures = true  # whether to include the aperture size in the SNR
                         # computation
-limit_sigma = 1.5       # sigma value of the detection (magnitude) limit with
+limit_sigma = 1.0       # sigma value of the detection (magnitude) limit with
                         # respect to the sky background
 no_detect_value = 99.0  # magnitude value assigned to undetected galaxies
 SN_detect = 1.0         # signal-to-noise ratio detection limit

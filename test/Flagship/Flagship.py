@@ -109,7 +109,7 @@ def main():
                 config="config/photometry.toml")
         if "5" in args.jobID:
             getattr(mocks, job_map["5"])(
-                config="config/photometry_old.toml")
+                config="config/photometry.toml")
         if "6" in args.jobID:
             getattr(mocks, job_map["6"])(
                 config="config/photometry.toml", mag="mags/lensed",
