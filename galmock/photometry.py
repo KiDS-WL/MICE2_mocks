@@ -17,6 +17,13 @@ from galmock.core.parallel import Schedule
 
 
 class PhotometryParser(Parser):
+    """
+    Parser for the TOML photometry configuration file.
+    
+    From python use
+        print(PhotometryParser.default)
+    to get an empty, default configuration file
+    """
 
     default = ParameterCollection(
         Parameter(

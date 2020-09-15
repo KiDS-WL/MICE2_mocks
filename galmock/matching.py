@@ -285,6 +285,13 @@ class DistributionEstimator(object):
 
 
 class MatcherParser(Parser):
+    """
+    Parser for the TOML data matching configuration file.
+    
+    From python use
+        print(MatcherParser.default)
+    to get an empty, default configuration file
+    """
 
     default = ParameterCollection(
         Parameter(

@@ -25,6 +25,13 @@ logger.setLevel(logging.DEBUG)
 
 
 class BpzParser(Parser):
+    """
+    Parser for the TOML BPZ configuration file.
+    
+    From python use
+        print(BpzParser.default)
+    to get an empty, default configuration file
+    """
 
     default = ParameterCollection(
         Parameter(

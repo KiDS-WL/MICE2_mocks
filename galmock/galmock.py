@@ -34,7 +34,27 @@ from galmock.samples import DensitySampler, RedshiftSampler, SampleManager
 
 
 def get_pseudo_sys_argv(func, args, kwargs):
-    """inspect function name, parameters"""
+    """
+    Inspects the parameters a called class method to create an sys.argv style
+    listing of parameters and values.
+
+    Parameters:
+    -----------
+    func : object
+        Callable to inspect.
+    args : list
+        List of function parameters used to call func.
+    kwargs : dict
+        Named variable function parameters used to call func.
+
+    Returns:
+    --------
+    sys_argv : list
+        List containing the class and method names in "." syntax and a list of
+        the parameter values and keyword argument - value pairs.
+    classinst : object
+        The class instance which owns the called method.
+    """
     # get description of function parameters expected
     params = OrderedDict()
     argspec = inspect.getargspec(func)
@@ -70,6 +90,11 @@ def get_pseudo_sys_argv(func, args, kwargs):
 
 
 def job(method):
+    """
+    Decorator for galmock pipeline processing steps implemented in GalaxyMock.
+    Manages the ModificationStamp instance of the data store to add time
+    stamps, information of the method call and data check sums.
+    """
 
     @functools.wraps(method)
     def wrapper(*args, **kwargs):
@@ -99,6 +124,28 @@ def job(method):
 
 
 class GalaxyMock(object):
+    """
+    Wrapper and managaer for the galmock.core.datastore.DataStore that
+    implements all tasks of the pipeline and hiding the complexity of the data
+    management. Implements additional methods to display information about the
+    data store status, such as (file-)size, columns names and attributes, the
+    history of class methods applied to the data and a summary of the log data
+    produced by each processing step.
+
+    To create a new, empty data store, see GalaxyMock.create().
+
+    Parameters:
+    -----------
+    datastore : str
+        Path to the data store to open. The data store is a directory that
+        contains nothing but a collection column data, for details see
+        mmaptable.MmapTable.
+    readonly : bool
+        Whether to allow write acces to the data store.
+    treads : int
+        The maximum number of threads or parallel processes to run in parallel
+        on the data. All by default.
+    """
 
     def __init__(self, datastore, readonly=True, threads=-1):
         self.datastore = DataStore.open(datastore, readonly=readonly)
@@ -114,6 +161,9 @@ class GalaxyMock(object):
         self.close()
 
     def close(self):
+        """
+        Close the data store and the underlying file pointers.
+        """
         self.datastore.close()
 
     def __len__(self):
@@ -121,13 +171,23 @@ class GalaxyMock(object):
 
     @property
     def filepath(self):
+        """
+        Return the root file path of the data store.
+        """
         return self.datastore.root
 
     @property
     def filesize(self):
+        """
+        Return the total size of the data on disk (excluding the attributes).
+        """
         return self.datastore._filesize
 
     def show_metadata(self):
+        """
+        Print the meta data of the table: file path, size on disk and number of
+        rows and columns.
+        """
         print("==> META DATA")
         n_cols, n_rows = self.datastore.shape
         print("root:     {:}".format(self.datastore.root))
@@ -135,6 +195,10 @@ class GalaxyMock(object):
         print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
 
     def show_columns(self):
+        """
+        Generate and print a listing of all columns with their respective data
+        type.
+        """
         header = "==> COLUMN NAME"
         width_cols = max(len(header), max(
             len(colname) for colname in self.datastore.colnames))
@@ -146,6 +210,10 @@ class GalaxyMock(object):
             print(line)
 
     def show_attributes(self):
+        """
+        Generate and print a listing of all columns with their dictonary-style
+        attributes listed (such as creation time stamp and check sums).
+        """
         print("\n==> ATTRIBUTES")
         for name in self.datastore.colnames:
             print()
@@ -169,12 +237,20 @@ class GalaxyMock(object):
                 print("     └╴ {:}".format(str(attrs)))
 
     def show_history(self):
+        """
+        Generate and print a list of the of class methods that were applied to
+        the data store, ordered by time. Only shows the latest call if a method
+        was called multiple times.
+        """
         print("\n==> HISTORY")
         date_width = 24
         for date, call in self.datastore.get_history().items():
             print("{:} : {:}".format(date.ljust(date_width), call))
 
     def show_logs(self):
+        """
+        Print the content of the data stores log file.
+        """
         print("\n==> LOGS")
         logpath = self.datastore.root + ".log"
         if not os.path.exists(logpath):
@@ -187,6 +263,32 @@ class GalaxyMock(object):
     def create(
             cls, datastore, input, format=None, fits_ext=1, columns=None,
             purge=False, threads=-1):
+        """
+        Create a new galaxy mock instance and data store from input simulation
+        data (such as MICE2, Flagship, ...).
+
+        Parameters:
+        -----------
+        datastore : str
+            Path at which the data store directory is created.
+        input : str
+            Path of the input file containing the raw simulation data.
+        format : str
+            Format descibing string, see galmock.core.readwrite for all
+            supported file formats.
+        fits_ext : int
+            If the input is in FITS format, read data from this table
+            extension.
+        columns : str
+            A column mapping configuration file, see
+            galmock.core.config.TableParser that maps the column name of the
+            input file to paths in the data store (optional).
+        purge : bool
+            Handle with care! Erases the data store directory if it exists.
+        treads : int
+            The maximum number of threads or parallel processes to run in
+            parallel on the data. All by default.
+        """
         jobname = inspect.stack()[1][3]
         logger = logging.getLogger(".".join([__name__, jobname]))
         logger.setLevel(logging.DEBUG)
@@ -257,6 +359,21 @@ class GalaxyMock(object):
         return instance
 
     def info(self, columns=False, attr=False, history=False, logs=False):
+        """
+        Print some information about the data store, such as meta data, column
+        names, attributes, history and the log file content.
+
+        Parameters:
+        -----------
+        columns : bool
+            Whether to print the listing of column names and data types.
+        attr : bool
+            Whether to list the column attributes.
+        history : bool
+            Whether to print the processing history.
+        logs : bool
+            Whether to print the log file content.
+        """
         self.show_metadata()
         if columns:
             self.show_columns()
@@ -268,6 +385,10 @@ class GalaxyMock(object):
             self.show_logs()
 
     def verify(self):
+        """
+        Compute and verify the SHA-1 check sums for each data column with the
+        reference value stored in the column attributes.
+        """
         self.show_metadata()
         # verify the check sums
         header = "==> COLUMN NAME"
@@ -305,6 +426,50 @@ class GalaxyMock(object):
     def query(
             self, output, query=None, verify=False, format=False, columns=None,
             compression=None, hdf5_shuffle=False, hdf5_checksum=False):
+        """
+        Query the data store and write matching results to an output file. The
+        queries are given as strings and allow computation with table columns
+        or constant data using brackets and the following operators:
+            arithmetic operators:
+                ** (power), - (negation), * (multiplication), / division,
+                % (modular division), + (addition), - (subtraction)
+            bitwise operators:
+                ~ (not), & (and), | (or), ^ (xor),
+            comparators:
+                == (equal), != (not equal), < (less), > (greater),
+                <= (less or equal), >= (greater or equal)
+            logial operators:
+                NOT, AND, OR, XOR
+        The usual order of operators applies, from arithmetic operators
+        (hightest) to logical operators (lowest priority), with brackets taking
+        precedence.
+
+        Example: position/ra/true > 30.0 AND position/ra/true < 60
+        selects all objects with right ascension (named "position/ra/true" in
+        the data store) 30 < RA < 60.
+
+        Parameters:
+        -----------
+        output : str
+            Path where the output file is written to. If no output is specified
+            and the output format is CSV, the data is written to stdout.
+        query : str
+            Query to perform on the data, see notes above.
+        verify : bool
+            Verify the column check sums before querying the data.
+        format : str
+            Format descibing string, see galmock.core.readwrite for all
+            supported file formats.
+        columns : list
+            List of column names to include in the output file.
+        compression : str
+            Compression algorithm to use, if supported by the output format,
+            see galmock.core.readwrite.
+        hdf5_shuffle : bool
+            Whether to apply the shuffle filter in HDF5 files.
+        hdf5_checksum : bool
+            Whether to add Fletcher32 check sums to the HDF5 data sets.
+        """
         to_stdout = output is None
         # parse the math expression
         selection_columns, expression = substitute_division_symbol(
@@ -374,6 +539,18 @@ class GalaxyMock(object):
 
     @job
     def prepare_MICE2(self, mag, evo):
+        """
+        Apply the MICE2 evolution correction.
+
+        Parameters:
+        -----------
+        mag : str
+            Directory in the data store that contains the raw MICE2 input
+            magnitudes.
+        evo : str
+            Directory in the data store in which the evolution corrected
+            magnitudes are store, using the same filter key name.
+        """
         # apply the evolution correction to the model magnitudes
         self.datastore.pool.set_worker(evolution_correction_wrapped)
         # find redshift column
@@ -405,6 +582,23 @@ class GalaxyMock(object):
     @job
     def prepare_Flagship(
             self, flux, mag, gal_idx=None, is_central=None):
+        """
+        Convert the Flagship fluxes to AB magnitudes and determine if a galaxy
+        is the central halo galaxy (if their halo ID == 0).
+
+        Parameters:
+        -----------
+        flux : str
+            Directory in the data store that contains the raw Flagship input
+            fluxes.
+        evo : str
+            Directory in the data store in which the converted AB magnitudes
+            are store, using the same filter key name.
+        gal_idx : str
+            Path of the galaxy index column in the data store.
+        is_central : str
+            Path of the central galaxy flag column in the data store.
+        """
         # convert model fluxes to model magnitudes
         self.datastore.pool.set_worker(flux_to_magnitudes_wrapped)
         # find all flux columns
@@ -443,6 +637,18 @@ class GalaxyMock(object):
 
     @job
     def magnification(self, mag, lensed):
+        """
+        Compute and add the effect of magnification to a set of input
+        magnitudes.
+
+        Parameters:
+        -----------
+        mag : str
+            Directory in the data store that contains the input magnitudes.
+        evo : str
+            Directory in the data store in which the magnification corrected
+            magnitudes are store, using the same filter key name.
+        """
         # apply the magnification correction to the model magnitudes
         self.datastore.pool.set_worker(magnification_correction_wrapped)
         # find convergence column
@@ -462,9 +668,9 @@ class GalaxyMock(object):
             self.datastore.add_column(
                 lensed_path, dtype=self.datastore[mag_path].dtype.str,
                 attr={
-                    "description":
-                    "{:} with magnification correction applied".format(
-                        lensed_path)},
+                        "description":
+                        "{:} with magnification correction applied".format(
+                            lensed_path)},
                 overwrite=True)
             # add columns to call signature
             self.datastore.pool.add_argument_column(mag_path)
@@ -474,6 +680,20 @@ class GalaxyMock(object):
 
     @job
     def effective_radius(self, config):
+        """
+        Compute a proxy for the intrinsic galaxy size, projected on-sky, in
+        arcseconds. When configured with flux_frac=0.5, this corresponds to
+        the effective radius (emitting 50% of the total flux).
+
+        Multiple intrinsic galaxy size can exist simultenously if named
+        accordingly.
+
+        Parameters:
+        -----------
+        config : str
+            Path to a TOML photometry configuration file, see
+            galmock.photometry.PhotometryParser.
+        """
         # check the configuration file
         configuration = PhotometryParser(config)
         # apply the magnification correction to the model magnitudes
@@ -503,6 +723,19 @@ class GalaxyMock(object):
 
     @job
     def apertures(self, config):
+        """
+        Add an aperture realisation for each galaxy, based on its intrinsic
+        size and average observing conditions (PSF FWHM).
+
+        Multiple aperture realistaions can exist simultenously if named
+        accordingly.
+
+        Parameters:
+        -----------
+        config : str
+            Path to a TOML photometry configuration file, see
+            galmock.photometry.PhotometryParser.
+        """
         # check the configuration file
         configuration = PhotometryParser(config)
         # apply the magnification correction to the model magnitudes
@@ -540,6 +773,29 @@ class GalaxyMock(object):
 
     @job
     def photometry(self, mag, real, config, seed="sapling"):
+        """
+        Add an photometry realisation for each galaxy, based on its aperture
+        size and limiting magnitude.
+
+        Multiple photometry realistaions can exist simultenously if named
+        accordingly.
+
+        Parameters:
+        -----------
+        mag : str
+            Directory in the data store that contains the noiseless input
+            magnitudes.
+        real : str
+            Directory in the data store where the magnitude realisations and
+            their errors are stored.
+        config : str
+            Path to a TOML photometry configuration file, see
+            galmock.photometry.PhotometryParser.
+        seed : str
+            Used to seed the random number generator for the photometric error.
+            Results are only reproducible, if the number of parallel processes
+            remains the same.
+        """
         # check the configuration file
         configuration = PhotometryParser(config)
         # apply the magnification correction to the model magnitudes
@@ -600,6 +856,19 @@ class GalaxyMock(object):
 
     @job
     def match_data(self, config):
+        """
+        Derive an observable from an external data set based on nearest
+        neighbour matching in a feature space (for example galaxy magntiudes).
+        
+        The external data must be a valid galmock.core.datastore which can be
+        created using Galmock.create, leaving the columns argument blank.
+
+        Parameters:
+        -----------
+        config : str
+            Path to a TOML sample matching configuration file, see
+            galmock.matching.MatcherParser.
+        """
         # check the configuration file
         configuration = MatcherParser(config)
         # apply the magnification correction to the model magnitudes
@@ -631,6 +900,25 @@ class GalaxyMock(object):
 
     @job
     def BPZ(self, mag, zphot, config):
+        """
+        Add photometric redshifts computed with BPZ for a magnitude
+        realisation (magnitude errors are required).
+
+        Multiple photometric redshift estimates can exist simultenously if
+        named accordingly.
+
+        Parameters:
+        -----------
+        mag : str
+            Directory in the data store that contains the input magnitude
+            realistion and errors.
+        zphot : str
+            Directory in the data store where the photo-z and additional BPZ
+            output is stored.
+        config : str
+            Path to a TOML BPZ configuration file, see
+            galmock.photoz.BpzParser.
+        """
         # check the configuration file
         configuration = BpzParser(config)
         # run BPZ on the selected magnitudes
@@ -668,6 +956,33 @@ class GalaxyMock(object):
     @job
     def select_sample(
             self, config, sample, area, type="reference", seed="sapling"):
+        """
+        Apply a sample selection function to the simulation data. Each sample
+        must be defined in galmock.samples and requires a configuration file
+        that specifies the required input columns in the data store. Adds a
+        bit mask column that indicates each (sub-)selection step performed.
+
+        Each sample has its own selection bit mask.
+
+        Parameters:
+        -----------
+        config : str
+            Path to a TOML sample configuration file, see the sample specific
+            parsers in galmock.samples.reference.
+        sample : str
+            Name used to identify the selection function implemented in
+            galmock.samples.
+        area : float
+            On-sky area covered by the input simulation data.
+        type : str
+            If a simulation data specific selection function should be used
+            (e.g. MICE2), defaults to the reference implementation (closest to
+            the literature selection).
+        seed : str
+            Used to seed the random number generator for the photometric error.
+            Results are only reproducible, if the number of parallel processes
+            remains the same.
+        """
         # check the configuration file
         Parser = SampleManager.get_parser(type, sample)
         configuration = Parser(config)

@@ -18,6 +18,10 @@
 # Modifications can be implemented for specific input mock catalogues
 # (flavours), see MICE2.py for reference.
 #
+# To obtain an empty, default configuration for any of the samples, import the
+# parser in python and type
+#     print(Parser_[sample_name].default)
+#
 
 import os
 
