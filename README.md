@@ -34,16 +34,28 @@ To be able to compute photometric redshifts
 [BPZ](http://www.stsci.edu/~dcoe/BPZ/) and a python2 environment is requried,
 see `requirements_BPZ_py2.txt`.
 
+The root directory of this repository should be included in the `$PYTHONPATH`.
+Optionally, the `scripts` can be included in `$PATH` to directly accessing the
+command line tools.
+
 
 ## Instructions
 
-Examples for how to set up and run the pipeline from python can be found in the
-`MICE2` and `Flagship` directories.
+Examples for how to set up and run the pipeline from python can be found in
+`MICE2/MICE2.py` and `Flagship/Flagship.py` directories. This includes samples
+of the configuration files (photometry, photo-z, spectroscopic reference
+samples) and the transmission curves required by BPZ (to be unpacked from the
+`filters.tar.gz` files).
 
 All pipeline methods are implemented in the main class, `galmock.GalaxyMock`.
-Alternatively, these methods can be used by stand-alone command line tools in
-the `scripts` directory. Type `[scriptname] --help` to obtain more information
+Alternatively, these methods can be used by calling command line tools in the
+`scripts` directory. Type `[scriptname] --help` to obtain more information
 about the usage of each of these scripts.
+
+Many of the processing steps are configured using configuration files. Default
+versions of these files can be generated using the command line tools by typing
+`[scriptname] --dump`, which will print an commented configuration file to
+the standard output.
 
 
 ### Data Access
@@ -79,7 +91,7 @@ FROM flagship_mock_1_8_4_s
 ```
 
 
-## Citing g
+## Citing galmock
 
 Papers utilizing the `galmock` pipeline should provide a link back to this
 repository. It is also requested that users cite
