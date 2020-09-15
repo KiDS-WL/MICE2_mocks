@@ -11,26 +11,6 @@ from galmock import GalaxyMock
 from galmock.core.config import logging_config
 
 
-# mapping between the job ID (see commandline parser) and the script signature
-job_map = {
-    "1": "create",
-    "2": "prepare_Flagship",
-    "3": "magnification",
-    "4": "effective_radius",
-    "5": "apertures",
-    "6": "photometry",
-    "7": "match_data",
-    "8": "BPZ",
-    "9": "select_sample",
-    "out": "query"}
-
-# generate a help message for the commandline parser
-job_help_str = "select a set of job IDs to process the mock data, "
-job_help_str += "options are: {{{:}}} or 'all' to run all jobs".format(
-    ", ".join(
-        "{:}:{:}".format(ID, job_map[ID]) for ID in sorted(job_map.keys())))
-
-
 parser = argparse.ArgumentParser(
     description="Pipeline to create realistic KiDS and spectroscopic mock "
                 "samples from the Flagship galaxy mock catalogue.",
@@ -38,7 +18,12 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "type", choices=("all", "test"), help="MICE2 data sample type")
 parser.add_argument(
-    "jobID", nargs="*", help=job_help_str)
+    "jobID", nargs="*",
+    help="select a set of job IDs to process the mock data, options are: "
+         "1: create datastore - 2: prepare Flagship - 3: add magnification - "
+         "4: effective radius - 5: add apertures - 6: add photometry - "
+         "7: match data - 8: BPZ photo-z - 9: select samples - out: export "
+         "samples - all: run all jobs in sequence")
 parser.add_argument(
     "--threads", type=int, default=cpu_count(),
     help="maximum number of threads to use (default: %(default)s)")
@@ -48,11 +33,13 @@ parser.add_argument(
 parser.add_argument(
     "-v", "--verbose", action="store_true", help="display debugging messages")
 
+all_jobs = tuple(str(i) for i in range(1, 10)) + ("out",)
+
 
 def main():
     args = parser.parse_args()
     if "all" in args.jobID:
-        args.jobID = job_map.keys()
+        args.jobID = all_jobs
     args.jobID = set(args.jobID)
     args.verbose = "-v" if args.verbose else ""
 
@@ -85,7 +72,7 @@ def main():
         verbose=args.verbose))
 
     # check for unknown jobs
-    for jobID in args.jobID - set(job_map.keys()):
+    for jobID in args.jobID - set(all_jobs):
         raise parser.error("invalid job ID: {:}".format(jobID))
 
     # run the jobs
@@ -98,45 +85,45 @@ def main():
 
     with mocks:
         if "2" in args.jobID:
-            getattr(mocks, job_map["2"])(
+            mocks.prepare_Flagship(
                 flux="flux/model", mag="mags/model", gal_idx="index_galaxy",
                 is_central="environ/is_central")
         if "3" in args.jobID:
-            getattr(mocks, job_map["3"])(
+            mocks.magnification(
                 mag="mags/model", lensed="mags/lensed")
         if "4" in args.jobID:
-            getattr(mocks, job_map["4"])(
+            mocks.effective_radius(
                 config="config/photometry.toml")
         if "5" in args.jobID:
-            getattr(mocks, job_map["5"])(
+            mocks.apertures(
                 config="config/photometry.toml")
         if "6" in args.jobID:
-            getattr(mocks, job_map["6"])(
+            mocks.photometry(
                 config="config/photometry.toml", mag="mags/lensed",
                 real="mags/K1000")
         if "7" in args.jobID:
-            getattr(mocks, job_map["7"])(
+            mocks.match_data(
                 config="config/matching.toml")
         if "8" in args.jobID:
             os.environ["hostname"] = os.uname()[1]
-            getattr(mocks, job_map["8"])(
+            mocks.BPZ(
                 config="config/BPZ.toml", mag="mags/K1000", zphot="BPZ/K1000")
         if "9" in args.jobID:
             for sample in samples:
-                getattr(mocks, job_map["9"])(
+                mocks.select_sample(
                     config="samples/{:}.toml".format(sample), type="Flagship",
                     sample=sample, area=area)
         if "out" in args.jobID:
-            getattr(mocks, job_map["out"])(
+            mocks.query(
                 output=output_base.format(args.type, ""), verify=True,
                 format=args.format, query=query)
             # get the remaining samples
             for sample in samples:
-                getattr(mocks, job_map["out"])(
+                mocks.query(
                     output=output_base.format(args.type, "_" + sample),
                     format=args.format, query=query_sample.format(sample, 1))
             # get the BOSS sample
-            getattr(mocks, job_map["out"])(
+            mocks.query(
                 output=output_base.format(args.type, "_BOSS"),
                 format=args.format, query=query_sample.format("SDSS", 12))
 
