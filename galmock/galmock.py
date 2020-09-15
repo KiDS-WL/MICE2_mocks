@@ -907,6 +907,9 @@ class GalaxyMock(object):
         Multiple photometric redshift estimates can exist simultenously if
         named accordingly.
 
+        Note that BPZ requires a python2 environment, see the
+        requirements_BPZ_py2.txt in the root directory.
+
         Parameters:
         -----------
         mag : str

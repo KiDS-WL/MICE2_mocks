@@ -1,48 +1,57 @@
 # MICE2_mocks
 
-This Repository provides code to create galaxy mock catalogues based on
-[MICE](http://maia.ice.cat/mice/) galaxy catalogues.
+This Repository provides code to derive survey specific mock cataloges from an
+existing input simulated galaxy mock catalogue such as the Euclid Flagship or
+MICE2. Even though is pipeline is writting for the Kilo-Degree Survey, all
+methods should be applicable to other reference data sets.
+
+The processing pipeline offers a variety of featues, such as:
+
+- adding realistic photometry realisations (mimicking real world observations),
+- photometric redshifts (using BPZ) and
+- selecting spectroscopic samples such as SDSS BOSS, GAMA, zCOSMOS and more.
+
+The functionality can easily be extended to further needs.
+
+The pipeline is based on an internal, memory-map based data store that is
+created when the pipeline is initialsed. This data layout allows extremely
+efficient data access, allowing parallel reading and writeing operations. All
+data processing is logged and data columns in the data store are marked with
+desciptive attributes. Once all computations are complete, the data store can
+be queried with logical expressions to select output (sub-)samples. Supported
+in- and output formats are (currently) CSV, FITS, HDF5 and Parquet.
+
+The pipeline can be accessed by dedicated command line scripts or directly
+through a Python interface.
 
 
 ## Requirements
 
-The pipeline is written in Python3 and requires the following non-standard
-packages:
-- `numpy` and `scipy`
-- `astropy>=3.0` (recommended for the improved astropy.table performance)
-- `matplotlib>=2.0` for the plotting scripts
-
-Additionally, the wrapper scripts in `./KV450` and `./DES` make use of
-an external packages that provide convenience functions to handle data tables:
-- [jlvdb/table_tools](https://github.com/jlvdb/table_tools) (script calls
-starting with `data_table_`)
-The path to `table_tools` must be included in `$PATH` and `$PYTHONPATH`.
+The pipeline is written in Python3 and requires the additional packages
+summarized in the `requirements.txt` file.
 
 To be able to compute photometric redshifts
-[BPZ](http://www.stsci.edu/~dcoe/BPZ/) is requried.
+[BPZ](http://www.stsci.edu/~dcoe/BPZ/) and a python2 environment is requried,
+see `requirements_BPZ_py2.txt`.
 
 
 ## Instructions
 
-Starting from the MICE2 base catalogues, the pipeline allows to model various
-observational selection functions:
+Examples for how to set up and run the pipeline from python can be found in the
+`MICE2` and `Flagship` directories.
 
-- Spectroscopic surveys: GAMA, SDSS (main sample, BOSS and QSOs), 2dFLenS,
-WiggleZ, DEEP2, zCOSMOS and VVDS (2h field)
-- Photometric surveys: Examples to create 450 sqdeg of KiDS-VIKING (KV450,
-`./KV450`) and the Dark Energy Survey (DES, `./DES`) are included.
-
-The pipeline allows to attach realistic photometry realisations to the MICE2
-catalogues, photometric redshifts, galaxy weights, and spectroscopic success
-rates for some of the included spectroscopic selection functions.
+All pipeline methods are implemented in the main class, `galmock.GalaxyMock`.
+Alternatively, these methods can be used by stand-alone command line tools in
+the `scripts` directory. Type `[scriptname] --help` to obtain more information
+about the usage of each of these scripts.
 
 
 ### Data Access
 
-The MICE2 base catalogues can be downloaded from
+The MICE2 and Flagship base catalogues can be downloaded from
 [COSMO HUB](https://cosmohub.pic.es/). Recommended column selections (in SQL
-query stile using 'expert mode') for KV450 are
-
+query stile using 'expert mode') to reproduce KiDS ugrizYJHKs data are for
+MICE2:
 ```
 SELECT
     `unique_gal_id`, `ra_gal`, `dec_gal`, `z_cgal`, `z_cgal_v`,
@@ -55,68 +64,28 @@ SELECT
     `disk_length`, `disk_axis_ratio`
 FROM micecatv2_0_view WHERE `dec_gal` <= 30 AND `ra_gal` >= 30 AND `ra_gal` <= 60
 ```
-where `des_asahi_full_y_true` is the best match for the VISTA (`vhs_*_true`)
-_Y_-band that is missing in MICE2. The VST _ugriz_-bands are covered by
-`sdss_*_true`.
-
-For DES we can select
+and for Flagship:
 ```
 SELECT
-    `unique_gal_id`, `ra_gal`, `dec_gal`, `z_cgal`, `z_cgal_v`,
-    `sdss_u_true`, `lephare_b_true`, `sdss_g_true`,
-    `lephare_v_true`, `sdss_r_true`, `lephare_rc_true`,
-    `sdss_i_true`, `lephare_ic_true`, `sdss_z_true`,
-    `des_asahi_full_y_true`, `vhs_j_true`,
-    `vhs_h_true`, `vhs_ks_true`,
-    `bulge_fraction`, `bulge_length`, `bulge_axis_ratio`,
-    `disk_length`, `disk_axis_ratio`
-FROM micecatv2_0_view WHERE `dec_gal` <= 30 AND `ra_gal` >= 30 AND `ra_gal` <= 60
+    `halo_id`, `galaxy_id`, `ra_gal`, `dec_gal`, `ra_gal_mag`, `dec_gal_mag`,
+    `true_redshift_gal`, `observed_redshift_gal`,
+    `kappa`, `gamma1`, `gamma2`, `ellipticity`,
+    `log_stellar_mass`, `halo_lm`, `kind`, `halo_n_sats`,
+    `kids_u`, `kids_g`, `kids_r`, `kids_i`, `lsst_z`,
+    `lsst_y`, `2mass_h`, `2mass_j`, `2mass_ks`,
+    `bulge_fraction`, `bulge_length`, `bulge_axis_ratio`, `bulge_angle`,
+    `disk_length`, `disk_axis_ratio`, `disk_angle`
+FROM flagship_mock_1_8_4_s
 ```
-correspondingly and make use of the fact that MICE2 comes by default with all
-DES model magnitudes.
-
-This selection uses the most complete patch of MICE (`30 <= RA <= 60` and
-`0 <= DEC <= 30`). Some of these columns are only needed to additionaly select
-spectoscopic samples.
 
 
-### Creating Photometric Catalogues
+## Citing g
 
-The wrapper scripts in `./KV450` and `./DES` show exemplary how to create
-mock catalogues matched to observational data. These steps include:
-
-1. Applying the MICE2 evolution correction.
-2. Correcting the model magnitudes for magnification.
-3. Computing observational galaxy sizes based on the point spread function
-(this allows a size contribution to the photometric uncertainties).
-4. Adding a photometry realization based on the observational limiting
-magnitudes
-5. Assigning galaxy weights by nearest neighbour matching between mock and data
-in magnitude space
-6. Computing photometric redshifts with BPZ
+Papers utilizing the `galmock` pipeline should provide a link back to this
+repository. It is also requested that users cite
+> van den Busch et al. 2020
 
 
-### Creating Spectroscopic Catalogues
+## Maintainers
 
-The pipeline bundles a variety of spectroscopic (target) selection functions:
-- 2dFLenS (Blake et al. 2016)
-- DEEP2 (Newman et al. 2013)
-- GAMA (Driver et al. 2011)
-- SDSS
-  - main sample (Strauss et al. 2002)
-  - BOSS (Dawson et al. 2013)
-  - QSO sample (Schneider et al. 2010a, only attempting to match the redshift 
-    distribution)
-- WiggleZ (Drinkwater et al. 2010, missing UV information replaced by redshift 
-  distribution matching)
-- VVDS (LeFèvre et al. 2005, only 2h field)
-- zCOSMOS (Lilly et al. 2009, only bright sample)
-
-These selection functions are defined in `./pipeline/specz_selection.py` and
-have some adjustments applied in order to give a better match to the data
-colour and/or redshift distributions.
-
-There are wrapper scripts in `./KV450` and `./DES` that produce photometry
-and/or line of sight realisations of the deep spectroscopic catalouges (DEEP2,
-VVDS and zCOSMOS) as they are used e.g. in Wright et al. (2019) for tests of
-the SOM DIR redshift calibration method.
+Jan Luca van den Busch (Ruhr-Universität Bochum, Germany) - [https://github.com/jlvdb]()
