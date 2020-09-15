@@ -170,8 +170,11 @@ class ParallelIterator(object):
 class ParallelTable(object):
     """
     Wrapper to apply a function to the columns of a MmapTable with concurrent
-    threads. For each thread the table rows are divided into equal sized chunks
-    to avoid current I/O operations on the same memory.
+    threads. For each thread the table rows are divided into equally sized
+    portions, which are then processed by in thread in chunks.
+
+    It is recommended to decorate the worker function with any of the
+    @Schedule decorators.
 
     Parameters:
     -----------

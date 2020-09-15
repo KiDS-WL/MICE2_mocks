@@ -3,6 +3,9 @@
 # and parquet files. The latter three formats are available only, if the
 # necessary packages are installed.
 #
+# Data is always read or written in chunks to prevent memory overflow. This
+# may be a performance bottle neck for smaller files.
+#
 
 import csv
 import logging

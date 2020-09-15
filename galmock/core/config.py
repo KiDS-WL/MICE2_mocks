@@ -25,6 +25,25 @@ _INDENT = 24
 
 
 def logging_config(logpath=None, overwrite=False, verbose=False):
+    """
+    Configures the python logging system in a specific format. Additionally,
+    the log data may be written to a log file, typically next to the data store
+    in use.
+
+    Parameters:
+    -----------
+    logpath : str
+        Optional path of the log file.
+    overwrite : bool
+        Whether to overwrite or append to the log file (if it exists).
+    verbose : bool
+        Whether to show events with a minimum level of "DEBUG" or "INFO".
+
+    Returns:
+    --------
+    logconfig : dict
+        Can be parsed by logging.config.dictConfig().
+    """
     logconfig = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -54,11 +73,24 @@ def logging_config(logpath=None, overwrite=False, verbose=False):
 
 
 class LineComment(object):
+    """
+    Specifies the configuration file generator to place a whole line with
+    commented text.
+
+    Parameters:
+    -----------
+    comment : str
+        The comment string to be placed. Line breaks may lead to unintended
+        behaviour.
+    """
 
     def __init__(self, comment):
         self.comment = comment
 
     def __str__(self):
+        """
+        Formats the line comment with a leading '#' and text wrapping applied.
+        """
         formatted = ""
         # preserve custom white spaces
         for paragraph in self.comment.splitlines():
@@ -71,6 +103,26 @@ class LineComment(object):
 
 
 class Parameter(object):
+    """
+    Specifies the configuration file generator to place a parameter. Parameters
+    are named, define a data type, optional default values and optional
+    descriptive comments starting on the same line or indented below.
+
+    Parameters:
+    -----------
+    name : str
+        Name under which the parameter is listed in the configuration file.
+    dtype : type
+        Type of the argument, can be any of the formats supported by TOML.
+    value : compatible to dtype
+        The default value to include in the generated configuration file.
+    comment : str
+        Comment that follows the parameter. Comments are indented and wrapped
+        by _INDENT characters and start in the row below if there is no
+        sufficient space following the parameter value.
+    parser : object
+        Parser that is used to convert the parameter value to string and back.
+    """
 
     def __init__(self, name, dtype, value=None, comment=None, parser=None):
         self.name = name
@@ -81,6 +133,11 @@ class Parameter(object):
         self.comment = comment
 
     def __str__(self):
+        """
+        Formats the parameter as [parameter name] = [default value] # comment.
+        Comments are wrapped and indented if they are too long for a single
+        line.
+        """
         formatted = ""
         # format the identifier
         if all(c in _TOML_KEY_CHARACTERS for c in self.name):
@@ -112,6 +169,23 @@ class Parameter(object):
 
 
 class ParameterListing(object):
+    """
+    Specifies the configuration file generator to place a parameter group. This
+    group accepts a variable number (at least one) of arbitrarily named
+    parameters that must have the same type. Groups are represented as
+    dictionaries in python and as sections in TOML files.
+
+    Parameters:
+    -----------
+    name : str
+        Name of the parameter listing.
+    dtype : type
+        Type of all the arguments, can be any of the formats supported by TOML.
+    header : str
+        Descriptive header for the listing, implemented as LineComment.
+    parser : object
+        Parser that is used to convert the parameter values to string and back.
+    """
 
     def __init__(self, name, dtype, header=None, parser=None):
         self.name = name
@@ -121,6 +195,9 @@ class ParameterListing(object):
         self.parser = parser
 
     def __str__(self):
+        """
+        Formats the parameter listing as TOML section, including a header line.
+        """
         formatted = "\n"
         formatted += "[{:}]\n".format(self.name)
         # add the header
@@ -129,16 +206,56 @@ class ParameterListing(object):
         return formatted.rstrip("\n")
 
     def get_required(self):
+        """
+        Get the names of the required parameters in this group.
+        """
         return []
 
     def get_optional(self):
+        """
+        Get the names of the optional parameters in this group.
+        """
         return []
 
     def is_known(self, name):
+        """
+        Test whether a parameter is registered in the group under the given
+        name.
+
+        Parameters:
+        -----------
+        name : str
+            Name of the parameter to look up.
+        
+        Returns:
+        --------
+        is_known : bool
+            Whether the parameter is registered.
+        """
         return True
 
 
 class ParameterGroup(object):
+    """
+    Specifies the configuration file generator to place a parameter group. This
+    group defines a fixed list of parameters and optional line comments to
+    generate for the conifguration file. Groups are represented as dictionaries
+    in python and as sections in TOML files.
+
+    Parameters:
+    -----------
+    name : str
+        Name of the parameter listing.
+    *entries : ParameterGroup, ParameterListing, Parameter or LineComment
+        Definitions for the content of this group. 
+    header : str
+        Descriptive header for the listing, implemented as LineComment.
+    required : bool
+        Whether this group can be omitted in the configuration file.
+    allow_unknown : bool
+        Whether this group accepts additional, undefined parameters when the
+        configuration file is parsed.
+    """
 
     _allow_groups = False
     _offset_header = False
@@ -174,6 +291,9 @@ class ParameterGroup(object):
             raise KeyError("entry not found: {:}".format(item))
 
     def __str__(self):
+        """
+        Formats the parameter group as TOML section, including a header line.
+        """
         formatted = "\n"
         if self.name is not None:
             formatted += "[{:}]\n".format(self.name)
@@ -186,9 +306,15 @@ class ParameterGroup(object):
         return formatted.rstrip("\n")
 
     def get_known(self):
+        """
+        Get the names of all registered parameters in this group.
+        """
         return [entry.name for entry in self if type(entry) is not LineComment]
 
     def get_required(self):
+        """
+        Get the names of the required parameters in this group.
+        """
         required = []
         for name in self.get_known():
             entry = self[name]
@@ -197,6 +323,9 @@ class ParameterGroup(object):
         return required
 
     def get_optional(self):
+        """
+        Get the names of the optional parameters in this group.
+        """
         optional = []
         for name in self.get_known():
             entry = self[name]
@@ -205,6 +334,20 @@ class ParameterGroup(object):
         return required
 
     def is_known(self, name):
+        """
+        Test whether a parameter is registered in the group under the given
+        name.
+
+        Parameters:
+        -----------
+        name : str
+            Name of the parameter to look up.
+        
+        Returns:
+        --------
+        is_known : bool
+            Whether the parameter is registered.
+        """
         if self.allow_unknown:
             return True  # match anything
         else:
@@ -212,6 +355,20 @@ class ParameterGroup(object):
 
 
 class ParameterCollection(ParameterGroup):
+    """
+    The root group of each configuration file that must be implemented as
+    Parser.default attribute in each configuration file parser.
+
+    Parameters:
+    -----------
+    *entries : ParameterGroup, ParameterListing, Parameter or LineComment
+        Definitions for the content of this group. 
+    header : str
+        Descriptive header for the listing, implemented as LineComment.
+    allow_unknown : bool
+        Whether this group accepts additional, undefined parameters when the
+        configuration file is parsed.
+    """
 
     _allow_groups = True
     _offset_header = True
@@ -251,6 +408,10 @@ class Parser(object):
 
     @staticmethod
     def _parse_param(param, name, dtype, required, parser):
+        """
+        Parse a parameter. Each parameter is checked against its definition in
+        self.default.
+        """
         if required and type(param) is not dtype:
             message = "expected type {:} but received {:}: {:}"
             raise TypeError(message.format(dtype, type(param), name))
@@ -262,6 +423,10 @@ class Parser(object):
             return param
 
     def _parse_group(self, group, reference):
+        """
+        Parse a parameter group and all parameters therein. Each parameter is
+        checked against the group definition in self.default.
+        """
         parsed = {}
         for name in reference.get_required():
             if name not in group:
@@ -289,14 +454,26 @@ class Parser(object):
         return parsed
 
     def _run_checks(self):
+        """
+        Optional method that is run after updating a parameter value. Can be
+        used to check for conflicting configurations.
+        """
         pass
 
     def __setattr__(self, name, value):
+        """
+        Set the parameter values, if the value is updated, the parameter
+        checks are run.
+        """
         if hasattr(self, name):
             self._run_checks()
         super().__setattr__(name, value)
 
     def __str__(self):
+        """
+        Formats the parameter values to a human readable dictionary
+        representation.
+        """
         formatted = ""
         for name in sorted(self._config.keys()):
             formatted += "{:} = {:}\n".format(name, self._config[name])
@@ -304,6 +481,11 @@ class Parser(object):
 
     @classmethod
     def get_dump(cls):
+        """
+        Creates an argparse.Action that can be used in scripts to display a
+        default configuration file that can be edited and parsed back by the
+        user.
+        """
         class dump(argparse.Action):
 
             def __init__(self, *args, nargs=0,**kwargs):
@@ -319,6 +501,11 @@ class Parser(object):
 
 
 class TableParser(Parser):
+    """
+    Parse for a column mapping configuration file. Defines a mapping between
+    the column names in the simulation data input file and the paths within
+    the pipeline data store.
+    """
 
     default = ParameterCollection(
         Parameter(
@@ -438,6 +625,10 @@ class TableParser(Parser):
 
     @property
     def column_map(self):
+        """
+        Returns the parsed mapping dictionary between input file and data
+        store.
+        """
         self._column_map = {}
         self._traverse_dict(self._config)
         return self._column_map

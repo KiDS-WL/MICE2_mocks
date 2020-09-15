@@ -4,6 +4,7 @@ from galmock.core.config import Parameter
 from galmock.samples.base import SampleManager
 
 
+# define some commonly used statements in the configuration file language
 header = (
     "This configuration file is required for mocks_select_sample. It "
     "defines the output column name of the selection bit mask and the "
@@ -25,6 +26,21 @@ for key in ("B", "Rc", "Ic"):
 
 
 def make_bitmask_parameter(sample):
+    """
+    Generates a parameter definition for the sample configuration file. It sets
+    the name of the output column in the data store for a bit mask that is used
+    to store the sample selection bits.
+
+    Parameters:
+    -----------
+    sample : str
+        Name of the sample described by the bit mask.
+    
+    Returns:
+    --------
+    param : galmock.core.config.Parameter
+        The generated paramter definition for the sample configuration file.
+    """
     param = Parameter(
         "bitmask", str, "samples/" + sample,
         "path at which the sample selection bit mask is saved in the data "
@@ -33,6 +49,12 @@ def make_bitmask_parameter(sample):
 
 
 class DumpConfig(Action):
+    """
+    An argparse.Action class that is used to generate the default layout of the
+    sample configuration file (--dump). Two additional parameters are parsed,
+    flavour and sample that are required to locate the correct configuration
+    parser.
+    """
 
     def __init__(self, *args, nargs=2, **kwargs):
         super().__init__(*args, nargs=nargs, **kwargs)

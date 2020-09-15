@@ -1,3 +1,24 @@
+#
+# This module implements the literature (reference) selection functions and
+# density samplers for different galaxy samples. The data columns in the data
+# store, required to select these samples, must be configured by a
+# configuration file. Therefore, each sample should define at least the first
+# two of these classes:
+#     - Parser_[sample_name]: Implements a ParameterCollection that defines the
+#       configuration file.
+#     - Select_[sample_name]: Implements the sample selection, such as
+#       photometric cuts or spectroscopic success rates.
+#     - Sample_[sample_name]: Optional density sampling, may be redshift
+#       weighted.
+# 
+# The naming convention is required to associate all classes belonging to one
+# sample. All these sample classes must be registered with
+# @SampleManager.register.
+#
+# Modifications can be implemented for specific input mock catalogues
+# (flavours), see MICE2.py for reference.
+#
+
 import os
 
 import numpy as np
