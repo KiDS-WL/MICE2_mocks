@@ -249,7 +249,7 @@ class BpzManager(object):
         if template not in self.installed_templates:
             message = "unknown template list: {:} (options are: {:})"
             message = message.format(
-                prior, ", ".join(self.installed_templates))
+                template, ", ".join(self.installed_templates))
             raise ValueError(message)
 
     def _restore_environment(self):
