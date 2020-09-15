@@ -1,3 +1,12 @@
+#
+# This is the main module of galmock that implements the mock data processing
+# methods. These are exposed as methods of the GalaxyMock class and by stand-
+# alone scripts, which manage the internal mock data storage system.s
+#
+# Each method should be wrapped with the @job decorator that manages the
+# internal logging system, time-stamps and data check-sums.
+#
+
 import functools
 import inspect
 import logging
@@ -65,7 +74,6 @@ def job(method):
     @functools.wraps(method)
     def wrapper(*args, **kwargs):
         sys_argv, classinst = get_pseudo_sys_argv(method, args, kwargs)
-        #print(classinst)
         restore_logger = classinst.logger
         # reset the timestamp handler
         classinst.datastore._timestamp = ModificationStamp(sys_argv)
@@ -500,7 +508,6 @@ class GalaxyMock(object):
         # apply the magnification correction to the model magnitudes
         # initialize the aperture computation
         self.datastore.pool.set_worker(apertures_wrapped)
-        self.datastore.pool.add_argument_constant(configuration.method)
         self.datastore.pool.add_argument_constant(configuration)
         # find effective radius and b/a ratio columns
         input_columns = (

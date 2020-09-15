@@ -1,3 +1,8 @@
+#
+# This module implements methods to add a realistic photometry realisation to
+# the mock data.
+#
+
 import os
 
 import toml
@@ -299,14 +304,56 @@ def find_percentile_wrapped(
 
 
 def FWHM_to_sigma(FWHM):
+    """
+    Convert the full width at half maximum of a Gaussian to it corresponding
+    sigma value.
+
+    Parameters:
+    -----------
+    FWHM : float
+        Full width at half maximum.
+    
+    Returns:
+    sigma : float
+        Value for sigma of the Gaussian.
+    """
     # sigma = FWHM / (2.0 * sqrt(2.0 * log(2.0)))
-    return FWHM / 2.3548200450309493
+    sigma =  FWHM / 2.3548200450309493
+    return sigma
 
 
 def apertures_SExtractor(config, filter_key, r_effective, ba_ratio):
+    """
+    Construct an Source Extractor-like aperture for a given intrinic size and
+    galaxy axis ratio for a given PSF size. This aproximates scaling the
+    Petrosion ratius by a constant factor (typically 2.5) to obtain an aperture
+    for MAG_AUTO magnitudes.
+
+    Parameters:
+    -----------
+    config : PhotometryParser
+        Configures all parameters required by the photometry functions.
+    filter_key : str
+        Identifier key for the photometric filter to process.
+    r_effective : float, array-like
+        Effective radius of the galaxies, proxy for the intrinsic size.
+    ba_ratio : float, array-like
+        Ration of minor to major galaxies axes.
+
+    Returns:
+    --------
+    aperture_major : float, array-like
+        Constructed aperture major axis.
+    aperture_minor : float, array-like
+        Constructed aperture minor axis.
+    snr_correction : float, array-like
+        Signal-to-noise ratio correction factor based on the aperture size.
+        Calculated from the square root of the ratio of the PSF (point-source)
+        to galaxy aperture area ratio.
+    """
     # compute the intrinsic galaxy major and minor axes and area
     mag_auto_scale = config.SExtractor["phot_autoparams"]
-    if config.legacy:
+    if config.legacy:  # legacy mode (van den Busch et al. 2020)
         galaxy_major = r_effective * mag_auto_scale
         galaxy_minor = galaxy_major * ba_ratio
         # "convolution" with the PSF
@@ -333,6 +380,32 @@ def apertures_SExtractor(config, filter_key, r_effective, ba_ratio):
 
 
 def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
+    """
+    Construct an GAaP-like aperture (Gaussian Aperture and Photometry) for a
+    given intrinic size and galaxy axis ratio for a given PSF size.
+
+    Parameters:
+    -----------
+    config : PhotometryParser
+        Configures all parameters required by the photometry functions.
+    filter_key : str
+        Identifier key for the photometric filter to process.
+    r_effective : float, array-like
+        Effective radius of the galaxies, proxy for the intrinsic size.
+    ba_ratio : float, array-like
+        Ration of minor to major galaxies axes.
+
+    Returns:
+    --------
+    aperture_major : float, array-like
+        Constructed aperture major axis.
+    aperture_minor : float, array-like
+        Constructed aperture minor axis.
+    snr_correction : float, array-like
+        Signal-to-noise ratio correction factor based on the aperture size.
+        Calculated from the square root of the ratio of the PSF (point-source)
+        to galaxy aperture area ratio.
+    """
     psf_sigma = FWHM_to_sigma(config.PSF[filter_key])
     aper_min = config.GAaP["aper_min"]
     aper_max = config.GAaP["aper_max"]
@@ -359,14 +432,35 @@ def apertures_GAaP(config, filter_key, r_effective, ba_ratio):
 
 @Schedule.description("constructing apertures")
 @Schedule.workload(0.15)
-def apertures_wrapped(method, config, r_effective, ba_ratio):
+def apertures_wrapped(config, r_effective, ba_ratio):
+    """
+    Wrapper for apertures_SExtractor() and apertures_GAaP() to compute
+    apertures for a set of galaxies for all configured filters.
+
+    Parameters:
+    -----------
+    config : PhotometryParser
+        Configures all parameters required by the photometry functions.
+    r_effective : float, array-like
+        Effective radius of the galaxies, proxy for the intrinsic size.
+    ba_ratio : float, array-like
+        Ration of minor to major galaxies axes.
+
+    Returns:
+    --------
+    results : list of float or array-like
+        Returns a concatenated listing of aperture major axes, aperture minor
+        axes and signal-to-noise correction factors for the galaxies in each
+        filter specified in the configuration.
+    """
     # select the photometry method
-    if method == "GAaP":
+    if config.method == "GAaP":
         aperture_func = apertures_GAaP
-    elif method == "SExtractor":
+    elif config.method == "SExtractor":
         aperture_func = apertures_SExtractor
     else:
-        raise ValueError("invalid photometry method: {:}".format(method))
+        message = "invalid photometry method: {:}"
+        raise ValueError(message.format(config.method))
     results = []
     # iterate through the psf sizes of all filters
     for filter_key in config.filter_names:
@@ -378,9 +472,34 @@ def apertures_wrapped(method, config, r_effective, ba_ratio):
 
 
 def photometry_realisation(config, filter_key, mag, snr_correction):
+    """
+    Compute a photometry realisation in a given filter for a given limiting
+    magnitude.
+
+    Parameters:
+    -----------
+    config : PhotometryParser
+        Configures all parameters required by the photometry functions.
+    filter_key : str
+        Identifier key for the photometric filter to process.
+    mag : float or array-like
+        Magnitude of the input galaxies in the given filter.
+    snr_correction : float, array-like
+        Signal-to-noise ratio correction factor based on the aperture size.
+        Calculated from the square root of the ratio of the PSF (point-source)
+        to galaxy aperture area ratio.
+
+    Returns:
+    --------
+    real : float or array-like
+        Magnitude realisation considering the limiting magnitude.
+    real_err : float or array-like
+        Gaussian error of the magnitude realisation considering the limiting
+        magnitude.
+    """
     mag_lim = config.limits[filter_key]
     limit_sigma = config.photometry["limit_sigma"]
-    if config.legacy:  # computation in magnitudes
+    if config.legacy:  # legacy mode (van den Busch et al. 2020)
         # compute the S/N of the model magnitudes
         snr = 10 ** (-0.4 * (mag - mag_lim)) * limit_sigma
     else:  # computation in fluxes
@@ -390,12 +509,14 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
         snr = flux / flux_err * limit_sigma
     snr *= snr_correction  # aperture correction
     snr = np.maximum(snr, config.photometry["SN_floor"])  # clip S/N
-    if config.legacy:  # magnitudes draw incorrectly with Gaussian errors
+    if config.legacy:  # legacy mode (van den Busch et al. 2020)
+        # assumes Gaussian magnitude error
         mag_err = 2.5 / np.log(10.0) / snr
         # compute the magnitde realisation and S/N
         real = np.random.normal(mag, mag_err, size=len(mag))
         snr = 10 ** (-0.4 * (real - mag_lim)) * limit_sigma
-    else:  # magnitudes constructed from fluxes with Gaussian errors
+    else:
+        # assumes Gaussian flux error
         # compute the flux realisation and S/N
         flux = np.random.normal(  # approximation for Poisson error
             flux, flux_err, size=len(flux))
@@ -417,6 +538,25 @@ def photometry_realisation(config, filter_key, mag, snr_correction):
 @Schedule.description("generating photometry realisation")
 @Schedule.workload(0.33)
 def photometry_realisation_wrapped(config, *mag_mag_lim_snr_correction):
+    """
+    Wrapper for photometry_realisation() to compute the magnitude realistions
+    for all configured filters simultaneously.
+
+    Parameters:
+    -----------
+    config : PhotometryParser
+        Configures all parameters required by the photometry functions.
+    mag_mag_lim_snr_correction : listing of float or array-like
+        Listing of input magnitudes, magnitude limit and signal-to-noise
+        correction factors for each filter in the configuration.
+
+    Returns:
+    --------
+    results : list of float or array-like
+        Returns a concatenated listing of magnitude realisations and their
+        Gaussian errors the galaxies in each filter specified in the
+        configuration.
+    """
     # iterate through the listing of magnitude columns, magnitude limits and
     # S/N correction factors for all filters
     results = []

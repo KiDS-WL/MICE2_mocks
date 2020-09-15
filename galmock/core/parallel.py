@@ -1,3 +1,14 @@
+#
+# This module implements an automatic scheduler for parallel processing on
+# the memory-mapping backed data store.
+# 
+# The data is split into approximately equal size chunks and processed in
+# parallel by a worker function. The worker function in each process is
+# supplied with an independent view of the memory mapped data which allows
+# parallel read and write access. The overall process is indicated by a
+# progress bar, controlled by an additional monitoring process.
+#
+
 import logging
 import multiprocessing as mp
 import os
@@ -21,9 +32,17 @@ logger.setLevel(logging.DEBUG)
 
 
 class Schedule:
+    """
+    Container class for a set of decorators used to instruct the scheduling
+    with ParallelTable.
+    """
 
     @staticmethod
     def description(desc):
+        """
+        Decorator that adds a descriptive message that is displayed before the
+        job is executed.
+        """
         def wrapper(worker):
             worker._description = desc
             return worker
@@ -31,11 +50,25 @@ class Schedule:
 
     @staticmethod
     def threads(worker):
+        """
+        Decorator that indicates that the worker function will spawn parallel
+        threads itself.
+        """
         worker._prefer_threads = True
         return worker
 
     @staticmethod
     def workload(fraction):
+        """
+        Decorator to set the approximate fraction of CPUs that are used for
+        parallel processing. The acutal number may varey on systems with 4 or
+        less CPUs.
+
+        Parameters:
+        -----------
+        fraction : float
+            Fraction of the maximum number of CPUs to use.
+        """
         def wrapper(worker):
             worker._cpu_util = fraction
             return worker
@@ -43,11 +76,20 @@ class Schedule:
 
     @staticmethod
     def IObound(worker):
+        """
+        Decorator that indicates that the worker function is expected to be
+        limited by the write speed of the devide hosting the data store.
+        ParallelTable will use the minimum amount of CPUs.
+        """
         worker._cpu_util = 0.0
         return worker
 
     @staticmethod
     def CPUbound(worker):
+        """
+        Decorator that indicates that the worker function is limited by the CPU
+        speed. ParallelTable will use the maximum amount of CPUs.
+        """
         worker._cpu_util = 1.0
         return worker
 

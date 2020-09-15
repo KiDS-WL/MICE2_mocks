@@ -1,3 +1,8 @@
+#
+# This module implements wrappers for photometric redshift estimation codes to
+# add photo-z to the mock data.
+#
+
 import logging
 import os
 import shutil
@@ -106,6 +111,18 @@ class BpzParser(Parser):
 
 
 class BpzManager(object):
+    """
+    Manages a running BPZ to obtain bayesion photometric reshifts on chunks of
+    input objects with magnitudes and magnitude errors. Automatically manages
+    a temporary working directory, environment variables required by BPZ and
+    input and output data conversion.
+
+    Parameters:
+    -----------
+    config : BpzParser
+        A BpzParser instance that defines all parameters required to locate and
+        configure the BPZ code.
+    """
 
     def __init__(self, config):
         logger.info("initializing BPZ")
@@ -161,10 +178,19 @@ class BpzManager(object):
         self.cleanup()
 
     def cleanup(self):
+        """
+        Restores the original environment variable values overwritten by this
+        class and removes the temporary data directory.
+        """
         self._restore_environment()
         self._tempdir.cleanup()
 
     def _init_environment(self):
+        """
+        Initalizes the required environment variables NUMERIX and BPZPATH, the
+        latter is taken from the configuration. The original value of the
+        variables is stored and can be restored later.
+        """
         self._restore_values = {}
         # save any original values to restore later
         for key in ("NUMERIX", "BPZPATH"):
@@ -177,6 +203,11 @@ class BpzManager(object):
         os.environ["NUMERIX"] = "numpy"
 
     def _init_tempdir(self):
+        """
+        Copies the required files from the BPZ source directory to the
+        temporary working directory. This allows running instances of this
+        class in parallel.
+        """
         for root, dirs, files in os.walk(self._config.BPZpath):
             if root.split(os.sep)[-1] in ("AB", "FILTER", "test", "output"):
                 continue
@@ -197,6 +228,10 @@ class BpzManager(object):
             os.mkdir(folder)
 
     def _check_prior_template(self):
+        """
+        Test whether the prior and template names defined in the configuration
+        exist.
+        """
         prior = self.config.prior["name"]
         if prior not in self.installed_priors:
             message = "unknown prior: {:} (options are: {:})"
@@ -211,6 +246,10 @@ class BpzManager(object):
             raise ValueError(message)
 
     def _restore_environment(self):
+        """
+        Restores or deletes the environment variables set by
+        self._init_environment.
+        """
         while len(self._restore_values) > 0:
             key, value = self._restore_values.popitem()
             # unset the variable if it did not exist before
@@ -221,6 +260,11 @@ class BpzManager(object):
                 os.environ[key] = value
 
     def _install_filters(self):
+        """
+        Check the requested filter transmission from the configuration and copy
+        the files to the temporary working directory and register them
+        internally.
+        """
         self._installed_filters = {}
         for name, path in self.config.filters.items():
             if name in self._installed_filters:
@@ -231,6 +275,10 @@ class BpzManager(object):
             self._installed_filters[name] = dest
 
     def _write_columns_file(self):
+        """
+        Write a .columns file to parse the configuration and the layout of the
+        input file to BPZ.
+        """
         width = max(
             len(name) for name in self.filter_names)
         width = max(width, 8)
@@ -257,23 +305,39 @@ class BpzManager(object):
             f.write(lines)
 
     def _create_AB_files(self):
+        """
+        Create the AB-files by executing BPZ with some dummy data. This
+        prevents that redundancy, if BPZ is executed in parallel processes.
+        """
         dummy_args = [[20.0], [0.01]] * len(self.filter_names)
         self.execute(*dummy_args)
 
     @property
     def config(self):
+        """
+        Return the configuration instance (BpzParser).
+        """
         return self._config
 
     @property
     def path(self):
+        """
+        Return the path to the temporary working directory.
+        """
         return self._tempdir.name
 
     @property
     def tempdir(self):
+        """
+        See self.path, either may be removed.
+        """
         return self._tempdir.name
 
     @property
     def interpreter(self):
+        """
+        Return the path to the python2 interpreter used to launch BPZ.
+        """
         if self.config.BPZenv == "python2":
             return self.config.BPZenv
         else:
@@ -281,6 +345,15 @@ class BpzManager(object):
 
     @property
     def installed_templates(self):
+        """
+        Return a mapping between names and file paths of installed SED
+        templates in the BPZ source directory.
+
+        Returns:
+        --------
+        templates : dict
+            Mapping between internal name and file path of the SED templates.
+        """
         # find all files that match SED/*.list
         templates = {}
         dirname = os.path.join(self.path, "SED")
@@ -292,6 +365,15 @@ class BpzManager(object):
 
     @property
     def installed_priors(self):
+        """
+        Return a mapping between names and file paths of installed reshift-
+        type priors in the BPZ source directory.
+
+        Returns:
+        --------
+        templates : dict
+            Mapping between internal name and file path of the priors.
+        """
         # find all files that match prior_*.py
         priors = {}
         for fname in os.listdir(self.path):
@@ -302,25 +384,82 @@ class BpzManager(object):
 
     @property
     def installed_filters(self):
+        """
+        Return a mapping between names and file paths of installed reshift-
+        type priors in the BPZ source directory.
+
+        Returns:
+        --------
+        templates : dict
+            Mapping between internal name and file path of the priors.
+        """
         return self._installed_filters
 
     @property
     def filter_names(self):
+        """
+        Return a mapping between names and file paths of registered
+        transmission profiles.
+
+        Returns:
+        --------
+        templates : dict
+            Mapping between internal name and file path of registered
+            transmission profiles.
+        """
         return sorted(self._config.filters.keys())
 
     @property
     def colnames(self):
+        """
+        List of the column names in the photo-z file created by BPZ.
+
+        Returns:
+        --------
+        colnames : tuple
+            Tuple of output file column names.
+        """
         return tuple(self._output_description.keys())
 
     @property
     def dtype(self):
+        """
+        List of data types of the colunms in the photo-z file created by BPZ.
+
+        Returns:
+        --------
+        colnames : numpy.dtype
+            Numpy data type description of the output data file.
+        """
         return self._output_dtype
 
     @property
     def descriptions(self):
+        """
+        Returns a mapping between the BPZ output file column names and a
+        literal description of the column content.
+
+        Returns:
+        --------
+        description : dict
+            Dictionary of name -> description for the output columns.
+        """
         return self._output_description
 
     def _write_input(self, *mags_errs, threadID=None):
+        """
+        Write input data (compilation of magnitudes and magnitude errors) to
+        an ASCII input file for BPZ that is described by a .columns file.
+
+        Parameters:
+        -----------
+        *mag_errs : even number listing of array-like
+            Alternating vectors of magnitudes and magnitude errors in the order
+            they are expected to appear by BPZ in the input file.
+        threadID : int
+            Thread identifier used to name and distinguish the in- and output
+            files used by parallel BPZ processes.
+        """
         n_filters = len(self.filter_names)
         if len(mags_errs) != 2 * n_filters:
             message = "expected {n:d} magnitude and {n:d} error columns"
@@ -335,6 +474,18 @@ class BpzManager(object):
             f.write("\n".join(lines))
 
     def _build_command(self, threadID, verbose=False):
+        """
+        Formats the command and argument list parsed to subprocess to run BPZ
+        on an input file.
+
+        Parameters:
+        -----------
+        threadID : int
+            Thread identifier used to name and distinguish the in- and output
+            files used by parallel BPZ processes.
+        verbose : bool
+            Whether logging information is written to stdout by BPZ.
+        """
         threadID = "" if threadID is None else "_" + str(threadID)
         # BPZ call
         command = [
@@ -364,6 +515,21 @@ class BpzManager(object):
         return command
 
     def _run_BPZ(self, threadID, timeout=None, verbose=False):
+        """
+        Wrapper function to execute BPZ, requires the input file for the same
+        threadID written to the temporary directory.
+
+        Parameters:
+        -----------
+        threadID : int
+            Thread identifier used to name and distinguish the in- and output
+            files used by parallel BPZ processes.
+        timeout : int
+            Maximum allowed run-time for the BPZ instance in seconds. Raises a
+            TimeoutExpired exception afterwards.
+        verbose : bool
+            Whether logging information is written to stdout by BPZ.
+        """
         command = self._build_command(threadID, verbose)
         with subprocess.Popen(
                 command, stdout=subprocess.PIPE,
@@ -388,6 +554,25 @@ class BpzManager(object):
                             proc.returncode, proc)
 
     def _read_output(self, threadID, get_ID, get_M_0):
+        """
+        Read an ASCII output file created by BPZ and convert it to a numpy
+        record array.
+
+        Parameters:
+        -----------
+        threadID : int
+            Specifies the thread from which to read the output data.
+        get_ID : bool
+            Whether to read the BPZ ID column.
+        get_M_0 : bool
+            Whether to read the column containing the prior filter magnitudes.
+        
+        Returns:
+        --------
+        bpz_result : numpy.array
+            Record array with data from the BPZ output file, the data types are
+            specifed by self.dtype.
+        """
         threadID = "" if threadID is None else "_" + str(threadID)
         outputfile = os.path.join(
             self.tempdir, self._output_template.format(threadID))
@@ -407,7 +592,33 @@ class BpzManager(object):
     def execute(
             self, *mags_errs, threadID=None, verbose=False,
             get_ID=False, get_M_0=True):
+        """
+        Execute BPZ on a set of objects with input magnitudes and magnitude
+        errors and obtain bayesian posterior photometric redshift for each.
+
+        Parameters:
+        -----------
+        *mag_errs : even number listing of array-like
+            Alternating vectors of magnitudes and magnitude errors in the order
+            they are expected to appear by BPZ in the input file.
+        threadID : int
+            Thread identifier used to name and distinguish the in- and output
+            files used by parallel BPZ processes.
+        verbose : bool
+            Whether logging information is written to stdout by BPZ.
+        get_ID : bool
+            Whether to read the BPZ ID column from the output file.
+        get_M_0 : bool
+            Whether to read the column containing the prior filter magnitudes
+            from the output file.
+
+        Returns:
+        --------
+        bpz_result : numpy.array
+            Record array with data from the BPZ output file, the data types are
+            specifed by self.dtype.
+        """
         self._write_input(*mags_errs, threadID=threadID)
         self._run_BPZ(threadID, verbose=verbose)
-        result = self._read_output(threadID, get_ID, get_M_0)
-        return result
+        bpz_result = self._read_output(threadID, get_ID, get_M_0)
+        return bpz_result

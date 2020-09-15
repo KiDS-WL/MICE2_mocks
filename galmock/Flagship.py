@@ -1,3 +1,8 @@
+#
+# This module implements methods to process raw data from the Flagship galaxy
+# mock cataloge.
+#
+
 import numpy as np
 
 from galmock.core.parallel import Schedule

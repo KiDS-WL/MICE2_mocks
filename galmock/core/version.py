@@ -1,7 +1,11 @@
+#
+# This module implements a git-based package version (if possible).
+#
+
 from os.path import dirname
 
 
-__version__ = "1.0.3"  # NOTE: keep up-to date with git tag version
+__version__ = "2.1"  # NOTE: keep up-to date with git tag version
 try:
     import subprocess
     # determine version from git commits

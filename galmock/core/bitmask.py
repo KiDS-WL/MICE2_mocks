@@ -1,3 +1,9 @@
+#
+# This module implements a bit mask manager used to store information for
+# sample selections. Each bit represents an independent sub-set of the
+# selection function.
+#
+
 from collections import OrderedDict
 
 import numpy as np

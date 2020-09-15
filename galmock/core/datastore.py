@@ -1,3 +1,10 @@
+#
+# This module implements a wrapper for mmaptable.MmapTable, a high performance
+# data storage system based on binary memory-mapped files, which allow parallel
+# reading and writing. The base functionality is extended by an attribute based
+# column description, logging and version control system.
+#
+
 import logging
 import multiprocessing
 import os
@@ -79,6 +86,10 @@ class ModificationStamp(object):
         self._columns[name] = column
 
     def add_checksums(self):
+        """
+        Compute SHA-1 check sums for all columns that are registered
+        internally and store them as attributes with the columns.
+        """
         # get an ordered list of file names for the columns
         filenames = [column.filename for column in self._columns.values()]
         # compute the check sums in parallel processes
@@ -97,8 +108,6 @@ class ModificationStamp(object):
         -----------
         timestamp : str
             Text encoded time stamp.
-        checksum : bool
-            Whether to add a SHA-1 checksum attribute.
         """
         # store the current time if none is provided
         if timestamp is None:
@@ -111,14 +120,23 @@ class ModificationStamp(object):
 
 class DataStore(MmapTable):
     """
-    Wrapper to open an existing MmapTable on disk.
+    Wrapper around mmaptable.MmapTable that extends the base functionality by
+    an automated, attribute based column description, logging and version
+    control system.
+
+    It is recommended to instantiate this class with the create() or open()
+    methods.
 
     Parameters:
     -----------
     path : str
         Path to MmapTable storage (must be a directory).
-    readonly : bool
-        Whether the storage is opened as read-only.
+    nrows : int
+        Number of rows at which all (new) columns will be initialized (ignored
+        if the table is not empty).
+    mode : char
+        Must be 'r' (read-only), 'r+' (read+write)  or 'w+' (overwrite
+        existing).
     """
 
     def __init__(self, path, nrows=None, mode="r"):
@@ -163,6 +181,14 @@ class DataStore(MmapTable):
         self.close(add_checksum=not exit_with_error)
 
     def close(self, add_checksum=True):
+        """
+        Close the data store and add time stamps and check sums to the columns.
+
+        Parameters:
+        -----------
+        add_checksum : bool
+            Whether to add check sums alongside the time stamps.
+        """
         if len(self._timestamp) > 0:
             message = "updating attributes"
             if add_checksum:
@@ -176,9 +202,22 @@ class DataStore(MmapTable):
 
     @property
     def filesize(self):
+        """
+        Return the total file size of the data store in bytes (not counting
+        the) attributes.
+        """
         return self._filesize
 
     def expand(self, nrows):
+        """
+        Extend the data store by allocating a number of additional rows at the
+        end of each column.
+
+        Parameters:
+        -----------
+        nrows : int
+            Then number of rows by which the table is grown.
+        """
         super().resize(len(self) + nrows)
         logger.debug("allocated {:,d} additional rows".format(nrows))
 
@@ -331,6 +370,10 @@ class DataStore(MmapTable):
         return photometry_columns, error_columns
 
     def show_preview(self):
+        """
+        Print a preview of the data store derived from its builtin str()
+        method.
+        """
         preview_lines = []
         for line in str(self).split("\n"):
             if line.strip():
@@ -339,4 +382,4 @@ class DataStore(MmapTable):
         header = "{ preview }".center(linelength, "-")
         footer = "-" * linelength
         preview = "\n".join(preview_lines[1:-2])
-        sys.stdout.write("{:}\n{:}\n{:}\n".format(header, preview, footer))
+        print("{:}\n{:}\n{:}".format(header, preview, footer))

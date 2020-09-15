@@ -1,3 +1,10 @@
+#
+# This module implements the logging and management of the configuration files
+# on which the galmock is built. The configuration file structure and the
+# default values are defined by a mini-language system, comparable to python's
+# argparse.
+#
+
 import argparse
 import logging
 import os

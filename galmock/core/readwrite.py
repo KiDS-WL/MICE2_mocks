@@ -1,3 +1,9 @@
+#
+# This module implements unified reader and writer classes for CSV, FITS, HDF5
+# and parquet files. The latter three formats are available only, if the
+# necessary packages are installed.
+#
+
 import csv
 import logging
 import os
