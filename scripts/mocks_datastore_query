@@ -31,7 +31,7 @@ output_group.add_argument(
     "--format", choices=sorted(SUPPORTED_WRITERS.keys()),
     help="output table file format (default: inferred from file extension)")
 output_group.add_argument(
-    "-c", "--columns", type=expand_path, nargs="*",
+    "-c", "--columns", nargs="*",
     help="only write these columns to the output table (order preserved)")
 output_group.add_argument(
     "--compression", choices=(
