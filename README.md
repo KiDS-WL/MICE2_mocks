@@ -112,6 +112,12 @@ scripts/mocks_init_pipeline path/to/datastore \
     -i /path/to/Flagship.fits --config Flagship/config/Flagship.toml
 ```
 
+Inspect the newly created data store and list all table columns and their
+attributes (descriptions, creation time stamps, pipeline version, check sums):
+```bash
+scripts/mocks_datastore_info path/to/datastore -c -a
+```
+
 Run some preprocessing that is specific to the input simulation (here most
 importantly converting fluxes to magnitudes):
 ```bash
@@ -192,8 +198,15 @@ The underlying data store of the pipeline can be manipulated manually as well.
 The recommend ways to access the data is via `galmock.GalaxyMock.datastore`,
 which is a wrapper for the underlying `mmaptable.MmapTable` format.
 
-The following example shows how to add new columns to an existing pipeline data
-store:
+A single column from an external file (FITS format here) can be added to an
+existing pipeline data store with:
+```bash
+scripts/mocks_datastore_ingest path/to/datastore \
+    -i /path/to/input.fits --column column_name --path path/in/datastore
+```
+
+The same can be achived in python by directy modifying the data store, as for
+example with the following code:
 
 ```python
 import os
