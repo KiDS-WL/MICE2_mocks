@@ -358,6 +358,112 @@ class GalaxyMock(object):
         instance = cls(datastore, readonly=False, threads=threads)
         return instance
 
+    @job
+    def ingest_column(
+            self, input, format=None, fits_ext=1, column=None,
+            path=None, description=None, overwrite=True):
+        """
+        Ingest a single data column from an external data source. The length
+        of the data must match the number of entries in the data store and is
+        not checked in advance.
+
+        Parameters:
+        -----------
+        input : str
+            Path of the input file containing the data column.
+        format : str
+            Format descibing string, see galmock.core.readwrite for all
+            supported file formats.
+        fits_ext : int
+            If the input is in FITS format, read data from this table
+            extension.
+        column : str
+            Name of the data column in the input file. Usefull if the file
+            contains more than one column.
+        path : str
+            Path to store the new column at in the data store. If none is
+            provided the column name is used.
+        description : str
+            Descriptive text to store as column attribute. By default stores the
+            input file path and column name.
+        overwrite : bool
+            Whether to overwrite the target column if it exists.
+        """
+        # read the data file and write it to the memmory mapped data store
+        with create_reader(input, format, None, fits_ext) as reader:
+            # check if the input column
+            if column is None:
+                if len(reader.colnames) != 1:
+                    message = "input file contains multiple columns and "
+                    message += "column is not specified"
+                    self.error(message)
+                    raise ValueError(message)
+                else:
+                    column = reader.colnames[0]
+            elif column not in reader.colnames:
+                message = "requested column not found in input "
+                message += "file: {:}".format(column)
+                self.logger.error(message)
+                raise KeyError(message)
+            # create the new data columns
+            if path is None:
+                path = column
+            self.logger.info("adding new column: {:}".format(path))
+            if description is None:
+                attr = {"source file": input, "source name": column}
+            else:
+                attr = {"description": description}
+            try:
+                dtype = reader.dtype[column].str
+                self.datastore.add_column(
+                    path, dtype=dtype, attr=attr, overwrite=overwrite)
+            except Exception as e:
+                self.logger.exception(str(e).strip("\""))
+                raise
+            # copy the data
+            self.logger.info("converting input data ...")
+            pbar_kwargs = {
+                "leave": False, "unit_scale": True, "unit": "row",
+                "dynamic_ncols": True}
+            if hasattr(reader, "_guess_length"):
+                pbar = ProgressBar()
+            else:
+                pbar = ProgressBar(n_rows=len(reader))
+            # read the data in chunks and copy it to the column
+            start = 0
+            for chunk in reader:
+                end = reader.current_row  # index where reading continues
+                if end > len(self):
+                    message = "input data exceeds column length"
+                    self.logger.error(message)
+                    raise ValueError(message)
+                # insert into data store column
+                self.datastore[path][start:end] = chunk[column]
+                # update the current row index
+                pbar.update(end - start)
+                start = end
+            if end != len(self):
+                message = "ran out of input data while filling column"
+                self.logger.error(message)
+                raise ValueError(message)
+            pbar.close()
+        # print a preview of the ingested column as quick check
+        self.datastore.show_preview(columns=[path])
+
+    def drop(self, columns):
+        """
+        Delete a set of columns from the data store.
+
+        Parameters:
+        -----------
+        columns : list of str
+            Paths of the columns to delete from the data store.
+        """
+        self.show_metadata()
+        print("\nWARNING:")
+        for column in columns:
+            self.datastore.drop_column(column)
+
     def info(self, columns=False, attr=False, history=False, logs=False):
         """
         Print some information about the data store, such as meta data, column
@@ -669,9 +775,9 @@ class GalaxyMock(object):
             self.datastore.add_column(
                 lensed_path, dtype=self.datastore[mag_path].dtype.str,
                 attr={
-                        "description":
-                        "{:} with magnification correction applied".format(
-                            lensed_path)},
+                    "description":
+                    "{:} with magnification correction applied".format(
+                        lensed_path)},
                 overwrite=True)
             # add columns to call signature
             self.datastore.pool.add_argument_column(mag_path)

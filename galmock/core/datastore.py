@@ -287,6 +287,26 @@ class DataStore(MmapTable):
             logger.exception(message)
             raise
 
+    def drop_column(self, path):
+        """
+        Delete a single column from the data store.
+
+        path : str
+            Name of the column to delete.
+        """
+        logger.warn("deleting column: {:}".format(path))
+        try:
+            if path not in self:
+                raise KeyError("column not found: {:}".format(path))
+            # delete the underlying memory maps
+            self.delete_column(path)
+            # also remove the column from the timestamp register
+            if path in self._timestamp._columns:
+                self._timestamp._columns.pop(path)
+        except KeyError as e:
+            logger.exception(str(e).strip("\""))
+            raise
+
     def get_history(self):
         """
         Read the creation labels from all columns attributes of the data store
@@ -369,16 +389,23 @@ class DataStore(MmapTable):
             raise KeyError(message)
         return photometry_columns, error_columns
 
-    def show_preview(self):
+    def show_preview(self, columns=None):
         """
         Print a preview of the data store derived from its builtin str()
         method.
+
+        Parameters:
+        -----------
+        columns : list
+            List of columns to show
         """
+        ds = self if columns is None else self[columns]
         preview_lines = []
-        for line in str(self).split("\n"):
+        for line in str(ds).split("\n"):
             if line.strip():
                 preview_lines.append(line)
         linelength = max(len(l) for l in preview_lines)
+        linelength = max(12, linelength)
         header = "{ preview }".center(linelength, "-")
         footer = "-" * linelength
         preview = "\n".join(preview_lines[1:-2])
