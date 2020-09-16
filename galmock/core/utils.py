@@ -152,9 +152,12 @@ def substitute_division_symbol(query, datastore, subst_smyb="#"):
             # apply the substitutions to all valid column names apperaing
             # in the math expression to avoid substitute intended divisions
             for colname in datastore.colnames:
-                substitue = colname.replace("/", subst_smyb)
-                while colname in query:
-                    query = query.replace(colname, substitue)
+                if "/" in colname:
+                    substitue = colname.replace("/", subst_smyb)
+                    while colname in query:
+                        query = query.replace(colname, substitue)
+                        selection_columns.add(colname)
+                elif colname in query:
                     selection_columns.add(colname)
             expression = MathTerm.from_string(query)
             # recursively undo the substitution
