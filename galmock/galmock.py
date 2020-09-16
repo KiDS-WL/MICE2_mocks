@@ -533,8 +533,9 @@ class GalaxyMock(object):
                     pbar.update(end - start)
             if not to_stdout:
                 pbar.close()
-        message = "wrote {:,d} matching entries ({:})".format(
-            n_select, bytesize_with_prefix(writer.filesize))
+        if not to_stdout:
+            message = "wrote {:,d} matching entries ({:})".format(
+                n_select, bytesize_with_prefix(writer.filesize))
         self.logger.info(message)
 
     @job
