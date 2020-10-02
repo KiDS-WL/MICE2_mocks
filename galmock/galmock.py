@@ -142,7 +142,7 @@ class GalaxyMock(object):
         mmaptable.MmapTable.
     readonly : bool
         Whether to allow write acces to the data store.
-    treads : int
+    threads : int
         The maximum number of threads or parallel processes to run in parallel
         on the data. All by default.
     """
@@ -417,38 +417,42 @@ class GalaxyMock(object):
                 dtype = reader.dtype[column].str
                 self.datastore.add_column(
                     path, dtype=dtype, attr=attr, overwrite=overwrite)
+                # copy the data
+                self.logger.info("converting input data ...")
+                pbar_kwargs = {
+                    "leave": False, "unit_scale": True, "unit": "row",
+                    "dynamic_ncols": True}
+                if hasattr(reader, "_guess_length"):
+                    pbar = ProgressBar()
+                else:
+                    pbar = ProgressBar(n_rows=len(reader))
+                # read the data in chunks and copy it to the column
+                start = 0
+                for chunk in reader:
+                    end = reader.current_row  # index where reading continues
+                    if end > len(self):
+                        message = "input data exceeds column length"
+                        self.logger.error(message)
+                        raise ValueError(message)
+                    # insert into data store column
+                    self.datastore[path][start:end] = chunk[column]
+                    # update the current row index
+                    pbar.update(end - start)
+                    start = end
+                if end != len(self):
+                    message = "ran out of input data while filling column"
+                    raise ValueError(message)
+                pbar.close()
+                # print a preview of the ingested column as quick check
+                self.datastore.show_preview(columns=[path])
             except Exception as e:
                 self.logger.exception(str(e).strip("\""))
+                # delete the new column if the data was not copied successfully
+                try:
+                    self.datastore.drop_column(path)
+                except Exception:
+                    pass
                 raise
-            # copy the data
-            self.logger.info("converting input data ...")
-            pbar_kwargs = {
-                "leave": False, "unit_scale": True, "unit": "row",
-                "dynamic_ncols": True}
-            if hasattr(reader, "_guess_length"):
-                pbar = ProgressBar()
-            else:
-                pbar = ProgressBar(n_rows=len(reader))
-            # read the data in chunks and copy it to the column
-            start = 0
-            for chunk in reader:
-                end = reader.current_row  # index where reading continues
-                if end > len(self):
-                    message = "input data exceeds column length"
-                    self.logger.error(message)
-                    raise ValueError(message)
-                # insert into data store column
-                self.datastore[path][start:end] = chunk[column]
-                # update the current row index
-                pbar.update(end - start)
-                start = end
-            if end != len(self):
-                message = "ran out of input data while filling column"
-                self.logger.error(message)
-                raise ValueError(message)
-            pbar.close()
-        # print a preview of the ingested column as quick check
-        self.datastore.show_preview(columns=[path])
 
     def drop(self, columns):
         """
