@@ -715,7 +715,7 @@ class GalaxyMock(object):
         """
         # add a simple range index
         index_column = self.datastore.add_column(
-            "index", dtype="u8", attr={"description": "unique galaxy index"},
+            "index", dtype="i8", attr={"description": "unique galaxy index"},
             overwrite=True)
         self.logger.info("adding galaxy range index")
         pbar = ProgressBar(len(self))
