@@ -3,7 +3,7 @@ import os
 from hashlib import sha1
 
 import numpy as np
-from mmaptable.mathexpression import MathTerm
+from tabeval import MathTerm
 from tqdm import tqdm
 
 
