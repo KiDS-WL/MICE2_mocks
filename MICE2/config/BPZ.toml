@@ -9,7 +9,6 @@ BPZenv = "/net/home/$hostname/jlvdb/BPZenv"
                         # (leave blank to use the default python2 interpreter)
 BPZtemp = "/dev/shm"    # temporary directory to use for bpz (I/O intense, e.g.
                         # a ram disk, if blank, defaults to data store)
-flux = false            # whether the input columns are fluxes or magnitudes
 system = "AB"           # photometric system, must be "AB" or "Vega"
 
 [filters]

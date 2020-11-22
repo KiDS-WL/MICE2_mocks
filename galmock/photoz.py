@@ -49,9 +49,6 @@ class BpzParser(Parser):
             "if blank, defaults to data store)",
             parser=expand_path),
         Parameter(
-            "flux", bool, False,
-            "whether the input columns are fluxes or magnitudes"),
-        Parameter(
             "system", str, "AB",
             "photometric system, must be \"AB\" or \"Vega\""),
         ParameterListing(
