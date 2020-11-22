@@ -41,9 +41,10 @@ class ModificationStamp(object):
         self._columns = OrderedDict()
         # get the function call signature
         caller = sys_argv[0]
-        caller += "("
-        caller += ", ".join(sys_argv[1:])
-        caller += ")"
+        if not os.path.exists(caller):  # not a script
+            caller += "("
+            caller += ", ".join(sys_argv[1:])
+            caller += ")"
         # create a dictionary with all shared entries
         self._attrs = {}
         self._attrs["created by"] = caller
