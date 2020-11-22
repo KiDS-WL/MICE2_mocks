@@ -11,12 +11,15 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is created")
+parser.add_argument(
+    "-r", "--recalc", action="store_true",
+    help="calculate new check sums for all columns")
 
 
 def main():
     args = parser.parse_args()
-    with GalaxyMock(args.datastore, True) as mocks:
-        mocks.verify()
+    with GalaxyMock(args.datastore, readonly=(args.recalc == False)) as mocks:
+        mocks.verify(args.recalc)
 
 
 if __name__ == "__main__":

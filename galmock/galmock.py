@@ -496,43 +496,66 @@ class GalaxyMock(object):
         if logs:
             self.show_logs()
 
-    def verify(self):
+    def verify(self, recalc=False):
         """
         Compute and verify the SHA-1 check sums for each data column with the
         reference value stored in the column attributes.
+
+        Parameters:
+        -----------
+        recalc : bool
+            Recalculate all check sums
         """
         self.show_metadata()
         # verify the check sums
+        if recalc:
+            print("\nRecomputing all check sums")
         header = "==> COLUMN NAME"
         width_cols = max(len(header), max(
             len(colname) for colname in self.datastore.colnames))
-        print("\n{:}    {:}  {:}".format(
-            header.ljust(width_cols), "STATUS ", "HASH"))
         # compute and verify the store checksums column by column
         n_good, n_warn, n_error = 0, 0, 0
-        line = "{:<{width}s}    {:<7s}  {:s}"
+        if recalc:
+            line = "{:<{width}s}    {:s}"
+            print("\n{:}    {:}".format(
+                header.ljust(width_cols), "HASH"))
+        else:
+            line = "{:<{width}s}    {:<7s}  {:s}"
+            print("\n{:}    {:}  {:}".format(
+                header.ljust(width_cols), "STATUS ", "HASH"))
         for name in self.datastore.colnames:
             column = self.datastore[name]
-            try:
-                checksum = column.attr["SHA-1 checksum"]
-                assert(checksum == sha1sum(column.filename))
-                n_good += 1
-            except KeyError:
-                print(line.format(
-                    name, "WARNING", "no checksum provided", width=width_cols))
-                n_warn += 1
-            except AssertionError:
-                print(line.format(
-                    name, "ERROR", "checksums do not match", width=width_cols))
-                n_error += 1
+            if recalc:
+                checksum = sha1sum(column.filename)
+                attr = column.attr
+                attr["SHA-1 checksum"] = checksum
+                column.attr = attr
+                print(line.format(name, checksum, width=width_cols))
             else:
-                print(line.format(name, "OK", checksum, width=width_cols))
+                try:
+                    checksum = column.attr["SHA-1 checksum"]
+                    assert(checksum == sha1sum(column.filename))
+                    n_good += 1
+                except KeyError:
+                    print(line.format(
+                        name, "WARNING", "no checksum provided",
+                        width=width_cols))
+                    n_warn += 1
+                except AssertionError:
+                    print(line.format(
+                        name, "ERROR", "checksums do not match",
+                        width=width_cols))
+                    n_error += 1
+                else:
+                    print(line.format(name, "OK", checksum, width=width_cols))
         # do a final report
-        if n_good == len(self.datastore.colnames):
-            print("\nAll columns passed")
-        else:
-            print("\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(
-                n_good, n_warn, n_error))
+        if not recalc:
+            if n_good == len(self.datastore.colnames):
+                print("\nAll columns passed")
+            else:
+                print(
+                    "\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(
+                        n_good, n_warn, n_error))
 
     @job
     def query(
