@@ -749,9 +749,17 @@ try:
             """
             dtypes = self._reader.get_rec_dtype()[0]  # data types from header
             # use the converter class to get the types with correct byte order
-            self._dtype = np.dtype([
-                (name, ConvertByteOrder(dtypes[name]).dtype)
-                for name in dtypes.names])
+            native = "<" if sys.byteorder == "little" else ">"
+            dtype_list = []
+            for name in dtypes.names:
+                dtype = dtypes[name]
+                # apparently, fitsio silently converts byte strings to unicode
+                # so the type casting will fail if we do not expect unicode
+                if "S" in dtype.str:
+                    endian, count = dtype.str.split("S")
+                    dtype = np.dtype("{:s}U{:s}".format(native, count))
+                dtype_list.append((name, ConvertByteOrder(dtype).dtype))
+            self._dtype = np.dtype(dtype_list)
 
         def read_chunk(self) -> np.array:
             """
@@ -776,7 +784,7 @@ try:
             self._current_row = end
             # correct the byte order directly (without the converters), since
             # the raw data is already contiguous
-            return buffer.astype(self._dtype, casting="equiv", copy=False)
+            return buffer.astype(self._dtype, casting="same_kind", copy=False)
 
         def reopen(self):
             """
