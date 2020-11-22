@@ -468,6 +468,22 @@ class BpzManager(object):
         if len(mags_errs) != 2 * n_filters:
             message = "expected {n:d} magnitude and {n:d} error columns"
             raise ValueError(message.format(n=n_filters))
+        # check that the provided values are sensible to prevent BPZ from
+        # not producing any output
+        for i in range(0, len(mags_errs), 2):
+            name = self.filter_names[i // 2]
+            mags = np.asarray(mags_errs[i])
+            errs = np.asarray(mags_errs[i + 1])
+            # check for NaNs and negative values
+            message = None
+            if not np.isfinite(mags).all():
+                message = "{:s}-band magnitudes contain infinite values"
+            elif not np.isfinite(errs).all():
+                message = "{:s}-band magnitude errors contain infinite values"
+            elif np.any(errs <= 0.0):
+                message = "{:s}-band magnitude errors must be positive values"
+            if message is not None:
+                raise ValueError(message.format(name))
         # format the lines
         line = "{:.5e} {:.5e} " * n_filters + "\n"
         lines = [line.format(*values) for values in zip(*mags_errs)]
