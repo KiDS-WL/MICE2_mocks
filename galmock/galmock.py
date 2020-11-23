@@ -773,9 +773,8 @@ class GalaxyMock(object):
     def prepare_Flagship(
             self, flux, mag, gal_idx=None, is_central=None):
         """
-        Add a range index, convert the Flagship fluxes to AB magnitudes and
-        determine if a galaxy is the central halo galaxy (if their halo
-        ID == 0).
+        Convert the Flagship fluxes to AB magnitudes and determine if a galaxy
+        is the central halo galaxy (if their halo ID == 0).
 
         Parameters:
         -----------
@@ -790,17 +789,6 @@ class GalaxyMock(object):
         is_central : str
             Path of the central galaxy flag column in the data store.
         """
-        # add a simple range index
-        index_column = self.datastore.add_column(
-            "index", dtype="i8", attr={"description": "unique galaxy index"},
-            overwrite=True)
-        self.logger.info("adding galaxy range index")
-        pbar = ProgressBar(len(self))
-        for start, end in self.datastore.row_iter():
-            index_column[start:end] = np.arange(
-                start, end, dtype=index_column.dtype)
-            pbar.update(end - start)
-        pbar.close()
         # convert model fluxes to model magnitudes
         self.datastore.pool.set_worker(flux_to_magnitudes_wrapped)
         # find all flux columns

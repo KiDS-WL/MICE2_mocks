@@ -27,10 +27,10 @@ parser.add_argument(
 parser.add_argument(
     "-v", "--verbose", action="store_true", help="display debugging messages")
 
-input_group = parser.add_argument_group("input simulation table")
+input_group = parser.add_argument_group("external table")
 input_group.add_argument(
     "-i", "--input", type=expand_path, required=True,
-    help="path to input simulation table")
+    help="path to table containing the input column")
 input_group.add_argument(
     "--format", choices=sorted(SUPPORTED_READERS.keys()),
     help="input table file format (default: inferred from file extension)")

@@ -8,8 +8,7 @@
 # for boolean values, "i8" for 64 bit integeres or "f4" for 32-bit floating
 # point values).
 
-index = "unique_gal_id"
-                        # recommended name for a unique galaxy index
+index_galaxy = "unique_gal_id"
 
 [position]
 # true galaxy position

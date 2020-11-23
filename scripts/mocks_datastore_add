@@ -14,7 +14,8 @@ parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is created")
 parser.add_argument(
-    "-p", "--path", help="path of the new column in the data store")
+    "-p", "--path", required=True,
+    help="path of the new column in the data store")
 parser.add_argument(
     "-d", "--dtype", default="f8",
     help="String describing a numpy data type, e.g. 'f8' -> 64bit float, 'i4' "

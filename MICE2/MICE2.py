@@ -85,7 +85,7 @@ def main():
     # run the jobs
     if "1" in args.jobID:
         mocks = GalaxyMock.create(
-            datastore, input=input_file, purge=True,
+            datastore, input=input_file, purge=True, index="index",
             columns="config/MICE2.toml", threads=args.threads)
     else:
         mocks = GalaxyMock(datastore, readonly=False, threads=args.threads)
