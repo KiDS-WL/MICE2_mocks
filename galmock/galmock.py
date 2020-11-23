@@ -459,6 +459,7 @@ class GalaxyMock(object):
                     pass
                 raise
 
+    @job
     def add_column(self, path, dtype="f8", description=None, fill_value=None):
         """
         Create a new column and initialize it with an optional fill value.
@@ -478,10 +479,10 @@ class GalaxyMock(object):
         """
         if path in self.datastore:
             raise KeyError("column already exists: {:}".format(path))
-        self.logger.info("adding new column: {:}".format(path))
+        # establish the data type and check the fill value
         try:
             dtype = np.dtype(dtype)
-            message = "initializing column as {:}".format(dtype)
+            message = "initializing as {:}".format(dtype.__str__().upper())
             if fill_value is not None:
                 fill_value = dtype.type(fill_value)
                 message += " with value '{:}'".format(fill_value)
@@ -491,6 +492,7 @@ class GalaxyMock(object):
         except ValueError as e:
             self.logger.exception(str(e))
             raise
+        # create the column
         self.logger.debug(message)
         column = self.datastore.add_column(
             path, dtype=dtype, attr={"description": description})

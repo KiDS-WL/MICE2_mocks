@@ -16,9 +16,9 @@ parser.add_argument(
 parser.add_argument(
     "-p", "--path", help="path of the new column in the data store")
 parser.add_argument(
-    "-d", "--dtype",
+    "-d", "--dtype", default="f8",
     help="String describing a numpy data type, e.g. 'f8' -> 64bit float, 'i4' "
-         "-> 32bit int, 'bool' -> True/False boolean")
+         "-> 32bit int, 'bool' -> True/False boolean (default: %(default)s)")
 parser.add_argument(
     "--description", help="descriptive text to store as column attribute")
 parser.add_argument(
