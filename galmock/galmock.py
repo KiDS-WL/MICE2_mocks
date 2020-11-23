@@ -389,8 +389,8 @@ class GalaxyMock(object):
             Path to store the new column at in the data store. If none is
             provided the column name is used.
         description : str
-            Descriptive text to store as column attribute. By default stores the
-            input file path and column name.
+            Descriptive text to store as column attribute. By default stores
+            the input file path and column name.
         overwrite : bool
             Whether to overwrite the target column if it exists.
         """
@@ -459,6 +459,44 @@ class GalaxyMock(object):
                     pass
                 raise
 
+    def add_column(self, path, dtype="f8", description=None, fill_value=None):
+        """
+        Create a new column and initialize it with an optional fill value.
+
+        Parameters:
+        -----------
+        path : str
+            Path of the new column in the data store.
+        dtyle : str
+            String describing a numpy data type, e.g. 'f8' -> 64bit float, 'i4'
+            -> 32bit int, 'bool' -> True/False boolean.
+        description : str
+            Descriptive text that is stored in the column attributes.
+        fill_value : any
+            Optional fill value to initialize the column, must parse to the
+            specified data type. Can be NaN or Inf for floating point types.
+        """
+        if path in self.datastore:
+            raise KeyError("column already exists: {:}".format(path))
+        self.logger.info("adding new column: {:}".format(path))
+        try:
+            dtype = np.dtype(dtype)
+            message = "initializing column as {:}".format(dtype)
+            if fill_value is not None:
+                fill_value = dtype.type(fill_value)
+                message += " with value '{:}'".format(fill_value)
+        except TypeError as e:
+            self.logger.exception(str(e))
+            raise
+        except ValueError as e:
+            self.logger.exception(str(e))
+            raise
+        self.logger.debug(message)
+        column = self.datastore.add_column(
+            path, dtype=dtype, attr={"description": description})
+        if fill_value is not None:
+            column[:] = fill_value
+
     def drop_column(self, columns):
         """
         Delete a set of columns from the data store.
@@ -468,8 +506,6 @@ class GalaxyMock(object):
         columns : list of str
             Paths of the columns to delete from the data store.
         """
-        self.show_metadata()
-        print("\nWARNING:")
         for column in columns:
             self.datastore.drop_column(column)
 

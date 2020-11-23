@@ -8,13 +8,23 @@ from galmock.core.utils import expand_path
 
 
 parser = argparse.ArgumentParser(
-    description="Delete a set of columns from the data store")
+    description="Create a new column and initialize it with an optional fill "
+                "value.")
 parser.add_argument(
     "datastore", type=expand_path,
     help="directory in which the data store is created")
 parser.add_argument(
-    "-c", "--columns", nargs="*",
-    help="paths of columns in the data store to remove")
+    "-p", "--path", help="path of the new column in the data store")
+parser.add_argument(
+    "-d", "--dtype",
+    help="String describing a numpy data type, e.g. 'f8' -> 64bit float, 'i4' "
+         "-> 32bit int, 'bool' -> True/False boolean")
+parser.add_argument(
+    "--description", help="descriptive text to store as column attribute")
+parser.add_argument(
+    "--fill",
+    help="fill value to initialize the column, must parse to the data type "
+         "(default: zero)")
 parser.add_argument(
     "-v", "--verbose", action="store_true", help="display debugging messages")
 
@@ -25,7 +35,7 @@ def main():
         logging_config(args.datastore + ".log",
         overwrite=False, verbose=args.verbose))
     with GalaxyMock(args.datastore, False) as mocks:
-        mocks.drop_column(args.columns)
+        mocks.add_column(args.path, args.dtype, args.description, args.fill)
 
 
 if __name__ == "__main__":
