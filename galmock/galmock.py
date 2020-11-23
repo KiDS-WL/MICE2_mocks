@@ -159,7 +159,7 @@ class GalaxyMock(object):
     @classmethod
     def create(
             cls, datastore, input, format=None, fits_ext=1, columns=None,
-            purge=False, threads=-1):
+            index=None, purge=False, threads=-1):
         """
         Create a new galaxy mock instance and data store from input simulation
         data (such as MICE2, Flagship, ...).
@@ -180,9 +180,12 @@ class GalaxyMock(object):
             A column mapping configuration file, see
             galmock.core.config.TableParser that maps the column name of the
             input file to paths in the data store (optional).
+        index : str
+            Path at which a range index is created (default: none added),
+            useful as unique identifer when creating subsets.
         purge : bool
             Handle with care! Erases the data store directory if it exists.
-        treads : int
+        threads : int
             The maximum number of threads or parallel processes to run in
             parallel on the data. All by default.
         """
@@ -247,6 +250,12 @@ class GalaxyMock(object):
                 # if using the CSV reader: truncate any allocated, unused rows
                 if len(ds) > end:
                     ds.resize(end)
+                # add the range index
+                if index is not None:
+                    idx_col = ds.add_column(
+                        index, dtype="i8", attr={"description": "range index"})
+                    for start, end in ds.row_iter():
+                        idx_col[start:end] = np.arange(start, end)
                 # print a preview of the table as quick check
                 ds.show_preview()
                 message = "finalized data store with {:,d} rows ({:})"
