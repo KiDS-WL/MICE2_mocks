@@ -9,6 +9,7 @@
 
 import csv
 import logging
+import multiprocessing
 import os
 import sys
 import warnings
@@ -17,7 +18,8 @@ from collections import OrderedDict
 
 import numpy as np
 
-from galmock.core.utils import bytesize_with_prefix, expand_path
+from galmock.core.datastore import DataStore
+from galmock.core.utils import bytesize_with_prefix, expand_path, sha1sum
 
 
 logger = logging.getLogger(__name__)
@@ -414,6 +416,14 @@ class Writer(DataBase, FileInterface):
         for data in self._buffer.pop_all():
             self._write(data)
 
+    def _set_attributes(self, attrs):
+        # write the attributes
+        return NotImplemented
+
+    def store_attributes(self, attrs):
+        # assign attributes to a (sub-set) of columns
+        self._set_attributes(attrs)
+
     def flush(self):
         """
         Write any queued data to the end of the file.
@@ -707,6 +717,110 @@ class CSVwriter(Writer):
         else:
             self.flush()
             self._file.close()
+
+
+@register("datastore", ("",))
+class DataStorewriter(Writer):
+        """
+        Write table data to new data store file using a buffer.
+
+        Parameters:
+        -----------
+        dtype : numpy.dtype
+            Describes the expected column names and data types.
+        fpath : str
+            Path to the FITS file.
+        overwrite : bool
+            Whether the output file is overwritten if it exists.
+        """
+
+        _allocate_size = int(1e7)  # number of rows by which the table is grown
+
+        def __init__(self, dtype, fpath, overwrite=False, **kwargs):
+            self._path = expand_path(fpath)
+            self._check_overwrite(fpath, overwrite)
+            self._dtype = dtype
+            # initialize the file writer and the buffer
+            self._buffer = BufferQueue(dtype)
+            self._rows_counter = 0
+            self._init_file()
+
+        @staticmethod
+        def _check_overwrite(fpath, overwrite):
+            if os.path.exists(fpath):
+                raise OSError("output path '{:}' exists".format(fpath))
+
+        def _init_file(self):
+            """
+            Open the correct target file an create a FITS table writer.
+            """
+            self._file = DataStore.create(
+                self._path, nrows=self._allocate_size, overwrite=True)
+            # add the columns
+            for name in self._dtype.names:
+                self._file.add_column(name, dtype=self._dtype[name])
+
+        def _write(self, data):
+            """
+            Write rows to the end of the output file.
+
+            Parameters:
+            -----------
+            data : numpy.array
+                Data table with column names and correct data types.
+            """
+            start = self._rows_counter
+            end = start + len(data)
+            # check if the table needs to grow
+            current_size = len(self._file)
+            if end > current_size:
+                # allocate at least the minimum allocation increment
+                grow_to = max(current_size + self._allocate_size, end)
+                self._file.resize(grow_to)
+            self._file[start:end] = data
+            # update the current length
+            self._rows_counter = end
+
+        def _set_attributes(self, attrs):
+            """
+            Add attributes to the columns.
+
+            Parameters:
+            -----------
+            attrs : dict
+                Mapping between column name and column attributes. The
+                attributes must be JSON serializable.
+            """
+            for name, attr in attrs.items():
+                column = self._file[name]
+                column.attr = attr
+
+        def close(self):
+            """
+            Flush the buffer and close the file.
+            """
+            self.flush()  # flush buffer
+            # trim any trailing rows
+            self._file.resize(self._rows_counter)
+            # compute the new check sums
+            filenames = [
+                self._file[name].filename for name in self._file.colnames]
+            with multiprocessing.Pool(4) as pool:
+                checksums = pool.map(sha1sum, filenames)
+            # store the check sums as attribute
+            for name, checksum in zip(self._file.colnames, checksums):
+                column = self._file[name]
+                attr = column.attr
+                if attr is None:
+                    column.attr = {"SHA-1 checksum": checksum}
+                else:
+                    try:
+                        attr["SHA-1 checksum"] = checksum
+                        column.attr = attr
+                    except TypeError:
+                        message = "attribute is not of type dict: {:}"
+                        raise TypeError(message.format(name)) 
+            self._file.close(add_timestamp=False)
 
 
 ########################  optionally supported formats  #######################
@@ -1073,6 +1187,34 @@ try:
                 dset[start:end] = data[name]
             # update the current length
             self._len = end
+
+        def _set_attributes(self, attrs):
+            """
+            Add attributes to the data sets.
+
+            Parameters:
+            -----------
+            attrs : dict
+                Mapping between column name and column attributes. The
+                attributes must be JSON serializable.
+            """
+            message = "ommitted unsupporetd attribute for column '{:}'"
+            for name, attr in attrs.items():
+                dset = self._file[name]
+                if type(attr) is dict:
+                    for key, value in attr.items():
+                        if key == "SHA-1 checksum":
+                            continue  # this is just a DataStore internal
+                        try:
+                            dset.attrs[key] = value
+                        except ValueError:
+                            extra_info = "{:}' with key '{:}".format(key, name)
+                            logger.warn(message.format(extra_info))
+                else:
+                    try:
+                        dset.attrs[key] = value
+                    except ValueError:
+                        logger.warn(message.format(name))
 
         def close(self):
             """

@@ -19,7 +19,7 @@ parser.add_argument(
 def main():
     args = parser.parse_args()
     with GalaxyMock(args.datastore, False) as mocks:
-        mocks.drop(args.columns)
+        mocks.drop_column(args.columns)
 
 
 if __name__ == "__main__":

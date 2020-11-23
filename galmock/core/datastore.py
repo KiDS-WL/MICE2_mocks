@@ -181,16 +181,19 @@ class DataStore(MmapTable):
         exit_with_error = args[0] is not None
         self.close(add_checksum=not exit_with_error)
 
-    def close(self, add_checksum=True):
+    def close(self, add_timestamp=True, add_checksum=True):
         """
         Close the data store and add time stamps and check sums to the columns.
 
         Parameters:
         -----------
+        add_timestamp : bool
+            Whether time stamps should be added. Disable only prevent custom
+            time stamps to be overwritten.
         add_checksum : bool
             Whether to add check sums alongside the time stamps.
         """
-        if len(self._timestamp) > 0:
+        if len(self._timestamp) > 0 and add_timestamp:
             message = "updating attributes"
             if add_checksum:
                 message = "computing checksums and " + message
@@ -311,8 +314,7 @@ class DataStore(MmapTable):
     def get_history(self):
         """
         Read the creation labels from all columns attributes of the data store
-        and keep a unique listing of the called scripts. The time resolution is
-        1 second.
+        and keep a unique listing of the called scripts.
 
         Returns:
         --------

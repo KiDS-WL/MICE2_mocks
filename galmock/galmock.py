@@ -156,111 +156,6 @@ class GalaxyMock(object):
             ".".join([__name__.split(".")[0], self.__class__.__name__]))
         self.logger.setLevel(logging.DEBUG)
 
-    def __enter__(self, *args, **kwargs):
-        return self
-
-    def __exit__(self, *args, **kwargs):
-        self.close()
-
-    def close(self):
-        """
-        Close the data store and the underlying file pointers.
-        """
-        self.datastore.close()
-
-    def __len__(self):
-        return len(self.datastore)
-
-    @property
-    def filepath(self):
-        """
-        Return the root file path of the data store.
-        """
-        return self.datastore.root
-
-    @property
-    def filesize(self):
-        """
-        Return the total size of the data on disk (excluding the attributes).
-        """
-        return self.datastore._filesize
-
-    def show_metadata(self):
-        """
-        Print the meta data of the table: file path, size on disk and number of
-        rows and columns.
-        """
-        print("==> META DATA")
-        n_cols, n_rows = self.datastore.shape
-        print("root:     {:}".format(self.datastore.root))
-        print("size:     {:}".format(self.datastore.filesize))
-        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
-
-    def show_columns(self):
-        """
-        Generate and print a listing of all columns with their respective data
-        type.
-        """
-        header = "==> COLUMN NAME"
-        width_cols = max(len(header), max(
-            len(colname) for colname in self.datastore.colnames))
-        print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
-        for name in self.datastore.colnames:
-            colname_padded = name.ljust(width_cols)
-            line = "{:}    {:}".format(
-                colname_padded, str(self.datastore[name].dtype))
-            print(line)
-
-    def show_attributes(self):
-        """
-        Generate and print a listing of all columns with their dictonary-style
-        attributes listed (such as creation time stamp and check sums).
-        """
-        print("\n==> ATTRIBUTES")
-        for name in self.datastore.colnames:
-            print()
-            # print the column name indented and then a tree-like listing
-            # of the attributes (drawing connecting lines for better
-            # visibitilty)
-            print("{:}".format(name))
-            attrs = self.datastore[name].attr
-            # all attributes from the pipeline should be dictionaries
-            if type(attrs) is dict:
-                i_last = len(attrs)
-                width_key = max(len(key) + 2 for key in attrs)
-                for i, key in enumerate(sorted(attrs), 1):
-                    print_key = key + " :"
-                    line = "{:}{:} {:}".format(
-                        " └╴ " if i == i_last else " ├╴ ",
-                        print_key.ljust(width_key), str(attrs[key]))
-                    print(line)
-            # fallback
-            else:
-                print("     └╴ {:}".format(str(attrs)))
-
-    def show_history(self):
-        """
-        Generate and print a list of the of class methods that were applied to
-        the data store, ordered by time. Only shows the latest call if a method
-        was called multiple times.
-        """
-        print("\n==> HISTORY")
-        date_width = 24
-        for date, call in self.datastore.get_history().items():
-            print("{:} : {:}".format(date.ljust(date_width), call))
-
-    def show_logs(self):
-        """
-        Print the content of the data stores log file.
-        """
-        print("\n==> LOGS")
-        logpath = self.datastore.root + ".log"
-        if not os.path.exists(logpath):
-            raise OSError("log file not found: {:}".format(logpath))
-        with open(logpath) as f:
-            for line in f.readlines():
-                print(line.strip())
-
     @classmethod
     def create(
             cls, datastore, input, format=None, fits_ext=1, columns=None,
@@ -360,6 +255,114 @@ class GalaxyMock(object):
         instance = cls(datastore, readonly=False, threads=threads)
         return instance
 
+    def close(self):
+        """
+        Close the data store and the underlying file pointers.
+        """
+        self.datastore.close()
+
+    def __enter__(self, *args, **kwargs):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        self.close()
+
+    def __len__(self):
+        return len(self.datastore)
+
+    def __contains__(self, key):
+        return key in self.datastore
+
+    @property
+    def filepath(self):
+        """
+        Return the root file path of the data store.
+        """
+        return self.datastore.root
+
+    @property
+    def filesize(self):
+        """
+        Return the total size of the data on disk (excluding the attributes).
+        """
+        return self.datastore._filesize
+
+    def show_metadata(self):
+        """
+        Print the meta data of the table: file path, size on disk and number of
+        rows and columns.
+        """
+        print("==> META DATA")
+        n_cols, n_rows = self.datastore.shape
+        print("root:     {:}".format(self.datastore.root))
+        print("size:     {:}".format(self.datastore.filesize))
+        print("shape:    {:,d} rows x {:d} columns".format(n_rows, n_cols))
+
+    def show_columns(self):
+        """
+        Generate and print a listing of all columns with their respective data
+        type.
+        """
+        header = "==> COLUMN NAME"
+        width_cols = max(len(header), max(
+            len(colname) for colname in self.datastore.colnames))
+        print("\n{:}    {:}".format(header.ljust(width_cols), "TYPE"))
+        for name in self.datastore.colnames:
+            colname_padded = name.ljust(width_cols)
+            line = "{:}    {:}".format(
+                colname_padded, str(self.datastore[name].dtype))
+            print(line)
+
+    def show_attributes(self):
+        """
+        Generate and print a listing of all columns with their dictonary-style
+        attributes listed (such as creation time stamp and check sums).
+        """
+        print("\n==> ATTRIBUTES")
+        for name in self.datastore.colnames:
+            print()
+            # print the column name indented and then a tree-like listing
+            # of the attributes (drawing connecting lines for better
+            # visibitilty)
+            print("{:}".format(name))
+            attrs = self.datastore[name].attr
+            # all attributes from the pipeline should be dictionaries
+            if type(attrs) is dict:
+                i_last = len(attrs)
+                width_key = max(len(key) + 2 for key in attrs)
+                for i, key in enumerate(sorted(attrs), 1):
+                    print_key = key + " :"
+                    line = "{:}{:} {:}".format(
+                        " └╴ " if i == i_last else " ├╴ ",
+                        print_key.ljust(width_key), str(attrs[key]))
+                    print(line)
+            # fallback
+            else:
+                print("     └╴ {:}".format(str(attrs)))
+
+    def show_history(self):
+        """
+        Generate and print a list of the of class methods that were applied to
+        the data store, ordered by time. Only shows the latest call if a method
+        was called multiple times.
+        """
+        print("\n==> HISTORY")
+        date_width = 24
+        for date, call in self.datastore.get_history().items():
+            print("{:} : {:}".format(date.ljust(date_width), call))
+
+    def show_logs(self):
+        """
+        Print the content of the data stores log file.
+        """
+        print("\n==> LOGS")
+        logpath = self.datastore.root + ".log"
+        if not os.path.exists(logpath):
+            raise OSError("log file not found: {:}".format(logpath))
+        with open(logpath) as f:
+            for line in f.readlines():
+                print(line.strip())
+
     @job
     def ingest_column(
             self, input, format=None, fits_ext=1, column=None,
@@ -456,7 +459,7 @@ class GalaxyMock(object):
                     pass
                 raise
 
-    def drop(self, columns):
+    def drop_column(self, columns):
         """
         Delete a set of columns from the data store.
 
@@ -668,10 +671,14 @@ class GalaxyMock(object):
                     pbar.update(end - start)
             if not to_stdout:
                 pbar.close()
+            # add attributes if format supports it
+            attrs = {
+                col: request_table[col].attr for col in request_table.colnames}
+            writer.store_attributes(attrs)
         if not to_stdout:
             message = "wrote {:,d} matching entries ({:})".format(
                 n_select, bytesize_with_prefix(writer.filesize))
-        self.logger.info(message)
+            self.logger.info(message)
 
     @job
     def prepare_MICE2(self, mag, evo):
