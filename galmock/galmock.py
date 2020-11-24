@@ -16,6 +16,7 @@ import warnings
 from collections import OrderedDict
 
 import numpy as np
+import toml
 
 from galmock.core.bitmask import BitMaskManager
 from galmock.core.config import TableParser
@@ -177,7 +178,7 @@ class GalaxyMock(object):
             If the input is in FITS format, read data from this table
             extension.
         columns : str
-            A column mapping configuration file, see
+            A column mapping configuration file in TOML format, see
             galmock.core.config.TableParser that maps the column name of the
             input file to paths in the data store (optional).
         index : str
@@ -255,7 +256,7 @@ class GalaxyMock(object):
                     idx_col = ds.add_column(
                         index, dtype="i8", attr={"description": "range index"})
                     for start, end in ds.row_iter():
-                        idx_col[start:end] = np.arange(start, end)
+                        idx_col[start:end] = np.arange(start, end, dtype="i8")
                 # print a preview of the table as quick check
                 ds.show_preview()
                 message = "finalized data store with {:,d} rows ({:})"
@@ -410,7 +411,7 @@ class GalaxyMock(object):
                 if len(reader.colnames) != 1:
                     message = "input file contains multiple columns and "
                     message += "column is not specified"
-                    self.error(message)
+                    self.logger.error(message)
                     raise ValueError(message)
                 else:
                     column = reader.colnames[0]
@@ -469,7 +470,9 @@ class GalaxyMock(object):
                 raise
 
     @job
-    def add_column(self, path, dtype="f8", description=None, fill_value=None):
+    def add_column(
+            self, path, dtype="f8", description=None, fill_value=None,
+            overwrite=False):
         """
         Create a new column and initialize it with an optional fill value.
 
@@ -485,9 +488,13 @@ class GalaxyMock(object):
         fill_value : any
             Optional fill value to initialize the column, must parse to the
             specified data type. Can be NaN or Inf for floating point types.
+        overwrite : bool
+            Whether to overwrite the target column if it exists.
         """
-        if path in self.datastore:
-            raise KeyError("column already exists: {:}".format(path))
+        if path in self.datastore and not overwrite:
+            message = "column already exists: {:}".format(path)
+            self.logger.error(message)
+            raise KeyError(message)
         # establish the data type and check the fill value
         try:
             dtype = np.dtype(dtype)
@@ -504,7 +511,8 @@ class GalaxyMock(object):
         # create the column
         self.logger.debug(message)
         column = self.datastore.add_column(
-            path, dtype=dtype, attr={"description": description})
+            path, dtype=dtype, attr={"description": description},
+            overwrite=overwrite)
         if fill_value is not None:
             column[:] = fill_value
 
@@ -606,6 +614,106 @@ class GalaxyMock(object):
                 print(
                     "\nPassed:   {:d}\nWarnings: {:d}\nErrors:   {:d}".format(
                         n_good, n_warn, n_error))
+
+    @job
+    def merge(
+            self, lindex, input, rindex, format=None, fits_ext=1, columns=None,
+            overwrite=True):
+        """
+        Merge data from an external file onto the data store using a unique
+        identifier. This identifier must be sorted numerically increasing.
+
+        Parameters:
+        -----------
+        lindex : str
+            Path to the unique identifier column in the data store.
+        input : str
+            Path of the input file containing the data.
+        rindex : str
+            Name of the unique identifier column in the input file.
+        format : str
+            Format descibing string, see galmock.core.readwrite for all
+            supported file formats.
+        fits_ext : int
+            If the input is in FITS format, read data from this table
+            extension.
+        columns : str
+            A plain TOML file in which each line maps a column in the data
+            store to a column in the data file (optional), e.g.:
+            "position/ra/obs" = "RA"
+        overwrite : bool
+            Whether to overwrite target columns if they exists.
+        """
+        # read the column mapping
+        if columns is not None:
+            try:
+                with open(columns) as f:
+                    col_map_dict = toml.load(f)
+            except OSError as e:
+                self.logger.exception("configuration file not found")
+                raise
+            except Exception as e:
+                self.logger.exception("malformed configuration file")
+                raise
+            for col in col_map_dict.keys():
+                if col not in self.datastore:
+                    message = "data store does not contain column: {:}"
+                    self.logger.error(message.format(col))
+                    raise KeyError(message.format(col))
+        else:
+            col_map_dict = None
+        # read the input file and collect the indices
+        self.logger.debug("reading external index")
+        ext_idx = []
+        with create_reader(
+                input, format, {"": rindex}, fits_ext=fits_ext) as reader:
+            if hasattr(reader, "_guess_length"):
+                pbar = ProgressBar()
+            else:
+                pbar = ProgressBar(n_rows=len(reader))
+            for chunk in reader:
+                ext_idx.extend(chunk[rindex])
+                pbar.update(len(chunk))
+            pbar.close()
+        self.logger.info("sorting indices")
+        ext_idx.sort()
+        # for each index in external data find the mathing index in data store
+        self.logger.info("mapping indices")
+        idx_map = {}  # look up the index in the data store later
+        row_ext = 0
+        pbar = ProgressBar(len(self))
+        pbar_step = 1000
+        # optimize the search by assuming ext_idx and datastore[index] are
+        # sorted by value
+        for row_all, index_all in enumerate(self.datastore[lindex]):
+            index_ext = ext_idx[row_ext]
+            if index_all == index_ext:
+                idx_map[index_ext] = row_all
+                row_ext += 1  # search for the next item
+                if row_ext == len(ext_idx):
+                    break
+            if row_all % pbar_step == 0:
+                pbar.update(pbar_step)
+        pbar.close()
+        if row_ext != len(ext_idx):
+            message = "some indices in the input file cannot be matched"
+            raise ValueError(message)
+        # map the external data onto the data store
+        with create_reader(
+                input, format, col_map_dict, fits_ext=fits_ext) as reader:
+            self.logger.info("mapping values")
+            if col_map_dict is None:  # by default map names one-to-one
+                col_map_dict = {col: col for col in reader.colnames}
+            if hasattr(reader, "_guess_length"):
+                pbar = ProgressBar()
+            else:
+                pbar = ProgressBar(n_rows=len(reader))
+            for chunk in reader:
+                idx_target = [idx_map[i] for i in chunk[rindex]]
+                for path, colname in col_map_dict.items():
+                    self.datastore[path][idx_target] = chunk[colname]
+                pbar.update(len(chunk))
+            pbar.close()
 
     @job
     def query(
