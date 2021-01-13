@@ -37,9 +37,9 @@ input_group.add_argument(
     "--fits-ext", type=int, default=1,
     help="FITS table extension to read (default: %(default)s)")
 input_group.add_argument(
-    "index",
+    "--index",
     help="path at which a range index is created (default: none added), "
-         "useful as unique identifer when creating subsets"
+         "useful as unique identifer when creating subsets")
 parser.add_argument(
     "-v", "--verbose", action="store_true", help="display debugging messages")
 
