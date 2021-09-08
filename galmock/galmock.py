@@ -1190,7 +1190,7 @@ class GalaxyMock(object):
             # make the output columns for each observable
             for output_path, dtype, attr in matcher.observable_information():
                 self.datastore.add_column(
-                    output_path, dtype=dtype, attr=attr, overwrite=True)
+                    output_path, dtype=dtype.str, attr=attr, overwrite=True)
                 self.datastore.pool.add_result_column(output_path)
             matcher.build_tree()
             # compute and store the corrected magnitudes

@@ -2,7 +2,7 @@
 # transmission curves, galaxy templates and Bayesian prior required to run the
 # BPZ photometric reshift code.
 
-BPZpath = "~/src/bpz-1.99.3"
+BPZpath = "/net/home/$hostname/jlvdb/src/bpz-1.99.3"
                         # path of the bpz installation to use
 BPZenv = "/net/home/$hostname/jlvdb/BPZenv"
                         # path to a python2 environment used when calling BPZ
