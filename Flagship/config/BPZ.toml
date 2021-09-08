@@ -1,0 +1,48 @@
+# This configuration file is required for mocks_BPZ. It defines the
+# transmission curves, galaxy templates and Bayesian prior required to run the
+# BPZ photometric reshift code.
+
+BPZpath = "~/src/bpz-1.99.3"
+                        # path of the bpz installation to use
+BPZenv = "/net/home/$hostname/jlvdb/BPZenv"
+                        # path to a python2 environment used when calling BPZ
+                        # (leave blank to use the default python2 interpreter)
+BPZtemp = "/dev/shm"    # temporary directory to use for bpz (I/O intense, e.g.
+                        # a ram disk, if blank, defaults to data store)
+system = "AB"           # photometric system, must be "AB" or "Vega"
+
+[filters]
+# mapping between filter keys (same as used in the column map file for
+# mocks_init_pipeline) and paths to transmission curve files compatible with
+# BPZ.
+u = "filters/Paranal_OmegaCAM.u_SDSS.res"
+g = "filters/Paranal_OmegaCAM.g_SDSS.res"
+r = "filters/Paranal_OmegaCAM.r_SDSS.res"
+i = "filters/Paranal_OmegaCAM.i_SDSS.res"
+Z = "filters/LSST_LSST.z.res"
+Y = "filters/LSST_LSST.y.res"
+J = "filters/2MASS_2MASS.J.res"
+H = "filters/2MASS_2MASS.H.res"
+Ks = "filters/2MASS_2MASS.Ks.res"
+                        # transmission files do not need to be in the
+                        # bpz_path/FILTER directory
+
+[prior]
+name = "NGVS"           # template-magnitude prior module in the bpz_path
+                        # directory (filename: prior_[name].py)
+filter = "i"            # filter key (one of those listed in the [filters]
+                        # section) based on which the prior is evaluated
+
+[templates]
+name = "CWWSB_capak"    # name of the template .list file in the
+                        # bpz_path/SED directory
+interpolation = 10      # introduces n points of interpolation between the
+                        # templates in the color space
+
+[likelihood]
+zmin = 0.0002           # minimum redshift probed
+zmax = 2.2984           # maximum redshift probed
+dz = 0.01               # redshift resolution, intervals are
+                        # logarithmic: (1+z)*dz 
+odds = 0.68             # redshift confidence limits
+min_rms = 0.0           # intrinsic scatter of the photo-z in dz/(1+z)

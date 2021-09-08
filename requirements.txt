@@ -1,0 +1,9 @@
+git+https://github.com/jlvdb/tabeval.git
+git+https://github.com/jlvdb/mmaptable.git
+fitsio
+h5py
+numpy
+pyarrow
+scipy
+toml
+tqdm

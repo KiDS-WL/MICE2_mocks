@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+import argparse
+import logging.config
+
+from galmock import GalaxyMock
+from galmock.core.config import logging_config
+from galmock.core.readwrite import SUPPORTED_WRITERS
+from galmock.core.utils import expand_path
+from galmock.samples import DumpConfig, SampleManager
+
+
+parser = argparse.ArgumentParser(
+    description="Apply sample selections on to obtain a mock representation "
+                "of a specific photometric or spectroscopic sample.",
+    add_help=False)
+parser.register("action", "dump", DumpConfig)
+
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+parser.add_argument(
+    "--type", default="reference", choices=SampleManager.flavours,
+    help="name of the sample selection to apply (default: %(default)s)")
+parser.add_argument(
+    "--sample", required=True, choices=SampleManager.samples,
+    help="name of the sample selection to apply")
+parser.add_argument(
+    "-c", "--config", type=expand_path, required=True,
+    help="parameter file in TOML format that defines data columns required "
+         "for the sample selection (use --dump to obtain a default parameter "
+         "file)")
+parser.add_argument(
+    "--area", type=float, required=True,
+    help="total area in squared degrees on the sky covered by the base "
+         "simulation (required by: {:})")
+parser.add_argument(
+    "--seed", default="sapling",
+    help="string to seed the random generator (default: %(default)s, results "
+         "are only reproducible for the same number of threads)")
+parser.add_argument(
+    "--threads", type=int, default=-1,
+    help="maximum number of threads to use (default: all)")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
+
+help_group = parser.add_argument_group("help and documentation")
+help_group.add_argument(
+    "-h", "--help", action="help",
+    help="show this help message and exit")
+help_group.add_argument(
+    "--dump", action="dump",
+    help="dump a default configuration file for a combination of type and "
+         "sample to stdout and exit (see --type and --sample for a list of "
+         "valid names)")
+
+
+def main():
+    args = parser.parse_args()
+    logging.config.dictConfig(
+        logging_config(args.datastore + ".log",
+        overwrite=False, verbose=args.verbose))
+    with GalaxyMock(args.datastore, False, args.threads) as mocks:
+        mocks.select_sample(
+            args.config, args.sample, args.area, args.type, args.seed)
+
+
+if __name__ == "__main__":
+    main()

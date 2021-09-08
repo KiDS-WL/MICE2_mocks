@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+import argparse
+import logging.config
+
+from galmock import GalaxyMock
+from galmock.core.utils import expand_path
+
+
+parser = argparse.ArgumentParser(
+    description="Show information about the data store like the size on disk, "
+                "shape, column names, descriptions, attributes and pipeline "
+                "logs and processing history.")
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
+parser.add_argument(
+    "-c", "--columns", action="store_true", help="show the column data types")
+parser.add_argument(
+    "-a", "--attr", action="store_true", help="show the column attributes")
+parser.add_argument(
+    "-p", "--history", action="store_true", help="show the pipeline history")
+parser.add_argument(
+    "-l", "--logs", action="store_true",
+    help="show the attached pipeline logs")
+
+
+def main():
+    args = parser.parse_args()
+    with GalaxyMock(args.datastore, True) as mocks:
+        mocks.info(args.columns, args.attr, args.history, args.logs)
+
+
+if __name__ == "__main__":
+    main()

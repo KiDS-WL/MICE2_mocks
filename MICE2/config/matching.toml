@@ -1,0 +1,53 @@
+# This configuration file is required for mocks_match_data. It defines the
+# features of the mock data and an external data set to match. Based on the
+# nearest neighbour in feature space, a set of observables from the external
+# data is assigned to the mock data. Additional distance, cut-offs, fallback
+# values and weightes for each feature space dimension can be specified.
+
+input = "/net/home/fohlen12/jlvdb/DATA/KV450_superuser"
+                        # path to input table, must be MmapTable compatible
+normalize = false       # whether each feature space dimension is normalized by
+                        # the standard deviation of the values in the dimension
+max_dist = 1.0          # maximum distance (Euclidean metric) to consider the
+                        # nearest neighbour a match, otherwise the fallback
+                        # value is assigned
+every_n = 1             # take a regular sample of the input data to speed up
+                        # tree build and query times
+
+[features]
+# Mapping between columns of the input data table and the columns of the mock
+# pipeline data store. The input features are used to build the search tree,
+# the data store features are matched against tree.
+MAG_GAAP_u = "mags/KV450/u"
+MAG_GAAP_g = "mags/KV450/g"
+MAG_GAAP_r = "mags/KV450/r"
+MAG_GAAP_i = "mags/KV450/i"
+MAG_GAAP_Z = "mags/KV450/Z"
+MAG_GAAP_Y = "mags/KV450/Y"
+MAG_GAAP_J = "mags/KV450/J"
+MAG_GAAP_H = "mags/KV450/H"
+MAG_GAAP_Ks = "mags/KV450/Ks"
+                        # key must be a valid column name in the input table,
+                        # value an existing column name in the data store
+
+[observables]
+# Mapping between columns of the input data table and the columns of the mock
+# pipeline data store. The observables of the input data that are assigned to
+# the nearest neighbour of an object in the data store.
+weight = "lensing/recal_weight"
+                        # key must be a valid column name in the input table,
+                        # value a pair of output column name in the data store
+                        # and fall back value if distance > max_dist
+
+[fallback]
+# Fallback value to assign if the nearest neighbour distance > max_dist. If no
+# value is provided the value of the observable is assigned instead.
+weight = 0.0      # key must match one of the keys in observables, value
+                        # must have the same data type as the observables
+
+[weights]
+# Weights are used to scale the feature space along specific axes. This is
+# useful to give a higher or lower significance to some features when matching.
+# If no weight is provided for a feature, no scaling is applied.
+                        # key must match one of the keys in observables, value
+                        # must have the same data type as the observables

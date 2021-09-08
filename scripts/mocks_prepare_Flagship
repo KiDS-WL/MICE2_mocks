@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+import argparse
+import logging.config
+
+from galmock import GalaxyMock
+from galmock.core.config import logging_config
+from galmock.core.utils import expand_path
+
+
+parser = argparse.ArgumentParser(
+    description="Convert fluxes in Flagship to AB magnitudes and add a flag "
+                "to identify the central halo galaxies.")
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+parser.add_argument(
+    "--flux", required=True,
+    help="sub-directory within data store which contains the input fluxes")
+parser.add_argument(
+    "--mag", required=True,
+    help="sub-directory within data store where the AB magnitudes are stored")
+parser.add_argument(
+    "--gal-idx",
+    help="path within data store which contains the galaxy indices")
+parser.add_argument(
+    "--is-central",
+    help="path within data store where the central galaxy flag is stored")
+parser.add_argument(
+    "--threads", type=int, default=-1,
+    help="maximum number of threads to use (default: all)")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
+
+
+def main():
+    args = parser.parse_args()
+    logging.config.dictConfig(
+        logging_config(args.datastore + ".log",
+        overwrite=False, verbose=args.verbose))
+    with GalaxyMock(args.datastore, False, args.threads) as mocks:
+        mocks.prepare_Flagship(
+            args.flux, args.mag, args.gal_idx, args.is_central)
+
+
+if __name__ == "__main__":
+    main()

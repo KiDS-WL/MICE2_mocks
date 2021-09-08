@@ -1,0 +1,15 @@
+# This configuration file is required for mocks_select_sample. It defines the
+# the output column name of the selection bit mask and the data columns for the
+# selection functions (such as magnitudes or redshift).
+
+bitmask = "samples/KiDS"   # path at which the sample selection bit mask is saved
+                        # in the data store
+
+[selection]
+# Mapping form keyword argument names in selection function to column path in
+# the data store. Optional arguments can be left blank.
+recal_weight = "lensing/recal_weight"
+                        # path of lensing weight in the data store
+# setting the following paramter will remove objects with non-detections
+prior_magnitude = "BPZ/K1000/M_0"
+                        # BPZ prior magnitude

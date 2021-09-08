@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+import argparse
+import logging.config
+
+from galmock import GalaxyMock
+from galmock.core.config import logging_config
+from galmock.core.utils import expand_path
+from galmock.matching import MatcherParser
+
+
+parser = argparse.ArgumentParser(
+    description="Infer attributes from an external data set using a k-nearest "
+                "neighbour matching.",
+    epilog="The input data must be loaded to memory at once, building the "
+           "search tree is not parallelized. Therefore matching against large "
+           "data sets may be slow.",
+    add_help=False)
+parser.register("action", "dump", MatcherParser.get_dump())
+
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is located")
+parser.add_argument(
+    "-c", "--config", type=expand_path, required=True,
+    help="parameter file in TOML format that defines the properties of the "
+         "photometry realisation and the method parameters (use --dump to "
+         "obtain a default parameter file)")
+parser.add_argument(
+    "--threads", type=int, default=-1,
+    help="maximum number of threads to use (default: all)")
+parser.add_argument(
+    "-v", "--verbose", action="store_true", help="display debugging messages")
+
+help_group = parser.add_argument_group("help and documentation")
+help_group.add_argument(
+    "-h", "--help", action="help",
+    help="show this help message and exit")
+help_group.add_argument(
+    "--dump", nargs=0, action="dump",
+    help="dump a default columns file to stdout and exit")
+
+
+def main():
+    args = parser.parse_args()
+    logging.config.dictConfig(
+        logging_config(args.datastore + ".log",
+        overwrite=False, verbose=args.verbose))
+    with GalaxyMock(args.datastore, False, args.threads) as mocks:
+        mocks.match_data(args.config)
+
+
+if __name__ == "__main__":
+    main()

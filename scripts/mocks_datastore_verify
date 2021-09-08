@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+import argparse
+import logging.config
+
+from galmock import GalaxyMock
+from galmock.core.utils import expand_path
+
+
+parser = argparse.ArgumentParser(
+    description="Verify the data integrity by using SHA-1 checksums")
+parser.add_argument(
+    "datastore", type=expand_path,
+    help="directory in which the data store is created")
+parser.add_argument(
+    "-r", "--recalc", action="store_true",
+    help="calculate new check sums for all columns")
+
+
+def main():
+    args = parser.parse_args()
+    with GalaxyMock(args.datastore, readonly=(args.recalc == False)) as mocks:
+        mocks.verify(args.recalc)
+
+
+if __name__ == "__main__":
+    main()
