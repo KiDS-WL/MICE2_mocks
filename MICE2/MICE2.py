@@ -20,7 +20,7 @@ parser.add_argument(
 parser.add_argument(
     "jobID", nargs="*",
     help="select a set of job IDs to process the mock data, options are: "
-         "1: create datastore - 2: prepare Flagship - 3: add magnification - "
+         "1: create datastore - 2: prepare MICE2 - 3: add magnification - "
          "4: effective radius - 5: add apertures - 6: add photometry - "
          "7: match data - 8: BPZ photo-z - 9: select samples - out: export "
          "samples - all: run all jobs in sequence")
@@ -44,8 +44,8 @@ def main():
     args.verbose = "-v" if args.verbose else ""
 
     # configure the data paths and sample selections
-    base_path = "/net/home/fohlen12/jlvdb/DATA/{:}/MICE2_"
-    base_path += "{:}_uBgVrRciIcYJHKs_shapes_halos_WL.fits"
+    base_path = "/net/home/fohlen13/jlvdb/DATA/MICE2_downloads/"
+    base_path += "MICE2_{:}_uBgVrRciIcYJHKs_shapes_halos_WL.fits"
     samples = ["KiDS", "2dFLenS", "GAMA", "SDSS"]
     # configure the output files and sample selection
     query = "{ra:} >= 40 AND {ra:} < 45 AND {dec:} >= 10 AND {dec:} < 15"
@@ -55,20 +55,20 @@ def main():
     output_base += "MICE2_query_{:}{:}." + args.format
 
     if args.type == "all":  # all
-        input_file = base_path.format("MICE2_KV_full", "all")
-        datastore = "/net/home/fohlen12/jlvdb/DATA/MICE2_KiDS_all"
+        input_file = base_path.format("all")
+        datastore = "/net/home/fohlen13/jlvdb/DATA/MICE2_KiDS_all"
         samples += ["WiggleZ", "DEEP2", "VVDSf02", "zCOSMOS"]
         area = 5156.6
 
     elif args.type == "deep":  # deep
-        input_file = base_path.format("MICE2_KV450", "deep")
-        datastore = "/net/home/fohlen12/jlvdb/DATA/MICE2_KiDS_crop"
+        input_file = base_path.format("deep")
+        datastore = "/net/home/fohlen13/jlvdb/DATA/MICE2_KiDS_crop"
         samples += ["WiggleZ", "DEEP2", "VVDSf02", "zCOSMOS"]
         area = 859.44
 
     else:  # test
-        input_file = base_path.format("MICE2_KV_full", "256th")
-        datastore = "/net/home/fohlen12/jlvdb/DATA/MICE2_KiDS_sparse"
+        input_file = base_path.format("256th")
+        datastore = "/net/home/fohlen13/jlvdb/DATA/MICE2_KiDS_sparse"
         # sample density insufficient for some samples
         area = 5156.6
 
