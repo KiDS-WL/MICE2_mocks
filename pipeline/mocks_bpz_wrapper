@@ -100,8 +100,12 @@ def run_BPZ(arguments):
     inputfile, logfile = arguments
     outputfile = os.path.splitext(inputfile)[0] + ".bpz"
     # assemble command chain
+    try:
+        python = os.environ["BPZPYTHON"]
+    except KeyError:
+        python = "python2"
     command = [
-        "python2", os.path.join(bpz_path, "bpz.py"), inputfile,
+        python, os.path.join(bpz_path, "bpz.py"), inputfile,
         "-COLUMNS", column_file, "-OUTPUT", outputfile,
         "-PRIOR", args.prior, "-SPECTRA", args.templates + ".list",
         "-ZMIN", str(args.z_min), "-ZMAX", str(args.z_max),
