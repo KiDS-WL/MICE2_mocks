@@ -10,6 +10,8 @@
 #                                                                             #
 ###############################################################################
 
+THREADS=32
+
 # data paths
 DATADIR=${HOME}/DATA/MICE2_KV450/KV450_magnification_off
 mkdir -p ${DATADIR}
@@ -32,7 +34,8 @@ MAGsig=1.5  # the original value is 1.0, however a slightly larger values
             # yields smaller photometric uncertainties and a better match in
             # the spec-z vs phot-z distribution between data and mocks
 
-export BPZPATH=~/src/bpz-1.99.3
+export BPZPATH=${HOME}/src/bpz-1.99.3
+export BPZPYTHON=${HOME}/BPZenv/bin/python2
 
 echo "==> generate base footprint for KV450"
 test -e ${DATADIR}/footprint.txt && rm ${DATADIR}/footprint.txt
@@ -90,6 +93,7 @@ mocks_extended_object_sn \
         vhs_h \
         vhs_ks \
     --scale 2.5 --flux-frac 0.5 \
+    --threads $THREADS \
     -o ${DATADIR}/apertures.fits
 # update the combined data table
 data_table_hstack \
@@ -169,6 +173,7 @@ mocks_draw_property \
     --d-prop weight \
     --r-max 1.0 \
     --fallback 0.0 \
+    --threads $THREADS \
     -t ${HOME}/DATA/KV450/recal_weights.tree.pickle \
     -o ${DATADIR}/recal_weights.fits
 # update the combined data table
@@ -211,6 +216,7 @@ mocks_bpz_wrapper \
     --templates CWWSB_capak \
     --prior NGVS \
     --prior-filter sdss_i_obs \
+    --threads $THREADS \
     -o ${DATADIR}/photoz.fits
 # update the combined data table
 data_table_hstack \

@@ -117,7 +117,8 @@ mocks_extended_object_sn \
         sdss_g \
         sdss_r \
         sdss_i \
-        sdss_z des_asahi_full_y \
+        sdss_z \
+        des_asahi_full_y \
         vhs_j \
         vhs_h \
         vhs_ks \
