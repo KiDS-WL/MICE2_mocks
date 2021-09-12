@@ -11,6 +11,8 @@
 #                                                                             #
 ###############################################################################
 
+THREADS=32
+
 # data paths
 DATADIR=${HOME}/DATA/MICE2_KV450/KV450_magnification_off
 MOCKmasked=${DATADIR}/MICE2_deep_uBgVrRciIcYJHKs_shapes_halos_WL_masked.fits
@@ -25,7 +27,8 @@ PSFs="    1.0  0.9  0.7  0.8  1.0   1.0  0.9  1.0  0.9"
 MAGlims="25.5 26.3 26.2 24.9 24.85 24.1 24.2 23.3 23.2"
 MAGsig=1.5
 
-export BPZPATH=~/src/bpz-1.99.3
+export BPZPATH=${HOME}/src/bpz-1.99.3
+export BPZPYTHON=${HOME}/BPZenv/bin/python2
 
 # For each survey create a footprint that covers 100x the masked CC data
 # footprint. This is slightly less area then the DIR spec-z catalogues cover:
@@ -96,6 +99,7 @@ for survey in DEEP2 VVDSf02 zCOSMOS; do
             sdss_i sdss_z des_asahi_full_y \
             vhs_j vhs_h vhs_ks \
         --scale 2.5 --flux-frac 0.5 \
+        --threads $THREADS \
         -o ${OUTROOT}/temp.fits
     data_table_hstack \
         -i ${patchcat} ${OUTROOT}/temp.fits \
@@ -161,6 +165,7 @@ for survey in DEEP2 VVDSf02 zCOSMOS; do
             --templates CWWSB_capak \
             --prior NGVS \
             --prior-filter sdss_i_obs \
+            --threads $THREADS \
             -o ${OUTROOT}/temp.fits
         data_table_hstack \
             -i ${OUTROOT}/${survey}_phot_samples/${survey}_phot_samples_${i_phot}.fits \
