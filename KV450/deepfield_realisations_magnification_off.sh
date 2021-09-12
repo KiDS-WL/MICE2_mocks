@@ -11,7 +11,7 @@
 #                                                                             #
 ###############################################################################
 
-THREADS=32
+THREADS=$(echo ${1:-$(nproc)})
 
 # data paths
 DATADIR=${HOME}/DATA/MICE2_KV450/KV450_magnification_off
