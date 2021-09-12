@@ -26,7 +26,7 @@ export -f process_chunk
 
 # data paths
 export PIPEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-DATADIR=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/KiDS_VIKING
+DATADIR=/net/home/${HOSTNAME}/jlvdb/DATA/MICE2_KV_full/KiDS_VIKING_test
 mkdir -p ${DATADIR}
 CHUNKDIR=${DATADIR}/CHUNKS
 

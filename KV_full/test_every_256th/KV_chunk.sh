@@ -28,7 +28,8 @@ MAGsig=1.5  # the original value is 1.0, however a slightly larger values
             # yields smaller photometric uncertainties and a better match in
             # the spec-z vs phot-z distribution between data and mocks
 
-export BPZPATH=~/src/bpz-1.99.3
+export BPZPATH=${HOME}/src/bpz-1.99.3
+export BPZPYTHON=${HOME}/BPZenv/bin/python2
 
 echo "==> apply evolution correction"
 # automatically applied to any existing MICE2 filter column
