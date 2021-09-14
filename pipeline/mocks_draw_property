@@ -182,7 +182,7 @@ if __name__ == "__main__":
     else:
         print(message)
     dist, idx_nearest = tree.query(
-        simul_attr, k=1, distance_upper_bound=args.r_max, workers=args.threads)
+        simul_attr, k=1, distance_upper_bound=args.r_max, n_jobs=args.threads)
 
     # create a new output table
     table = Table()
