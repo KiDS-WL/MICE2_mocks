@@ -96,7 +96,6 @@ mocks_flux_magnification \
 # update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
-       ${DATADIR}/magnitudes_evolved.fits \
        ${DATADIR}/magnitudes_magnified.fits \
     -o ${MOCKoutfull}
 echo ""
