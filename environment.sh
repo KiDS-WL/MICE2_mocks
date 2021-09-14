@@ -1,3 +1,5 @@
+source env/bin/activate
+
 export PATH=${HOME}/src/table_tools:$PATH
 export PATH=${HOME}/src/stomp_tools:$PATH
 export PATH=${HOME}/src/MICE2_mocks/pipeline:$PATH
