@@ -128,7 +128,6 @@ mocks_extended_object_sn \
 # update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
-       ${DATADIR}/magnitudes_evolved.fits \
        ${DATADIR}/magnitudes_magnified.fits \
        ${DATADIR}/apertures.fits \
     -o ${MOCKoutfull}
@@ -166,9 +165,6 @@ mocks_photometry_realisation \
 # update the combined data table
 data_table_hstack \
     -i ${MOCKmasked} \
-       ${DATADIR}/magnitudes_evolved.fits \
-       ${DATADIR}/magnitudes_magnified.fits \
-       ${DATADIR}/apertures.fits \
        ${DATADIR}/magnitudes_observed.fits \
     -o ${MOCKoutfull}
 echo ""
@@ -210,15 +206,6 @@ mocks_draw_property \
     --threads $THREADS \
     -t ${HOME}/DATA/KV450/recal_weights.tree.pickle \
     -o ${DATADIR}/recal_weights.fits
-# update the combined data table
-data_table_hstack \
-    -i ${MOCKmasked} \
-       ${DATADIR}/magnitudes_evolved.fits \
-       ${DATADIR}/magnitudes_magnified.fits \
-       ${DATADIR}/apertures.fits \
-       ${DATADIR}/magnitudes_observed.fits \
-       ${DATADIR}/recal_weights.fits \
-    -o ${MOCKoutfull}
 echo ""
 
 echo "==> compute photo-zs"
@@ -253,7 +240,9 @@ mocks_bpz_wrapper \
     --prior-filter sdss_i_obs_mag \
     --threads $THREADS \
     -o ${DATADIR}/photoz.fits
-# update the combined data table
+echo ""
+
+echo "==> create full output table"
 data_table_hstack \
     -i ${MOCKmasked} \
        ${DATADIR}/magnitudes_evolved.fits \
