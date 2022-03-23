@@ -59,6 +59,13 @@ if __name__ == "__main__":
     params_group.add_argument(
         '--seed', default='KV450',
         help='string to seed the random generator (default: %(default)s)')
+    params_group.add_argument(
+        '--store-flux', action='store_true',
+        help='include the fluxes in the output data')
+    params_group.add_argument(
+        '--zeropoint', type=float, default=0.0,
+        help='photometric zeropoint used to compute fluxes from magnitudes '
+             '(default: %(default)s)')
 
     args = parser.parse_args()
 
@@ -87,48 +94,44 @@ if __name__ == "__main__":
         filt: lim for filt, lim in zip(filters, args.limits)}
 
     # create noise realisations
-    SN_limit = args.sn_limit
-    SN_detect = args.sn_detect
     non_detection_magnitude = 99.0  # inserted for non-detections
-    detect_sigma_to_mag = 2.5 * np.log10(args.significance)  # ZP conversion
     # dictionaries that collect the magnitude realisations per filter
     mag_realisation_data = {}
     mag_realisation_error = {}
+    flux_realisation_data = {}
+    flux_realisation_error = {}
     # reseed the random state -> reproducible results
     hasher = md5(bytes(args.seed, "utf-8"))
     hashval = bytes(hasher.hexdigest(), "utf-8")
     np.random.seed(np.frombuffer(hashval, dtype=np.uint32))
     for filt, sn_key in zip(filters, sn_factors):
-        if sn_key is None:
-            SN_factor = 1.0
-        else:
-            SN_factor = data[sn_key]
-        model_mags = mag_model_data[filt]
         print("processing filter '%s'" % filt)
-        # compute the S/N of the model magnitudes
-        model_SN = np.power(
-            10, -0.4 * (
-                model_mags - mag_model_limits[filt] - detect_sigma_to_mag))
-        model_SN *= SN_factor
-        model_SN = np.maximum(model_SN, SN_limit)
-        model_mags_err = 2.5 / np.log(10.0) / model_SN
-        # compute the magnitde realisation and S/N
-        real_mags = model_mags + np.random.normal(
-            0.0, model_mags_err, size=len(model_SN))
-        real_SN = np.power(
-            10, -0.4 * (
-                real_mags - mag_model_limits[filt] - detect_sigma_to_mag))
-        real_SN *= SN_factor
-        real_SN = np.maximum(real_SN, SN_limit)
+        model_mags = mag_model_data[filt]
+        # compute the model flux
+        model_flux = np.power(10.0, -0.4 * (model_mags - args.zeropoint))
+        # compute the flux error from the magnitude limit
+        flux_err = (
+            np.power(10.0, -0.4 * (mag_model_limits[filt] - args.zeropoint)) /
+            args.significance)
+        if sn_key is not None:
+            # point source correction: 0 < data[sn_key] <= 1
+            flux_err /= data[sn_key]
+        # compute the flux realisation (the flux error does not change)
+        real_flux = np.random.normal(model_flux, flux_err)
+        # convert to magnitudes
+        real_mags = -2.5 * np.log10(real_flux) + args.zeropoint
+        real_SN = np.maximum(real_flux / flux_err, args.sn_limit)
         real_mags_err = 2.5 / np.log(10.0) / real_SN
         # set magnitudes of undetected objects and mag < 5.0 to 99.0
-        not_detected = (real_SN < SN_detect) | (real_mags < 5.0)
+        not_detected = (real_SN < args.sn_detect)
         real_mags[not_detected] = non_detection_magnitude
         real_mags_err[not_detected] = (
-            mag_model_limits[filt] - detect_sigma_to_mag)
+            mag_model_limits[filt] - 2.5 * np.log10(args.significance))
         # collect the results
         mag_realisation_data[filt] = real_mags.astype(np.float32)
         mag_realisation_error[filt] = real_mags_err.astype(np.float32)
+        flux_realisation_data[filt] = real_flux.astype(np.float32)
+        flux_realisation_error[filt] = flux_err.astype(np.float32)
 
     # collect output data
     table = Table()
@@ -151,6 +154,13 @@ if __name__ == "__main__":
         table[keyerr] = Column(
             mag_realisation_error[filt], unit=units.mag,
             description="error of realisation of model magnitude")
+        if args.store_flux:
+            table["flux_" + key] = Column(
+                flux_realisation_data[filt],
+                description="realisation of model flux")
+            table["fluxerr_" + key] = Column(
+                flux_realisation_error[filt],
+                description="error of realisation of model flux")
 
     # write to specified output path
     print("write table to: %s" % args.output)
