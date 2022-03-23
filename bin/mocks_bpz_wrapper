@@ -8,8 +8,7 @@ from multiprocessing import cpu_count
 from shutil import rmtree
 
 import numpy as np
-from astropy import units
-from astropy.table import Column, Table, vstack
+from astropy.table import Table, vstack
 from scipy.integrate import cumtrapz
 
 from table_tools import load_table

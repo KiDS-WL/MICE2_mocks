@@ -5,8 +5,6 @@ import sys
 
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.integrate import cumtrapz
-from scipy.stats import gaussian_kde
 
 from MICE2_mocks.plotting import hist_step_filled, subplot_grid
 from table_tools import load_table
