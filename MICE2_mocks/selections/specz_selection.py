@@ -162,6 +162,29 @@ class DES_MICE_data(MICE_data):
     detection_band = "i"
 
 
+class Euclid_MICE_data(MICE_data):
+    """
+    Sub-class of MICE_data defining the Euclid specific mock catalogue
+    magnitude columns and the detection band.
+
+    Parameters
+    ----------
+    micetable : astropy.table.Table
+        MICE2 data table.
+    """
+
+    filter_keys = {
+        "g": "lsst_g",
+        "r": "lsst_r",
+        "i": "lsst_i",
+        "z": "lsst_z",
+        "B": "lsst_g",  # closest match in Flagship2 at the moment
+        "V": "lephare_v",  # currently not used
+        "R": "lsst_r",
+        "I": "lsst_i"}
+    detection_band = "i"  # currently not used
+
+
 class make_specz(object):
     """
     Base class for spectroscopic selection function. The selection is split
@@ -674,9 +697,14 @@ class make_DEEP2(make_specz):
     def __init__(self, micedata):
         super().__init__(micedata)
         # magnitudes
-        self.B = self.data.B("evo")
-        self.R = self.data.R("evo")
-        self.I = self.data.I("evo")
+        try:
+            self.B = self.data.B("evo")
+            self.R = self.data.R("evo")
+            self.I = self.data.I("evo")
+        except KeyError:
+            self.B = self.data.B("obs")
+            self.R = self.data.R("obs")
+            self.I = self.data.I("obs")
 
     def photometryCut(self):
         ###############################################################
@@ -753,7 +781,10 @@ class make_VVDSf02(make_specz):
     def __init__(self, micedata):
         super().__init__(micedata)
         # magnitudes
-        self.I = self.data.I("evo")
+        try:
+            self.I = self.data.I("evo")
+        except KeyError:
+            self.I = self.data.I("obs")
 
     def photometryCut(self):
         ###############################################################
@@ -831,7 +862,10 @@ class make_zCOSMOS(make_specz):
     def __init__(self, micedata):
         super().__init__(micedata)
         # magnitudes
-        self.I = self.data.I("evo")
+        try:
+            self.I = self.data.I("evo")
+        except KeyError:
+            self.I = self.data.I("obs")
 
     def photometryCut(self):
         ###############################################################
