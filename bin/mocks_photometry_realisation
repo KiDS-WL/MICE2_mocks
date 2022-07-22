@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import sys
+import warnings
 from hashlib import md5
 
 import numpy as np
@@ -65,6 +66,9 @@ if __name__ == "__main__":
         '--zeropoint', type=float, default=0.0,
         help='photometric zeropoint used to compute fluxes from magnitudes '
              '(default: %(default)s)')
+    params_group.add_argument(
+        '--is-flux', action='store_true',
+        help='whether the photometry is given in flux units')
 
     args = parser.parse_args()
 
@@ -105,9 +109,12 @@ if __name__ == "__main__":
     np.random.seed(np.frombuffer(hashval, dtype=np.uint32))
     for filt, sn_key in zip(filters, sn_factors):
         print("processing filter '%s'" % filt)
-        model_mags = mag_model_data[filt]
-        # compute the model flux
-        model_flux = np.power(10.0, -0.4 * (model_mags - args.zeropoint))
+        if args.is_flux:
+            model_flux = mag_model_data[filt]
+        else:
+            model_mags = mag_model_data[filt]
+            # compute the model flux
+            model_flux = np.power(10.0, -0.4 * (model_mags - args.zeropoint))
         # compute the flux error from the magnitude limit
         flux_err = (
             np.power(10.0, -0.4 * (mag_model_limits[filt] - args.zeropoint)) /
@@ -118,7 +125,11 @@ if __name__ == "__main__":
         # compute the flux realisation (the flux error does not change)
         real_flux = np.random.normal(model_flux, flux_err)
         # convert to magnitudes
-        real_mags = -2.5 * np.log10(real_flux) + args.zeropoint
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            real_mags = np.nan_to_num(
+                -2.5 * np.log10(real_flux) + args.zeropoint,
+                nan=non_detection_magnitude)
         real_SN = np.maximum(real_flux / flux_err, args.sn_limit)
         real_mags_err = 2.5 / np.log(10.0) / real_SN
         # set magnitudes of undetected objects and mag < 5.0 to 99.0
