@@ -130,7 +130,9 @@ if __name__ == "__main__":
             real_mags = np.nan_to_num(
                 -2.5 * np.log10(real_flux) + args.zeropoint,
                 nan=non_detection_magnitude)
-        real_SN = np.maximum(real_flux / flux_err, args.sn_limit)
+        real_SN = np.nan_to_num(
+            np.maximum(real_flux / flux_err, args.sn_limit),
+            nan=args.sn_limit, posinf=args.sn_limit)
         real_mags_err = 2.5 / np.log(10.0) / real_SN
         # set magnitudes of undetected objects and mag < 5.0 to 99.0
         not_detected = (real_SN < args.sn_detect)
