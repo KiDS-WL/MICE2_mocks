@@ -11,7 +11,7 @@ scripts = [
 
 setuptools.setup(
     name="MICE2_mocks",
-    version="1.0.1",
+    version="1.1",
     author="Jan Luca van den Busch",
     description="This Repository provides code to create galaxy mock catalogues based on MICE galaxy catalogues.",
     long_description=long_description,
