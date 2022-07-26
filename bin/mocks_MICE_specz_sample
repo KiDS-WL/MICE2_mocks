@@ -31,7 +31,7 @@ if __name__ == "__main__":
         '-s', '--simulated', required=True,
         help='file path of the simulation table')
     sim_group.add_argument(
-        '--s-type', required=True, choices=('KV450', 'DES'),
+        '--s-type', required=True, choices=('KV450', 'DES', 'Euclid'),
         help='simulated photometric data sample')
     sim_group.add_argument(
         '--s-format', default='fits',
@@ -85,6 +85,9 @@ if __name__ == "__main__":
             load_table(args.simulated, args.s_format))
     elif args.s_type == "DES":
         simul = selections.DES_MICE_data(
+            load_table(args.simulated, args.s_format))
+    elif args.s_type == "Euclid":
+        simul = selections.Euclid_MICE_data(
             load_table(args.simulated, args.s_format))
     else:
         raise ValueError("unspecified survey --s-type '%s'" % args.s_type)

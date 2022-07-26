@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import itertools
 import multiprocessing
 import sys
 from multiprocessing import cpu_count
@@ -43,6 +44,8 @@ def f_R_e(R, R_e_Disk, R_e_Bulge, f_B, percentile=0.5):
     flux_fraction_offset : float
         Fraction of flux emitted within R minus percentile.
     """
+    if np.any(R < 0):
+        raise ValueError("R must be positive")
     if R_e_Disk == 0.0 or f_B == 1.0:  # no disk component
         disk_term = 0.0
     else:  # evaluate the integrated Sersic n=1 profile
@@ -96,8 +99,7 @@ def f_R_e_derivative(R, R_e_Disk, R_e_Bulge, f_B, *args):
     return flux_fraction_der
 
 
-def find_percentile(
-        percentile, R_e_Disk, R_e_Bulge, f_B, method="newton"):
+def find_percentile(percentile, R_e_Disk, R_e_Bulge, f_B):
     """
     Compute the radius within which a certain percentile of flux is emitted
     using the scipy.optimize.root_scalar root-finding algorithm. By default
@@ -113,9 +115,6 @@ def find_percentile(
         Effective angular size of the bulge component.
     f_B : float
         Bulge fraction, (flux bulge / total flux).
-    method : sting
-        Root-finding method to use (from scipy.optimize.root_scalar).
-
     Returns
     -------
     solution.root : float
@@ -123,9 +122,12 @@ def find_percentile(
     """
     assert(0.0 <= f_B <= 1.0)
     assert(R_e_Disk >= 0.0 and R_e_Bulge >= 0.0)
-    x0 = (1.0 - f_B) * R_e_Disk + f_B * R_e_Bulge
+    R = np.logspace(-5, 2, 6)
+    idx_min = np.argmin(np.abs(
+        f_R_e(R, R_e_Disk, R_e_Bulge, f_B, percentile)))
+    bracket = (R[idx_min-1], R[idx_min+1])
     solution = root_scalar(
-        f_R_e, fprime=f_R_e_derivative, x0=x0, method=method, maxiter=100,
+        f_R_e, method="brentq", bracket=bracket, maxiter=100,
         args=(R_e_Disk, R_e_Bulge, f_B, percentile))
     return solution.root
 
@@ -221,21 +223,25 @@ if __name__ == "__main__":
     bulge_size = data[args.bulge_size]
     disk_size = data[args.disk_size]
     ba_ratio = data[args.ba_ratio]
-    flux_fraction = np.full_like(bulge_ratio, args.flux_frac)
     # create an argument list for map / multiprocessing.pool.map
-    arguments = list(zip(flux_fraction, disk_size, bulge_size, bulge_ratio))
+    gal_iter = zip(
+        itertools.repeat(args.flux_frac), disk_size, bulge_size, bulge_ratio)
     message = "compute intrinsic galaxy sizes"
     # compute the radius of galaxies that emits a certain fraction of the
     # total flux
     if args.threads > 1:
         print(message + " using %d threads" % args.threads)
         with multiprocessing.Pool(args.threads) as pool:
-            galaxy_size = pool.map(root_function, arguments)
+            galaxy_size = np.fromiter(
+                pool.imap(
+                    root_function, gal_iter,
+                    chunksize=1 + len(data) // args.threads),
+                dtype=float)
     else:
         print(message)
-        galaxy_size = tuple(map(root_function, arguments))
+        galaxy_size = np.fromiter(map(root_function, gal_iter), dtype=float)
     # compute the intrinsic galaxy major and minor axes and area
-    galaxy_major = np.asarray(galaxy_size) * args.scale
+    galaxy_major = galaxy_size * args.scale
     galaxy_minor = galaxy_major * ba_ratio
     galaxy_area = np.pi * galaxy_major * galaxy_minor
 
